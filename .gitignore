@@ -1,0 +1,18 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Go local caches and build artifacts
+backend/.gocache/
+backend/.gomodcache/
+backend/runs/
+backend/*.exe
+backend/*.test
+backend/*.out
+backend/coverage.out
+
+# Local generated or scratch files
+backend/repo_merged.md
+backend/README copy.md

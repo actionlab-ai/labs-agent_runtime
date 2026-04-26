@@ -1,0 +1,25 @@
+{
+  "package": "novel-knowledge-assets-v0.1",
+  "created": "2026-04-24T19:28:34.909671",
+  "file_count": 18,
+  "files": [
+    "00-principles/novel-engineering-first-principles.md",
+    "01-project-model/novel-as-code-project.md",
+    "02-context-engineering/context-compiler-and-128k.md",
+    "02-context-engineering/fact-card-spec.md",
+    "02-context-engineering/retrieval-strategy-matrix.md",
+    "03-knowledge-shards/character-shard-template.md",
+    "03-knowledge-shards/info-gap-reader-promise-pacing-ledgers.md",
+    "03-knowledge-shards/item-shard-template.md",
+    "03-knowledge-shards/knowledge-shard-principles.md",
+    "03-knowledge-shards/plot-thread-and-subplot-template.md",
+    "04-writing-workflows/master-subagent-and-chapter-workflows.md",
+    "05-quality-systems/emotion-pacing-and-payoff.md",
+    "05-quality-systems/reader-experience-ai-tone-continuity.md",
+    "06-agent-runtime/novelcode-runtime-architecture.md",
+    "06-agent-runtime/tool-design-and-run-record.md",
+    "07-skill-evolution/from-assets-to-promptpacks.md",
+    "README.md",
+    "templates/templates.md"
+  ]
+}
