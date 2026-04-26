@@ -79,6 +79,21 @@ output contract 解决“返回什么”
 - 稳定标题
 - 重点是 premise / hook / progression / chapter arc / suspense
 
+### `bootstrap_v1`
+
+用途：
+
+- 处理用户最初的一段 idea
+- 决定先澄清还是先起盘
+- 生成世界观 / 金手指 / 主角起点这一层的初稿
+
+输出要求：
+
+- 信息不足时优先输出澄清问题和可选方向
+- 信息足够时输出结构化起盘简报
+- 不写正文
+- 不把未知核心设定硬补成事实
+
 ### `rewrite_v1`
 
 用途：
@@ -115,6 +130,9 @@ output contract 解决“返回什么”
 - `webnovel-opening-sniper`
   - `tool_contract: opening_v1`
   - `tool_output_contract: opening_prose_v1`
+- `novel-idea-bootstrap`
+  - `tool_contract: bootstrap_v1`
+  - `tool_output_contract: world_power_brief_v1`
 
 这意味着：
 

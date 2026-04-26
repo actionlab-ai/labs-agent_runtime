@@ -24,6 +24,7 @@
 
 - 已完成：`webnovel-opening-sniper` 的基础 tool contract
 - 已完成：`opening_v1` 的初步输出约束
+- 已完成：`novel-idea-bootstrap` 的 `bootstrap_v1` 起盘与澄清约束
 - 待做：`outline_v1`
 - 待做：`rewrite_v1`
 - 未开始：大规模小说 skill 库扩展

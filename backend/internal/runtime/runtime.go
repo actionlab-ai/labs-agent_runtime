@@ -362,7 +362,7 @@ func ComposeSkillPrompt(cmd skill.Command, originalUserInput string, invocationA
 	b.WriteString("\n\n# Current Skill Task\n\n")
 	b.WriteString(task)
 	b.WriteString("\n\n# Output Rule\n\n")
-	b.WriteString("Follow this skill strictly. If the user context is incomplete, produce the best usable version from the provided facts and end with the 3 most valuable missing inputs for the next round.\n")
+	b.WriteString("Follow this skill strictly. Respect the skill's own missing-context policy first. If the skill does not define one and the user context is incomplete, produce the best usable version from the provided facts and end with the 3 most valuable missing inputs for the next round.\n")
 	return b.String()
 }
 

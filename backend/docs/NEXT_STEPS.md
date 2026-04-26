@@ -20,6 +20,7 @@
 - DeepSeek 实测调通
 - `return_skill_output_direct`
 - `opening_v1` 的初步输出 contract
+- `bootstrap_v1` 的起盘与澄清 contract
 
 ### 进行中
 
@@ -53,6 +54,9 @@
 1. 定义 `outline_v1`
 2. 定义 `rewrite_v1`
 3. 给不同小说 skill 建立稳定 output contract
+4. 继续打磨 `bootstrap_v1`
+   - 用户澄清后的二轮合并
+   - 世界观 / 金手指 / 主线任务的分段拆 skill
 
 ### P3
 

@@ -168,6 +168,47 @@ Body`)
 	}
 }
 
+func TestSearchRanksBootstrapSkillForIdeaQueries(t *testing.T) {
+	skillsDir := t.TempDir()
+	writeTestSkill(t, skillsDir, "webnovel-opening-sniper", `---
+name: Opening Sniper
+description: Writes a strong 600-word opening
+when_to_use: Use when the user asks for an opening or first chapter
+tags:
+  - novel
+  - opening
+  - hook
+---
+Body`)
+	writeTestSkill(t, skillsDir, "novel-idea-bootstrap", `---
+name: Idea Bootstrapper
+description: Turns a rough novel idea into worldview, power system, and early plot scaffolding
+when_to_use: Use when the user gives a rough idea and wants worldbuilding or golden finger design
+aliases:
+  - world-power-designer
+search_hint: idea worldbuilding setting golden finger 世界观 金手指 起盘 配角 主线
+tags:
+  - 小说
+  - 世界观
+  - 金手指
+  - 创意
+---
+Body`)
+
+	reg, err := LoadRegistry(skillsDir)
+	if err != nil {
+		t.Fatalf("LoadRegistry failed: %v", err)
+	}
+
+	hits := reg.Search("帮我根据一个都市异能idea设计世界观和金手指", 5)
+	if len(hits) == 0 {
+		t.Fatalf("expected search hits")
+	}
+	if hits[0].ID != "novel-idea-bootstrap" {
+		t.Fatalf("expected bootstrap skill to rank first, got %#v", hits[0])
+	}
+}
+
 func writeTestSkill(t *testing.T, skillsDir, skillID, content string) {
 	t.Helper()
 	skillDir := filepath.Join(skillsDir, skillID)

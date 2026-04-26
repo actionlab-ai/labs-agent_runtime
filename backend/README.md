@@ -38,6 +38,7 @@
 - `router / skill executor assembly -> final request -> response analysis` 已落地
 - 小说产物默认可以落到 [docs/08-generated-drafts](../docs/08-generated-drafts/README.md)
 - `opening_v1` 输出 contract 已开始落地
+- `bootstrap_v1` 创意起盘 skill 已接入，可先做世界观 / 金手指 / 主角起点澄清与初稿
 - 跨轮 discovered memory 还没做，等 mem 系统稳定后再推进
 - 小说 skill 库的大规模扩展还没开始，当前重心仍然是把工具调用层磨到很稳
 
@@ -67,6 +68,12 @@ go build -o novelrt ./cmd/novelrt
 
 ```bash
 ./novelrt -config config.yaml -input "帮我写一个都市异能悬疑开篇，主角能从尸检报告里看出隐藏信息"
+```
+
+创意起盘测试：
+
+```bash
+./novelrt -config config.yaml -input "我有个都市异能小说 idea：主角能从遗物上读到死者最后的执念，先帮我做世界观和金手指，如果信息不够先问我"
 ```
 
 调试模式：
