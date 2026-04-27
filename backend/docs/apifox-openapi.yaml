@@ -1,0 +1,619 @@
+openapi: 3.0.3
+info:
+  title: Novel Agent Runtime API
+  version: 0.1.0
+  description: |
+    Apifox import spec for project management, model management, project documents,
+    skills listing, and runtime runs.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+tags:
+  - name: Health
+  - name: Skills
+  - name: Projects
+  - name: Project Documents
+  - name: Models
+  - name: Runs
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+
+  /v1/skills:
+    get:
+      tags: [Skills]
+      summary: List loaded skill metadata
+      responses:
+        "200":
+          description: Skill metadata list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  skills:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /v1/projects:
+    get:
+      tags: [Projects]
+      summary: List projects
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Project"
+    post:
+      tags: [Projects]
+      summary: Create or restore a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+            example:
+              id: urban-rebirth
+              name: 都市重生
+              description: 都市异能悬疑项目
+              metadata: {}
+      responses:
+        "200":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  project:
+                    $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /v1/projects/{id}:
+    get:
+      tags: [Projects]
+      summary: Get project
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  project:
+                    $ref: "#/components/schemas/Project"
+        "404":
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [Projects]
+      summary: Update project
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+            example:
+              name: 都市重生
+              description: 更新后的项目描述
+              status: active
+              metadata: {}
+      responses:
+        "200":
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  project:
+                    $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Projects]
+      summary: Soft delete project
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+
+  /v1/projects/{id}/documents:
+    get:
+      tags: [Project Documents]
+      summary: List project documents
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Project documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProjectDocument"
+
+  /v1/projects/{id}/documents/{kind}:
+    put:
+      tags: [Project Documents]
+      summary: Upsert project document by kind
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+          example: world_rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertProjectDocumentRequest"
+            example:
+              title: 世界规则
+              body: 遗物会保留死者最后三分钟的执念。
+              metadata: {}
+      responses:
+        "200":
+          description: Project document upserted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  document:
+                    $ref: "#/components/schemas/ProjectDocument"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /v1/models:
+    get:
+      tags: [Models]
+      summary: List model profiles
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Model profiles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ModelProfile"
+    post:
+      tags: [Models]
+      summary: Create or restore model profile
+      description: Accepts raw api_key for runtime use. Responses only return api_key_set, not the key itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateModelProfileRequest"
+            example:
+              id: deepseek-flash
+              name: DeepSeek Flash
+              provider: openai_compatible
+              model_id: deepseek-v4-flash
+              base_url: https://api.deepseek.com
+              api_key: sk-your-key
+              context_window: 1000000
+              max_output_tokens: 32768
+              temperature: 0.7
+              timeout_seconds: 180
+              metadata: {}
+      responses:
+        "200":
+          description: Model profile created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  model:
+                    $ref: "#/components/schemas/ModelProfile"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /v1/models/{id}:
+    get:
+      tags: [Models]
+      summary: Get model profile
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Model profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  model:
+                    $ref: "#/components/schemas/ModelProfile"
+        "404":
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [Models]
+      summary: Update model profile
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateModelProfileRequest"
+            example:
+              name: DeepSeek Flash
+              provider: openai_compatible
+              model_id: deepseek-v4-flash
+              base_url: https://api.deepseek.com
+              api_key: sk-your-key
+              context_window: 1000000
+              max_output_tokens: 32768
+              temperature: 0.7
+              timeout_seconds: 180
+              status: active
+              metadata: {}
+      responses:
+        "200":
+          description: Model profile updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  model:
+                    $ref: "#/components/schemas/ModelProfile"
+        "400":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Models]
+      summary: Soft delete model profile
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+
+  /v1/runs:
+    post:
+      tags: [Runs]
+      summary: Execute one runtime run
+      description: Uses project context from PostgreSQL and optionally selects a model profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRunRequest"
+            example:
+              project: urban-rebirth
+              model: deepseek-flash
+              input: 继续完善这个项目的世界观和能力体系
+              dry_run: false
+      responses:
+        "200":
+          description: Run result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  final_text:
+                    type: string
+                  run_id:
+                    type: string
+                  run_dir:
+                    type: string
+                  db_run:
+                    $ref: "#/components/schemas/Run"
+                  project:
+                    nullable: true
+                    allOf:
+                      - $ref: "#/components/schemas/Project"
+                  model:
+                    nullable: true
+                    allOf:
+                      - $ref: "#/components/schemas/ModelProfile"
+        "400":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+components:
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      example: urban-rebirth
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 100
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    JSONValue:
+      type: object
+      additionalProperties: true
+    CreateProjectRequest:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/JSONValue"
+    UpdateProjectRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          example: active
+        metadata:
+          $ref: "#/components/schemas/JSONValue"
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/JSONValue"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UpsertProjectDocumentRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+          description: Optional. Path parameter wins when omitted.
+        title:
+          type: string
+        body:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/JSONValue"
+    ProjectDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        project_id:
+          type: string
+        kind:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/JSONValue"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateModelProfileRequest:
+      type: object
+      required: [model_id, base_url]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+          default: openai_compatible
+        model_id:
+          type: string
+        base_url:
+          type: string
+        api_key:
+          type: string
+          writeOnly: true
+          description: Raw API key accepted on create/update. Responses do not echo it.
+        context_window:
+          type: integer
+        max_output_tokens:
+          type: integer
+        temperature:
+          type: number
+          format: double
+        timeout_seconds:
+          type: integer
+        metadata:
+          $ref: "#/components/schemas/JSONValue"
+    UpdateModelProfileRequest:
+      allOf:
+        - $ref: "#/components/schemas/CreateModelProfileRequest"
+        - type: object
+          properties:
+            status:
+              type: string
+              example: active
+    ModelProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        model_id:
+          type: string
+        base_url:
+          type: string
+        api_key_set:
+          type: boolean
+          description: Whether a raw api_key is stored. The raw key is never returned.
+        context_window:
+          type: integer
+        max_output_tokens:
+          type: integer
+        temperature:
+          type: number
+          format: double
+        timeout_seconds:
+          type: integer
+        status:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/JSONValue"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateRunRequest:
+      type: object
+      required: [input]
+      properties:
+        project:
+          type: string
+        model:
+          type: string
+        input:
+          type: string
+        dry_run:
+          type: boolean
+          default: false
+        debug:
+          type: boolean
+    Run:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        project_id:
+          type: string
+        session_id:
+          type: integer
+          format: int64
+        input:
+          type: string
+        final_text:
+          type: string
+        run_dir:
+          type: string
+        status:
+          type: string
+        error:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/JSONValue"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DeleteResponse:
+      type: object
+      properties:
+        deleted:
+          type: boolean
+          example: true
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string

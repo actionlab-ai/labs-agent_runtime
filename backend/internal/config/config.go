@@ -10,16 +10,18 @@ import (
 )
 
 type Config struct {
-	Path    string
-	Root    string
-	Model   RuntimeModel  `mapstructure:"model"`
-	Runtime RuntimeConfig `mapstructure:"runtime"`
+	Path     string
+	Root     string
+	Model    RuntimeModel   `mapstructure:"model"`
+	Runtime  RuntimeConfig  `mapstructure:"runtime"`
+	Database DatabaseConfig `mapstructure:"database"`
 }
 
 type RuntimeModel struct {
 	Provider       string  `mapstructure:"provider"`
 	ID             string  `mapstructure:"id"`
 	BaseURL        string  `mapstructure:"base_url"`
+	APIKey         string  `mapstructure:"api_key"`
 	APIKeyEnv      string  `mapstructure:"api_key_env"`
 	ContextWindow  int     `mapstructure:"context_window"`
 	MaxOutput      int     `mapstructure:"max_output_tokens"`
@@ -32,6 +34,8 @@ type RuntimeConfig struct {
 	RunsDir              string  `mapstructure:"runs_dir"`
 	WorkspaceRoot        string  `mapstructure:"workspace_root"`
 	DocumentOutputDir    string  `mapstructure:"document_output_dir"`
+	ProjectID            string  `mapstructure:"project_id"`
+	ProjectRoot          string  `mapstructure:"project_root"`
 	MaxToolRounds        int     `mapstructure:"max_tool_rounds"`
 	MaxSkillToolRounds   int     `mapstructure:"max_skill_tool_rounds"`
 	ForceToolSearchFirst bool    `mapstructure:"force_tool_search_first"`
@@ -42,6 +46,12 @@ type RuntimeConfig struct {
 	MaxRetainedSkills    int     `mapstructure:"max_retained_skills"`
 	ActivationMinScore   float64 `mapstructure:"activation_min_score"`
 	ActivationScoreRatio float64 `mapstructure:"activation_score_ratio"`
+}
+
+type DatabaseConfig struct {
+	URL           string `mapstructure:"url"`
+	MigrationsDir string `mapstructure:"migrations_dir"`
+	AutoMigrate   bool   `mapstructure:"auto_migrate"`
 }
 
 func Load(path string) (Config, error) {
@@ -75,6 +85,10 @@ func Load(path string) (Config, error) {
 	cfg.Runtime.RunsDir = resolve(root, cfg.Runtime.RunsDir)
 	cfg.Runtime.WorkspaceRoot = resolve(root, firstNonEmpty(cfg.Runtime.WorkspaceRoot, ".."))
 	cfg.Runtime.DocumentOutputDir = resolve(root, firstNonEmpty(cfg.Runtime.DocumentOutputDir, "../docs/08-generated-drafts"))
+	if strings.TrimSpace(cfg.Runtime.ProjectRoot) != "" {
+		cfg.Runtime.ProjectRoot = resolve(root, cfg.Runtime.ProjectRoot)
+	}
+	cfg.Database.MigrationsDir = resolve(root, firstNonEmpty(cfg.Database.MigrationsDir, "./internal/db/migrations"))
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -85,6 +99,7 @@ func Load(path string) (Config, error) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("model.provider", "openai_compatible")
 	v.SetDefault("model.api_key_env", "NOVEL_MODEL_API_KEY")
+	v.SetDefault("model.api_key", "")
 	v.SetDefault("model.context_window", 131072)
 	v.SetDefault("model.max_output_tokens", 4096)
 	v.SetDefault("model.temperature", 0.7)
@@ -94,6 +109,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("runtime.runs_dir", "./runs")
 	v.SetDefault("runtime.workspace_root", "..")
 	v.SetDefault("runtime.document_output_dir", "../docs/08-generated-drafts")
+	v.SetDefault("runtime.project_id", "")
+	v.SetDefault("runtime.project_root", "")
 	v.SetDefault("runtime.max_tool_rounds", 4)
 	v.SetDefault("runtime.max_skill_tool_rounds", 6)
 	v.SetDefault("runtime.force_tool_search_first", true)
@@ -104,18 +121,23 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("runtime.max_retained_skills", 6)
 	v.SetDefault("runtime.activation_min_score", 0.18)
 	v.SetDefault("runtime.activation_score_ratio", 0.55)
+	v.SetDefault("database.url", "")
+	v.SetDefault("database.migrations_dir", "./internal/db/migrations")
+	v.SetDefault("database.auto_migrate", true)
 }
 
 func bindEnv(v *viper.Viper) {
 	v.SetEnvPrefix("NOVEL")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+	_ = v.BindEnv("database.url", "DATABASE_URL", "NOVEL_DATABASE_URL")
 
 	// Explicit binds make supported overrides discoverable and stable.
 	for _, key := range []string{
 		"model.provider",
 		"model.id",
 		"model.base_url",
+		"model.api_key",
 		"model.api_key_env",
 		"model.context_window",
 		"model.max_output_tokens",
@@ -125,6 +147,8 @@ func bindEnv(v *viper.Viper) {
 		"runtime.runs_dir",
 		"runtime.workspace_root",
 		"runtime.document_output_dir",
+		"runtime.project_id",
+		"runtime.project_root",
 		"runtime.max_tool_rounds",
 		"runtime.max_skill_tool_rounds",
 		"runtime.force_tool_search_first",
@@ -135,6 +159,8 @@ func bindEnv(v *viper.Viper) {
 		"runtime.max_retained_skills",
 		"runtime.activation_min_score",
 		"runtime.activation_score_ratio",
+		"database.migrations_dir",
+		"database.auto_migrate",
 	} {
 		_ = v.BindEnv(key)
 	}

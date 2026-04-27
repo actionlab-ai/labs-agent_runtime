@@ -123,6 +123,7 @@ user_invocable: true
 
 执行规则：
 
+0. 如果工具提示里存在 `active_project_id` 或 `Active Novel Project Context`，最终开篇必须基于该项目上下文工作；不要脱离已有世界观、能力体系、禁区和当前状态。
 1. 如果参数里有 `document_path`，优先写到那个路径。
 2. 如果没有 `document_path`，写到 runtime 提供的默认文档输出目录里，文件名自己根据题材/主角/钩子生成一个简洁 slug。
 3. 文档主体默认只保留用户真正需要的成品内容，不写分析腔和过程腔。

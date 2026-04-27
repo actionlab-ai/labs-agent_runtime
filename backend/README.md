@@ -45,41 +45,44 @@
 更详细的进度和文档导航见：
 [docs/README.md](docs/README.md)
 
-## 常用命令
+## 启动服务
 
 ```bash
 cd backend
 go build -o novelrt ./cmd/novelrt
 ```
 
-列出已加载 skills：
-
 ```bash
-./novelrt -config config.yaml -list-skills
-```
-
-只做本地检索，不请求模型：
-
-```bash
-./novelrt -config config.yaml -input "+forensic urban opening" -dry-run
-```
-
-正常运行：
-
-```bash
-./novelrt -config config.yaml -input "帮我写一个都市异能悬疑开篇，主角能从尸检报告里看出隐藏信息"
-```
-
-创意起盘测试：
-
-```bash
-./novelrt -config config.yaml -input "我有个都市异能小说 idea：主角能从遗物上读到死者最后的执念，先帮我做世界观和金手指，如果信息不够先问我"
+set DATABASE_URL=postgres://postgres:<password>@<host>:<port>/codefly?sslmode=disable
+./novelrt -config config.yaml -addr :8080
 ```
 
 调试模式：
 
 ```bash
-./novelrt -config config.deepseek-debug.yaml -input "帮我写一个都市异能悬疑开篇" -debug
+./novelrt -config config.deepseek-debug.yaml -addr :8080 -debug
+```
+
+常用接口：
+
+```bash
+curl -X POST http://localhost:8080/v1/projects \
+  -H "Content-Type: application/json" \
+  -d '{"name":"都市异能悬疑"}'
+
+curl http://localhost:8080/v1/projects
+
+curl -X POST http://localhost:8080/v1/models \
+  -H "Content-Type: application/json" \
+  -d '{"id":"deepseek-flash","name":"DeepSeek Flash","model_id":"deepseek-v4-flash","base_url":"https://api.deepseek.com","api_key":"sk-your-key","max_output_tokens":8192}'
+
+curl -X PUT http://localhost:8080/v1/projects/都市异能悬疑/documents/world_rules \
+  -H "Content-Type: application/json" \
+  -d '{"title":"世界规则","body":"遗物会保留死者最后三分钟的执念。"}'
+
+curl -X POST http://localhost:8080/v1/runs \
+  -H "Content-Type: application/json" \
+  -d '{"project":"都市异能悬疑","model":"deepseek-flash","input":"继续完善这个项目的世界观和能力体系"}'
 ```
 
 ## 新的落盘产物
@@ -97,10 +100,15 @@ go build -o novelrt ./cmd/novelrt
 
 ## 配置提醒
 
-- `model.api_key_env` 填的是“环境变量名”，不是裸密钥
-- 当前正式默认配置使用 `DEEPSEEK_API_KEY`
+- 模型管理接口直接传 `api_key`；响应只返回 `api_key_set`，不会回显裸密钥
+- 配置文件里的 `model.api_key_env` 仅作为兼容兜底；如果同时配置 `api_key` 和 `api_key_env`，优先使用 `api_key`
+- 数据库连接不要写进仓库，启动前用 `DATABASE_URL` 或 `NOVEL_DATABASE_URL` 注入
 - `config.deepseek-debug.yaml` 只建议调试时使用
+- 当前只保留 HTTP 服务入口；项目管理、模型管理和运行都走 API
 - 当前默认 workspace root 是仓库根目录，默认文档输出目录是 [docs/08-generated-drafts](../docs/08-generated-drafts/README.md)
+- 项目信息、项目文档和 run 记录现在以 PostgreSQL 为主存储
+- `document_output_dir` 仍用于 skill 文件工具输出草稿或调试文档，但不再是项目状态的 source of truth
+- 项目模式下 runtime 会把 PG 中的 `project_documents` 注入到 skill 上下文里；后续世界观、开篇、章节等操作都会以这些数据库记录作为当前项目基线
 
 ## 推荐阅读顺序
 

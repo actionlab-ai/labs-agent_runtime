@@ -15,7 +15,7 @@ type Store struct {
 }
 
 func New(runsDir string) (*Store, error) {
-	id := "run-" + time.Now().Format("20060102-150405")
+	id := "run-" + time.Now().Format("20060102-150405-000000000")
 	root := filepath.Join(runsDir, id)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err

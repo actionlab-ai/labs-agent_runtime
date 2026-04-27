@@ -2,6 +2,7 @@ model:
   provider: openai_compatible
   id: deepseek-v4-flash
   base_url: https://api.deepseek.com
+  api_key: ""
   api_key_env: DEEPSEEK_API_KEY
   context_window: 1000000
   max_output_tokens: 409600
@@ -12,6 +13,8 @@ runtime:
   runs_dir: ./runs
   workspace_root: ..
   document_output_dir: ../docs/08-generated-drafts
+  project_id: ""
+  project_root: ""
   max_tool_rounds: 4
   max_skill_tool_rounds: 6
   force_tool_search_first: true
@@ -22,3 +25,7 @@ runtime:
   max_retained_skills: 6
   activation_min_score: 0.18
   activation_score_ratio: 0.55
+database:
+  url: ""
+  migrations_dir: ./internal/db/migrations
+  auto_migrate: true

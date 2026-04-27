@@ -484,6 +484,52 @@ func TestBuildSkillAssemblyIncludesLocalToolPack(t *testing.T) {
 	}
 }
 
+func TestSkillDocumentHintIncludesProjectID(t *testing.T) {
+	rt := newTestRuntime(t)
+	cmd, err := rt.Registry.LoadInvocationCommand("webnovel-opening-sniper")
+	if err != nil {
+		t.Fatalf("LoadInvocationCommand failed: %v", err)
+	}
+	store, err := runstore.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("runstore.New failed: %v", err)
+	}
+	session := newSkillFileToolSession(RuntimeConfigView{
+		WorkspaceRoot:     rt.Config.Runtime.WorkspaceRoot,
+		DocumentOutputDir: filepath.Join(rt.Config.Runtime.WorkspaceRoot, "docs", "generated"),
+		ProjectID:         "case-file",
+	}, store, "skill-calls/test")
+
+	hint := skillDocumentHint(cmd, session)
+	if !strings.Contains(hint, "active_project_id: case-file") {
+		t.Fatalf("expected active project id in hint, got %q", hint)
+	}
+}
+
+func TestSkillContextHintInjectsProjectContext(t *testing.T) {
+	rt := newTestRuntime(t)
+	cmd, err := rt.Registry.LoadInvocationCommand("webnovel-opening-sniper")
+	if err != nil {
+		t.Fatalf("LoadInvocationCommand failed: %v", err)
+	}
+	rt.Config.Runtime.ProjectID = "case-file"
+	rt.ProjectContext = "# Active Novel Project Context\n\n- project_id: case-file\n\n## 世界规则\n\n遗物会保留死者最后三分钟的执念。"
+
+	session := newSkillFileToolSession(RuntimeConfigView{
+		WorkspaceRoot:     rt.Config.Runtime.WorkspaceRoot,
+		DocumentOutputDir: rt.Config.Runtime.DocumentOutputDir,
+		ProjectID:         rt.Config.Runtime.ProjectID,
+	}, rt.Store, "skill-calls/test")
+
+	hint := rt.skillContextHint(cmd, session)
+	if !strings.Contains(hint, "Active Novel Project Context") {
+		t.Fatalf("expected injected project context, got %q", hint)
+	}
+	if !strings.Contains(hint, "遗物会保留死者最后三分钟的执念") {
+		t.Fatalf("expected canon file content in hint, got %q", hint)
+	}
+}
+
 func TestSkillFileWriteRequiresReadForExistingFile(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	filePath := filepath.Join(workspaceRoot, "docs", "sample.md")

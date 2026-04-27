@@ -32,15 +32,23 @@ type skillFileReadState struct {
 type skillFileToolSession struct {
 	WorkspaceRoot     string
 	DocumentOutputDir string
+	ProjectID         string
+	ProjectRoot       string
 	ReadState         map[string]skillFileReadState
 	Store             *runstore.Store
 	StorePrefix       string
 }
 
 func newSkillFileToolSession(cfg RuntimeConfigView, store *runstore.Store, prefix string) *skillFileToolSession {
+	projectRoot := ""
+	if strings.TrimSpace(cfg.ProjectRoot) != "" {
+		projectRoot = filepath.Clean(cfg.ProjectRoot)
+	}
 	return &skillFileToolSession{
 		WorkspaceRoot:     filepath.Clean(cfg.WorkspaceRoot),
 		DocumentOutputDir: filepath.Clean(cfg.DocumentOutputDir),
+		ProjectID:         strings.TrimSpace(cfg.ProjectID),
+		ProjectRoot:       projectRoot,
 		ReadState:         map[string]skillFileReadState{},
 		Store:             store,
 		StorePrefix:       prefix,
@@ -50,6 +58,8 @@ func newSkillFileToolSession(cfg RuntimeConfigView, store *runstore.Store, prefi
 type RuntimeConfigView struct {
 	WorkspaceRoot     string
 	DocumentOutputDir string
+	ProjectID         string
+	ProjectRoot       string
 }
 
 func (s *skillFileToolSession) toolSpecs(allowed []string) []model.ToolSpec {
@@ -572,20 +582,32 @@ func skillDocumentHint(cmd skill.Command, session *skillFileToolSession) string 
 	}
 	root := filepath.ToSlash(session.WorkspaceRoot)
 	defaultDir := filepath.ToSlash(session.DocumentOutputDir)
+	projectRoot := filepath.ToSlash(session.ProjectRoot)
 	var names []string
 	for _, spec := range specs {
 		names = append(names, spec.Function.Name)
 	}
 	guidance := "When the task produces a durable novel artifact, prefer writing a markdown document under preferred_document_output_dir. If document_path is provided in the tool arguments, use that path. After writing, return a short summary with file path instead of repeating the whole document unless the user explicitly asked for chat-only output."
+	if strings.TrimSpace(session.ProjectID) != "" && strings.TrimSpace(session.ProjectRoot) == "" {
+		guidance += " Project mode is active and project state is database-backed. Treat the injected Active Novel Project Context as current canon. If the result should update long-lived project state, clearly label the target project document kind such as project_brief, world_rules, power_system, mainline, or current_state."
+	}
+	if strings.TrimSpace(session.ProjectRoot) != "" {
+		guidance += " Project mode is active: keep durable novel artifacts under active_project_root. Use 00-project for project briefs, reader contracts, style, and taboo; 01-bible for world and power rules; 02-outline for outlines; 03-drafts for prose drafts; 04-knowledge for shards and ledgers; 05-snapshots for chapter state snapshots; 07-audits for reviews; and 08-fact-cards for evidence-backed facts. preferred_document_output_dir is the default folder for new draft-like artifacts."
+	}
 	available := strings.Join(names, ", ")
 	if strings.Contains(available, skillBashToolName) || strings.Contains(available, skillPowerShellToolName) {
 		guidance += " Use Bash or PowerShell only for terminal operations such as git, build, test, environment inspection, or process commands. Do not use shell tools for file search, file reads, file edits, or file writes when Glob, Read, Edit, or Write are available."
 	}
-	return fmt.Sprintf(
-		"workspace_root: %s\npreferred_document_output_dir: %s\nallowed_local_tools: %s\n%s",
-		root,
-		defaultDir,
-		available,
-		guidance,
-	)
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("workspace_root: %s\n", root))
+	if strings.TrimSpace(session.ProjectID) != "" {
+		b.WriteString(fmt.Sprintf("active_project_id: %s\n", session.ProjectID))
+	}
+	if strings.TrimSpace(session.ProjectRoot) != "" {
+		b.WriteString(fmt.Sprintf("active_project_root: %s\n", projectRoot))
+	}
+	b.WriteString(fmt.Sprintf("preferred_document_output_dir: %s\n", defaultDir))
+	b.WriteString(fmt.Sprintf("allowed_local_tools: %s\n", available))
+	b.WriteString(guidance)
+	return b.String()
 }

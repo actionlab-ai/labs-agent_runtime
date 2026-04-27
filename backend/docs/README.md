@@ -51,7 +51,7 @@
 ## 各文档现在各自负责什么
 
 - `CONFIG.md`
-  - 当前真实配置、环境变量覆盖和命令行参数
+  - 当前真实配置、环境变量覆盖和 HTTP 服务启动参数
 - `IMPLEMENTATION.md`
   - 当前运行时架构和调用链
 - `FULL_REQUEST_FLOW.md`

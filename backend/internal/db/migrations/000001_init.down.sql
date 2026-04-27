@@ -1,0 +1,10 @@
+DROP TRIGGER IF EXISTS runs_set_updated_at ON runs;
+DROP TRIGGER IF EXISTS sessions_set_updated_at ON sessions;
+DROP TRIGGER IF EXISTS project_documents_set_updated_at ON project_documents;
+DROP TRIGGER IF EXISTS projects_set_updated_at ON projects;
+DROP FUNCTION IF EXISTS set_updated_at();
+DROP TABLE IF EXISTS runs;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS project_documents;
+DROP TABLE IF EXISTS projects;

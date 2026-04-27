@@ -202,6 +202,7 @@ user_invocable: true
 
 执行规则：
 
+0. 如果工具提示里存在 `active_project_id` 或 `Active Novel Project Context`，本轮必须基于该项目上下文工作；不要把它当成新项目。若输出应成为长期设定，请明确标注建议写回的项目文档类型，例如 `project_brief`、`world_rules`、`power_system`。
 1. 如果用户这轮是澄清模式：
    - 先直接在聊天里给出澄清问题，方便对话继续
    - 如果参数里有 `document_path`，同时把同样内容写入文件

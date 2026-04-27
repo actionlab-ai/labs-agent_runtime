@@ -73,6 +73,13 @@ func NewOpenAICompatible(baseURL, apiKeyEnv, model string, timeoutSeconds int) *
 	if apiKey == "" {
 		apiKey = "EMPTY"
 	}
+	return NewOpenAICompatibleWithAPIKey(baseURL, apiKey, model, timeoutSeconds)
+}
+
+func NewOpenAICompatibleWithAPIKey(baseURL, apiKey, model string, timeoutSeconds int) *Client {
+	if strings.TrimSpace(apiKey) == "" {
+		apiKey = "EMPTY"
+	}
 	return &Client{
 		BaseURL:      strings.TrimRight(baseURL, "/"),
 		APIKey:       apiKey,

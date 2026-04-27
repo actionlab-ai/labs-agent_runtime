@@ -3,6 +3,7 @@ package runtime
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -157,6 +158,16 @@ Constraints:
 		blocks = append(blocks, promptBlock{
 			Label:   "search_first_gate",
 			Content: "Current round rule: only tool_search should be used to discover a suitable local skill before any direct skill execution.",
+		})
+	}
+	if strings.TrimSpace(r.Config.Runtime.ProjectID) != "" {
+		projectNote := fmt.Sprintf("Active novel project is selected: project_id=%s. Treat follow-up requests such as worldbuilding, opening, outline, or revision as work inside this project unless the user explicitly says otherwise.", r.Config.Runtime.ProjectID)
+		if strings.TrimSpace(r.Config.Runtime.ProjectRoot) != "" {
+			projectNote = fmt.Sprintf("Active novel project is selected: project_id=%s, project_root=%s. Treat follow-up requests such as worldbuilding, opening, outline, or revision as work inside this project unless the user explicitly says otherwise.", r.Config.Runtime.ProjectID, filepath.ToSlash(r.Config.Runtime.ProjectRoot))
+		}
+		blocks = append(blocks, promptBlock{
+			Label:   "active_project",
+			Content: projectNote,
 		})
 	}
 	if len(state.RetainedSkills) > 0 {

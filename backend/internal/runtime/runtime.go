@@ -14,11 +14,12 @@ import (
 )
 
 type Runtime struct {
-	Config   config.Config
-	Registry *skill.Registry
-	Model    *model.Client
-	Store    *runstore.Store
-	Debug    bool
+	Config         config.Config
+	Registry       *skill.Registry
+	Model          *model.Client
+	Store          *runstore.Store
+	Debug          bool
+	ProjectContext string
 }
 
 type RunResult struct {
@@ -80,6 +81,9 @@ func New(cfg config.Config) (*Runtime, error) {
 		return nil, err
 	}
 	client := model.NewOpenAICompatible(cfg.Model.BaseURL, cfg.Model.APIKeyEnv, cfg.Model.ID, cfg.Model.TimeoutSeconds)
+	if strings.TrimSpace(cfg.Model.APIKey) != "" {
+		client = model.NewOpenAICompatibleWithAPIKey(cfg.Model.BaseURL, cfg.Model.APIKey, cfg.Model.ID, cfg.Model.TimeoutSeconds)
+	}
 	return &Runtime{Config: cfg, Registry: reg, Model: client, Store: store}, nil
 }
 
@@ -274,8 +278,10 @@ func (r *Runtime) ExecuteSkill(ctx context.Context, skillID, originalUserInput s
 	fileTools := newSkillFileToolSession(RuntimeConfigView{
 		WorkspaceRoot:     r.Config.Runtime.WorkspaceRoot,
 		DocumentOutputDir: r.Config.Runtime.DocumentOutputDir,
+		ProjectID:         r.Config.Runtime.ProjectID,
+		ProjectRoot:       r.Config.Runtime.ProjectRoot,
 	}, r.Store, filepath.ToSlash(filepath.Join("skill-calls", safeID)))
-	compiled := ComposeSkillPrompt(cmd, originalUserInput, invocationArgs, skillDocumentHint(cmd, fileTools))
+	compiled := ComposeSkillPrompt(cmd, originalUserInput, invocationArgs, r.skillContextHint(cmd, fileTools))
 	_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/compiled-prompt.md", safeID), compiled)
 	_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/skill-metadata.json", safeID), cmd)
 	conversation := []model.Message{{Role: "user", Content: compiled}}
@@ -317,6 +323,21 @@ func (r *Runtime) ExecuteSkill(ctx context.Context, skillID, originalUserInput s
 	}
 	_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/output.md", safeID), lastText)
 	return lastText, nil
+}
+
+func (r *Runtime) skillContextHint(cmd skill.Command, fileTools *skillFileToolSession) string {
+	hint := skillDocumentHint(cmd, fileTools)
+	if strings.TrimSpace(r.ProjectContext) != "" {
+		_ = r.Store.WriteText("project-context.md", r.ProjectContext)
+		if strings.TrimSpace(hint) == "" {
+			return r.ProjectContext
+		}
+		return hint + "\n\n" + r.ProjectContext
+	}
+	if strings.TrimSpace(r.Config.Runtime.ProjectRoot) == "" {
+		return hint
+	}
+	return hint
 }
 
 func ComposeSkillPrompt(cmd skill.Command, originalUserInput string, invocationArgs map[string]any, toolingHint string) string {
