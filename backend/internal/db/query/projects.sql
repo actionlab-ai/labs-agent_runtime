@@ -1,20 +1,23 @@
 -- name: CreateProject :one
-INSERT INTO projects (id, name, description, metadata)
-VALUES ($1, $2, $3, $4)
+INSERT INTO projects (id, name, description, storage_provider, storage_bucket, storage_prefix, metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
     description = EXCLUDED.description,
+    storage_provider = EXCLUDED.storage_provider,
+    storage_bucket = EXCLUDED.storage_bucket,
+    storage_prefix = EXCLUDED.storage_prefix,
     metadata = projects.metadata || EXCLUDED.metadata,
     deleted_at = NULL
-RETURNING id, name, description, status, metadata, created_at, updated_at, deleted_at;
+RETURNING id, name, description, status, storage_provider, storage_bucket, storage_prefix, metadata, created_at, updated_at, deleted_at;
 
 -- name: GetProject :one
-SELECT id, name, description, status, metadata, created_at, updated_at, deleted_at
+SELECT id, name, description, status, storage_provider, storage_bucket, storage_prefix, metadata, created_at, updated_at, deleted_at
 FROM projects
 WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: ListProjects :many
-SELECT id, name, description, status, metadata, created_at, updated_at, deleted_at
+SELECT id, name, description, status, storage_provider, storage_bucket, storage_prefix, metadata, created_at, updated_at, deleted_at
 FROM projects
 WHERE deleted_at IS NULL
 ORDER BY updated_at DESC, created_at DESC
@@ -25,9 +28,12 @@ UPDATE projects
 SET name = $2,
     description = $3,
     status = $4,
-    metadata = $5
+    storage_provider = $5,
+    storage_bucket = $6,
+    storage_prefix = $7,
+    metadata = $8
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, description, status, metadata, created_at, updated_at, deleted_at;
+RETURNING id, name, description, status, storage_provider, storage_bucket, storage_prefix, metadata, created_at, updated_at, deleted_at;
 
 -- name: DeleteProject :exec
 UPDATE projects

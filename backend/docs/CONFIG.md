@@ -1,6 +1,6 @@
 # 配置说明
 
-本文档描述当前 `backend/config.yaml` 与 `backend/config.deepseek-debug.yaml` 所对应的真实配置语义。
+本文档描述当前 `backend/config.yaml` 的真实配置语义。
 
 ## 1. 当前正式配置
 
@@ -8,26 +8,14 @@
 
 - [config.yaml](../config.yaml)
 
-当前默认模型配置是：
+当前默认服务配置是：
 
 ```yaml
-model:
-  provider: openai_compatible
-  id: deepseek-v4-flash
-  base_url: https://api.deepseek.com
-  api_key: ""
-  api_key_env: DEEPSEEK_API_KEY
-  context_window: 1000000
-  max_output_tokens: 32768
-  temperature: 0.7
-  timeout_seconds: 180
 runtime:
   skills_dir: ./skills
   runs_dir: ./runs
   workspace_root: ..
   document_output_dir: ../docs/08-generated-drafts
-  project_id: ""
-  project_root: ""
   max_tool_rounds: 4
   max_skill_tool_rounds: 6
   force_tool_search_first: true
@@ -40,33 +28,36 @@ runtime:
   activation_score_ratio: 0.55
 database:
   url: ""
+  host: 36.138.61.152
+  port: 30432
+  name: codefly
+  user: postgres
+  password: ""
+  sslmode: disable
+  connect_timeout_seconds: 5
   migrations_dir: ./internal/db/migrations
   auto_migrate: true
+redis:
+  enabled: true
+  required: false
+  mode: cluster
+  addrs:
+    - 36.138.61.152:30001
+    - 36.138.61.152:30002
+    - 36.138.61.152:30003
+    - 36.138.61.152:30004
+    - 36.138.61.152:30005
+    - 36.138.61.152:30006
+  password: ""
+  key_prefix: novelrt
+  ttl_seconds: 300
+logging:
+  level: debug
+  encoding: console
+  development: true
 ```
 
-## 2. `model` 配置项
-
-- `provider`
-  - 当前实现里主要是 OpenAI-compatible 调用链
-- `id`
-  - 请求 `/chat/completions` 时发送的模型名
-- `base_url`
-  - OpenAI-compatible 接口地址
-- `api_key`
-  - 直接使用的模型 API Key
-  - 优先级高于 `api_key_env`
-- `api_key_env`
-  - 兼容旧配置的环境变量名兜底；新建模型配置时优先使用 `api_key`
-- `context_window`
-  - 模型上下文窗口上限
-- `max_output_tokens`
-  - 单次请求的输出 token 上限
-- `temperature`
-  - 采样温度
-- `timeout_seconds`
-  - HTTP 超时
-
-## 3. `runtime` 配置项
+## 2. `runtime` 配置项
 
 - `skills_dir`
   - skill 扫描目录
@@ -76,10 +67,6 @@ database:
   - skill 文件工具允许读写的工作区根目录
 - `document_output_dir`
   - 默认文档落地目录
-- `project_id`
-  - 可选。指定 HTTP `POST /v1/runs` 在请求体未传 `project` 时的默认项目 ID
-- `project_root`
-  - 兼容旧文件项目上下文的字段。PG 项目模式下通常为空
 - `max_tool_rounds`
   - router tool calling 最大轮数
 - `max_skill_tool_rounds`
@@ -101,32 +88,109 @@ database:
 - `activation_score_ratio`
   - 激活窗口相对首个命中分数的比例阈值
 
-## 4. `database` 配置项
+## 3. `database` 配置项
 
 - `url`
   - PostgreSQL 连接串
   - 不建议写进配置文件；优先用 `DATABASE_URL` 或 `NOVEL_DATABASE_URL`
+- `host`
+  - PostgreSQL 主机名或 IP
+- `port`
+  - PostgreSQL 端口
+- `name`
+  - 数据库名
+- `user`
+  - 用户名
+- `password`
+  - 密码
+- `sslmode`
+  - 连接参数，例如 `disable`、`require`
+- `connect_timeout_seconds`
+  - 建连超时，单位秒
 - `migrations_dir`
   - golang-migrate 迁移目录
 - `auto_migrate`
   - HTTP 服务启动时是否自动执行 migration
 
-## 5. Debug 配置
+## 4. `redis` 配置项
 
-调试时可用：
+Redis Cluster 只做共享缓存，不是模型配置的 source of truth。模型配置、默认模型设置仍然以 PostgreSQL 为准。
 
-- [config.deepseek-debug.yaml](../config.deepseek-debug.yaml)
+- `enabled`
+  - 是否启用 Redis Cluster 缓存
+- `required`
+  - 是否要求 Redis 启动成功。默认 `false`，Redis 不可用时降级回 PostgreSQL；生产环境如果希望 Redis 不通就拒绝启动，可以设为 `true`
+- `mode`
+  - Redis 连接模式，支持 `cluster` 和 `standalone`。当前集群使用 `cluster`；后续切单点时改成 `standalone` 并只保留一个地址即可
+- `addrs`
+  - Redis 地址列表。`cluster` 模式填写多个节点；`standalone` 模式使用第一个地址
+- `password`
+  - Redis 密码；不建议写进配置文件，优先用 `REDIS_PASSWORD` 或 `NOVEL_REDIS_PASSWORD`
+- `key_prefix`
+  - 缓存 key 前缀，默认 `novelrt`
+- `ttl_seconds`
+  - 缓存过期时间，默认 300 秒
 
-这份配置主要用于：
+当前缓存内容：
 
-- 开启 `-debug` 时保存详细请求/响应轨迹
-- 做大 token 上限实验
-- 排查模型兼容性问题
+- `projects`
+- `model_profiles`
+- `app_settings.default_model_id`
 
-注意：
+写入项目、模型配置或默认模型时，流程是先写 PostgreSQL，再由后台 goroutine 同步 Redis。读取项目、模型或默认模型时，流程是先读 Redis，未命中再回源 PostgreSQL 并立即回填 Redis。
 
-- skill 执行阶段对 DeepSeek 仍然会做运行时保护，不会真的盲目把超上限 token 打出去
-- skill 如果使用文件工具，默认会把文档写到 `document_output_dir`
+项目存储定位现在属于 `projects` 表字段：
+
+- `storage_provider`: `filesystem` 或 `s3`
+- `storage_bucket`: S3 bucket，`filesystem` 模式可为空
+- `storage_prefix`: 本地文件夹名或 S3 key prefix
+
+## 5. `logging` 配置项
+
+日志使用 `zap`，启动后所有 HTTP 请求都会带 `request_id`。你查一个接口时，按同一个 `request_id` 过滤，就能看到它走了哪些步骤。
+
+- `level`
+  - 支持 `debug`、`info`、`warn`、`error`
+  - 本地排查建议 `debug`
+- `encoding`
+  - 支持 `console` 和 `json`
+  - 本地看日志用 `console` 更直观；生产采集建议 `json`
+- `development`
+  - 本地可以设为 `true`，日志更适合直接看
+  - 生产建议 `false`
+
+当前会记录：
+
+- `http.request.start` / `http.request.completed`
+- `project.cache.hit` / `project.cache.miss` / `project.pg.get`
+- `model.cache.hit` / `model.cache.miss` / `model.pg.get`
+- `default_model.cache.hit` / `default_model.pg.get`
+- `run.request.accepted` / `run.model.selected` / `run.project_context.loaded`
+- `cache.sync.start` / `cache.sync.done` / `cache.sync.failed`
+
+不会记录 API Key、用户输入正文和模型完整响应，只记录长度、ID、状态、耗时等排查信息。
+
+### `filesystem` 项目落盘
+
+当项目的 `storage_provider=filesystem` 时：
+
+- 创建项目会自动创建 `${runtime.workspace_root}/projects/<storage_prefix>/`
+- 项目目录下会生成 `meta.json`
+- 文档写入 `/v1/projects/:id/documents/:kind` 时，会同步到 `documents/<kind>.md`
+- 同时会生成 `documents/<kind>.meta.json`
+- 项目级 `meta.json` 会记录 `project_id`、`storage_*`、`document_count` 和 `document_kinds`
+
+### skill 内置项目文档工具
+
+项目模式下，skill executor 会额外暴露 3 个项目级工具：
+
+- `ListProjectDocuments`
+- `ReadProjectDocument`
+- `WriteProjectDocument`
+
+这些工具不直接读写本地路径，而是调用运行时注入的 `ProjectDocumentProvider`。当前 provider 的 HTTP/PG 实现最终会写入 PostgreSQL，并在 `filesystem` 项目上同步一份文件投影；后续切换到 S3 时，只需要替换 provider 实现，业务 skill 不需要关心底层是文件夹还是 bucket。
+
+普通 `Read / Write / Edit / Glob` 仍然是 workspace 文件工具，适合调试文件、临时草稿和非项目状态文件；小说世界观、情感内核、角色卡、当前状态这类长期项目资料应该优先走项目文档工具。
 
 ## 6. 环境变量覆盖
 
@@ -135,10 +199,12 @@ database:
 示例：
 
 ```bash
-export DEEPSEEK_API_KEY=your_real_key
-export DATABASE_URL=postgres://postgres:***@host:30432/codefly?sslmode=disable
-export NOVEL_MODEL_ID=deepseek-v4-flash
-export NOVEL_MODEL_TIMEOUT_SECONDS=180
+export DATABASE_HOST=127.0.0.1
+export DATABASE_PORT=5432
+export DATABASE_NAME=codefly
+export DATABASE_USER=postgres
+export DATABASE_PASSWORD=your_real_password
+export REDIS_PASSWORD=your_real_redis_password
 export NOVEL_RUNTIME_MAX_RETAINED_SKILLS=8
 ```
 
@@ -196,8 +262,16 @@ export NOVEL_RUNTIME_MAX_RETAINED_SKILLS=8
   - 更新模型配置
 - `DELETE /v1/models/:id`
   - 软删除模型配置
+  - 如果它是当前默认模型，会拒绝删除，必须先切换或清空默认模型
+- `GET /v1/settings/default-model`
+  - 查看数据库里的默认模型设置
+- `PUT /v1/settings/default-model`
+  - 设置数据库默认模型
+  - 请求体：`{"model":"deepseek-flash"}`
+- `DELETE /v1/settings/default-model`
+  - 清空数据库默认模型
 - `POST /v1/runs`
   - 基于输入执行一次 runtime run
   - 请求体：`{"project":"都市异能悬疑","model":"deepseek-flash","input":"继续完善世界观","dry_run":false}`
-  - `project` 可省略；省略时使用配置里的 `runtime.project_id`
-  - `model` 可省略；省略时使用配置文件里的 `model`
+  - `project` 可省略；省略时本次运行不绑定项目上下文。Web 界面应在打开某个项目后显式传当前项目 ID
+  - `model` 默认必传；只有数据库里设置了默认模型时才可以省略

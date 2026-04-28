@@ -8,10 +8,13 @@ Thumbs.db
 backend/.gocache/
 backend/.gomodcache/
 backend/runs/
+backend/logs/
 backend/*.exe
 backend/*.test
 backend/*.out
 backend/coverage.out
+projects/
+deploy/postgre/rendered/
 
 # Local generated or scratch files
 backend/repo_merged.md

@@ -10,21 +10,27 @@ import (
 )
 
 const createProject = `-- name: CreateProject :one
-INSERT INTO projects (id, name, description, metadata)
-VALUES ($1, $2, $3, $4)
+INSERT INTO projects (id, name, description, storage_provider, storage_bucket, storage_prefix, metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
     description = EXCLUDED.description,
+    storage_provider = EXCLUDED.storage_provider,
+    storage_bucket = EXCLUDED.storage_bucket,
+    storage_prefix = EXCLUDED.storage_prefix,
     metadata = projects.metadata || EXCLUDED.metadata,
     deleted_at = NULL
-RETURNING id, name, description, status, metadata, created_at, updated_at, deleted_at
+RETURNING id, name, description, status, storage_provider, storage_bucket, storage_prefix, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateProjectParams struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Metadata    []byte `json:"metadata"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	StorageProvider string `json:"storage_provider"`
+	StorageBucket   string `json:"storage_bucket"`
+	StoragePrefix   string `json:"storage_prefix"`
+	Metadata        []byte `json:"metadata"`
 }
 
 func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
@@ -32,6 +38,9 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		arg.ID,
 		arg.Name,
 		arg.Description,
+		arg.StorageProvider,
+		arg.StorageBucket,
+		arg.StoragePrefix,
 		arg.Metadata,
 	)
 	var i Project
@@ -40,6 +49,9 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.Name,
 		&i.Description,
 		&i.Status,
+		&i.StorageProvider,
+		&i.StorageBucket,
+		&i.StoragePrefix,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -60,7 +72,7 @@ func (q *Queries) DeleteProject(ctx context.Context, id string) error {
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, name, description, status, metadata, created_at, updated_at, deleted_at
+SELECT id, name, description, status, storage_provider, storage_bucket, storage_prefix, metadata, created_at, updated_at, deleted_at
 FROM projects
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -73,6 +85,9 @@ func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 		&i.Name,
 		&i.Description,
 		&i.Status,
+		&i.StorageProvider,
+		&i.StorageBucket,
+		&i.StoragePrefix,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -133,7 +148,7 @@ func (q *Queries) ListProjectDocuments(ctx context.Context, projectID string) ([
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, name, description, status, metadata, created_at, updated_at, deleted_at
+SELECT id, name, description, status, storage_provider, storage_bucket, storage_prefix, metadata, created_at, updated_at, deleted_at
 FROM projects
 WHERE deleted_at IS NULL
 ORDER BY updated_at DESC, created_at DESC
@@ -159,6 +174,9 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 			&i.Name,
 			&i.Description,
 			&i.Status,
+			&i.StorageProvider,
+			&i.StorageBucket,
+			&i.StoragePrefix,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -179,17 +197,23 @@ UPDATE projects
 SET name = $2,
     description = $3,
     status = $4,
-    metadata = $5
+    storage_provider = $5,
+    storage_bucket = $6,
+    storage_prefix = $7,
+    metadata = $8
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, description, status, metadata, created_at, updated_at, deleted_at
+RETURNING id, name, description, status, storage_provider, storage_bucket, storage_prefix, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateProjectParams struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
-	Metadata    []byte `json:"metadata"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	Status          string `json:"status"`
+	StorageProvider string `json:"storage_provider"`
+	StorageBucket   string `json:"storage_bucket"`
+	StoragePrefix   string `json:"storage_prefix"`
+	Metadata        []byte `json:"metadata"`
 }
 
 func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error) {
@@ -198,6 +222,9 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		arg.Name,
 		arg.Description,
 		arg.Status,
+		arg.StorageProvider,
+		arg.StorageBucket,
+		arg.StoragePrefix,
 		arg.Metadata,
 	)
 	var i Project
@@ -206,6 +233,9 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.Name,
 		&i.Description,
 		&i.Status,
+		&i.StorageProvider,
+		&i.StorageBucket,
+		&i.StoragePrefix,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,

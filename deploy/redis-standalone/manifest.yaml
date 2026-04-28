@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: runtime
+---
+# 持久卷声明模板（实际使用时需根据存储类调整）
+# 如果集群有默认 StorageClass，PVC 会自动创建 PV
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-redis-0   # StatefulSet 会自动按名称匹配：<volumeClaimTemplate名称>-<pod序号>
+  namespace: runtime
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi         # 根据需求调整大小
+  storageClassName: "nfs"    # 若需指定存储类，取消注释并填写
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: runtime
+data:
+  redis.conf: |
+    # 基础配置
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    requirepass change-me
+    daemonize no
+    supervised no
+    pidfile /var/run/redis_6379.pid
+    loglevel notice
+    logfile ""
+
+    # 持久化：开启 AOF，数据更安全
+    appendonly yes
+    appendfsync everysec
+
+    # 快照（RDB）作为辅助
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    # 内存与淘汰策略（可选）
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+
+    # 慢日志
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+    # 其他稳定性参数
+    timeout 300
+    tcp-keepalive 60
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: runtime
+spec:
+  serviceName: "redis"
+  replicas: 1                     # 单点
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      # 尽可能将 Pod 调度到稳定节点（软反亲和）
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: redis
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: redis
+          image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - redis-server
+            - /usr/local/etc/redis/redis.conf
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+            limits:
+              cpu: 500m
+              memory: 600Mi
+          volumeMounts:
+            - name: redis-config
+              mountPath: /usr/local/etc/redis/redis.conf
+              subPath: redis.conf
+            - name: redis-data
+              mountPath: /data
+          # 健康检查：保证就绪和存活状态
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config
+            items:
+              - key: redis.conf
+                path: redis.conf
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: "nfs"     # 按需指定
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: runtime
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+      nodePort: 30011
+  type: NodePort   # 集群内访问，可改为 NodePort 或 LoadBalancer

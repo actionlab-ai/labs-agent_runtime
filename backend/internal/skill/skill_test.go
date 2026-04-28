@@ -209,6 +209,45 @@ Body`)
 	}
 }
 
+func TestSearchRanksEmotionalCoreSkillForNovelCoreQueries(t *testing.T) {
+	skillsDir := t.TempDir()
+	writeTestSkill(t, skillsDir, "novel-emotional-core", `---
+name: Emotional Core Designer
+description: Build the emotional core for a new webnovel before worldbuilding
+when_to_use: Use when the user wants novel core, reader desire, recognition, catharsis, or emotional payoff
+aliases:
+  - emotional-core
+  - novel-core
+search_hint: emotional core novel core desire recognition catharsis 情感内核 小说内核 爽感 认可感 压迫 渴望
+tags:
+  - 情感内核
+  - 新书内核
+  - 爽感
+---
+Body`)
+	writeTestSkill(t, skillsDir, "novel-idea-bootstrap", `---
+name: Idea Bootstrapper
+description: Turns a rough novel idea into worldview and power system
+tags:
+  - 世界观
+  - 金手指
+---
+Body`)
+
+	reg, err := LoadRegistry(skillsDir)
+	if err != nil {
+		t.Fatalf("LoadRegistry failed: %v", err)
+	}
+
+	hits := reg.Search("我想先设计新书情感内核和中年男人被生活压迫后的爽感", 5)
+	if len(hits) == 0 {
+		t.Fatalf("expected search hits")
+	}
+	if hits[0].ID != "novel-emotional-core" {
+		t.Fatalf("expected emotional core skill to rank first, got %#v", hits[0])
+	}
+}
+
 func writeTestSkill(t *testing.T, skillsDir, skillID, content string) {
 	t.Helper()
 	skillDir := filepath.Join(skillsDir, skillID)

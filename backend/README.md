@@ -24,6 +24,9 @@
    - `Glob`
    - `Bash`
    - `PowerShell`
+   - `ListProjectDocuments`
+   - `ReadProjectDocument`
+   - `WriteProjectDocument`
 7. skill 真执行成功后，默认直接把 skill 输出返回给用户；如果 skill 已把内容落成文档，则返回的是简短文件摘要而不是整篇正文。
 8. router 和 skill executor 每一轮在真正发模型前，都会先生成 request assembly，并把预处理后的 messages / tools / prompt / final chat request 落盘。
 
@@ -35,6 +38,7 @@
 - DeepSeek 实测调通
 - `tool_search -> activation -> retained pool -> structured skill tool` 已落地
 - `Read / Write / Edit / Glob / Bash / PowerShell` 已接入 skill executor
+- `ListProjectDocuments / ReadProjectDocument / WriteProjectDocument` 已作为项目级内置工具接入 skill executor；它们只调用项目文档 provider，不直接操作本地文件路径
 - `router / skill executor assembly -> final request -> response analysis` 已落地
 - 小说产物默认可以落到 [docs/08-generated-drafts](../docs/08-generated-drafts/README.md)
 - `opening_v1` 输出 contract 已开始落地
@@ -53,14 +57,15 @@ go build -o novelrt ./cmd/novelrt
 ```
 
 ```bash
-set DATABASE_URL=postgres://postgres:<password>@<host>:<port>/codefly?sslmode=disable
+export DATABASE_PASSWORD=your_real_database_password
+export REDIS_PASSWORD=your_real_redis_password
 ./novelrt -config config.yaml -addr :8080
 ```
 
 调试模式：
 
 ```bash
-./novelrt -config config.deepseek-debug.yaml -addr :8080 -debug
+./novelrt -config config.yaml -addr :8080 -debug
 ```
 
 常用接口：
@@ -101,22 +106,31 @@ curl -X POST http://localhost:8080/v1/runs \
 ## 配置提醒
 
 - 模型管理接口直接传 `api_key`；响应只返回 `api_key_set`，不会回显裸密钥
-- 配置文件里的 `model.api_key_env` 仅作为兼容兜底；如果同时配置 `api_key` 和 `api_key_env`，优先使用 `api_key`
-- 数据库连接不要写进仓库，启动前用 `DATABASE_URL` 或 `NOVEL_DATABASE_URL` 注入
-- `config.deepseek-debug.yaml` 只建议调试时使用
+- 配置文件不再携带模型的 `base_url / model_id / api_key`；这些都走 `/v1/models` 存数据库
+- `/v1/runs` 默认需要传 `model`；如果想省略，需要先通过 `/v1/settings/default-model` 在数据库里设置默认模型
+- 数据库连接既支持 `database.url`，也支持 `database.host / port / name / user / password / sslmode`
+- Redis Cluster 当前缓存项目元数据、模型配置和默认模型设置；PostgreSQL 仍然是主存储，写接口会先写 PG 再由后台 goroutine 同步 Redis
+- Redis 客户端支持 `cluster` 和 `standalone` 两种模式；以后切单点只改 `redis.mode` 和 `redis.addrs`
+- 日志使用 zap；本地默认 `logging.level: debug`、`logging.encoding: console`，每个 API 请求都会带 `request_id`，可以串起 HTTP、Redis、PG、run 的调用链
+- 进程内不缓存模型配置，所以模型变更不需要通知内存；下一次 `/v1/runs` 会从 Redis/PG 读取最新配置
 - 当前只保留 HTTP 服务入口；项目管理、模型管理和运行都走 API
 - 当前默认 workspace root 是仓库根目录，默认文档输出目录是 [docs/08-generated-drafts](../docs/08-generated-drafts/README.md)
 - 项目信息、项目文档和 run 记录现在以 PostgreSQL 为主存储
+- 项目记录包含 `storage_provider / storage_bucket / storage_prefix`，用于表达本地文件夹或 S3 bucket/prefix；后续换存储后端不需要改 HTTP 合同
+- `filesystem` 项目会额外落盘到 `${runtime.workspace_root}/projects/<storage_prefix>/`，目录下包含 `meta.json`、`documents/*.md` 和对应的 `.meta.json`
 - `document_output_dir` 仍用于 skill 文件工具输出草稿或调试文档，但不再是项目状态的 source of truth
-- 项目模式下 runtime 会把 PG 中的 `project_documents` 注入到 skill 上下文里；后续世界观、开篇、章节等操作都会以这些数据库记录作为当前项目基线
+- 项目模式下 runtime 会通过 `ContextProvider` 把 PG 中的 `project_documents` 注入到 skill 上下文里；后续世界观、开篇、章节等操作都会以这些数据库记录作为当前项目基线
+- skill 定义当前仍来自本地 `skills/`，通过 `SkillProvider` 暴露；后续可以扩展 DB/Git/对象存储来源，不影响 HTTP 层
+- 多 skill 编排的边界已经落在 `WorkflowRunner`，下一步会在它之上做项目初始化和章节创作 workflow
 
 ## 推荐阅读顺序
 
 1. [docs/README.md](docs/README.md)
 2. [docs/CONFIG.md](docs/CONFIG.md)
-3. [docs/FULL_REQUEST_FLOW.md](docs/FULL_REQUEST_FLOW.md)
-4. [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)
-5. [docs/FILE_TOOLS_AND_DOCUMENT_OUTPUT.md](docs/FILE_TOOLS_AND_DOCUMENT_OUTPUT.md)
-6. [docs/SEARCH_PIPELINE.md](docs/SEARCH_PIPELINE.md)
-7. [docs/TOOL_SEARCH_VS_NOVELCODE.md](docs/TOOL_SEARCH_VS_NOVELCODE.md)
-8. [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md)
+3. [docs/SKILL_WORKFLOW_RUNTIME.md](docs/SKILL_WORKFLOW_RUNTIME.md)
+4. [docs/FULL_REQUEST_FLOW.md](docs/FULL_REQUEST_FLOW.md)
+5. [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)
+6. [docs/FILE_TOOLS_AND_DOCUMENT_OUTPUT.md](docs/FILE_TOOLS_AND_DOCUMENT_OUTPUT.md)
+7. [docs/SEARCH_PIPELINE.md](docs/SEARCH_PIPELINE.md)
+8. [docs/TOOL_SEARCH_VS_NOVELCODE.md](docs/TOOL_SEARCH_VS_NOVELCODE.md)
+9. [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md)

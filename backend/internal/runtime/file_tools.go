@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -17,10 +18,13 @@ import (
 )
 
 const (
-	skillReadToolName  = "Read"
-	skillWriteToolName = "Write"
-	skillEditToolName  = "Edit"
-	skillGlobToolName  = "Glob"
+	skillReadToolName                 = "Read"
+	skillWriteToolName                = "Write"
+	skillEditToolName                 = "Edit"
+	skillGlobToolName                 = "Glob"
+	skillListProjectDocumentsToolName = "ListProjectDocuments"
+	skillReadProjectDocumentToolName  = "ReadProjectDocument"
+	skillWriteProjectDocumentToolName = "WriteProjectDocument"
 )
 
 type skillFileReadState struct {
@@ -33,22 +37,18 @@ type skillFileToolSession struct {
 	WorkspaceRoot     string
 	DocumentOutputDir string
 	ProjectID         string
-	ProjectRoot       string
+	ProjectDocs       ProjectDocumentProvider
 	ReadState         map[string]skillFileReadState
 	Store             *runstore.Store
 	StorePrefix       string
 }
 
 func newSkillFileToolSession(cfg RuntimeConfigView, store *runstore.Store, prefix string) *skillFileToolSession {
-	projectRoot := ""
-	if strings.TrimSpace(cfg.ProjectRoot) != "" {
-		projectRoot = filepath.Clean(cfg.ProjectRoot)
-	}
 	return &skillFileToolSession{
 		WorkspaceRoot:     filepath.Clean(cfg.WorkspaceRoot),
 		DocumentOutputDir: filepath.Clean(cfg.DocumentOutputDir),
 		ProjectID:         strings.TrimSpace(cfg.ProjectID),
-		ProjectRoot:       projectRoot,
+		ProjectDocs:       cfg.ProjectDocs,
 		ReadState:         map[string]skillFileReadState{},
 		Store:             store,
 		StorePrefix:       prefix,
@@ -59,7 +59,7 @@ type RuntimeConfigView struct {
 	WorkspaceRoot     string
 	DocumentOutputDir string
 	ProjectID         string
-	ProjectRoot       string
+	ProjectDocs       ProjectDocumentProvider
 }
 
 func (s *skillFileToolSession) toolSpecs(allowed []string) []model.ToolSpec {
@@ -80,6 +80,11 @@ func (s *skillFileToolSession) toolSpecs(allowed []string) []model.ToolSpec {
 		case skillPowerShellToolName:
 			specs = append(specs, powerShellToolSpec())
 		}
+	}
+	if s.ProjectDocs != nil && strings.TrimSpace(s.ProjectID) != "" {
+		specs = append(specs, listProjectDocumentsToolSpec())
+		specs = append(specs, readProjectDocumentToolSpec())
+		specs = append(specs, writeProjectDocumentToolSpec())
 	}
 	return specs
 }
@@ -193,6 +198,10 @@ func globToolSpec() model.ToolSpec {
 }
 
 func (s *skillFileToolSession) handleToolCall(tc model.ToolCall) (string, error) {
+	return s.handleToolCallWithContext(context.Background(), tc)
+}
+
+func (s *skillFileToolSession) handleToolCallWithContext(ctx context.Context, tc model.ToolCall) (string, error) {
 	_ = s.Store.WriteJSON(filepath.ToSlash(filepath.Join(s.StorePrefix, "tools", fmt.Sprintf("%s-%s-call.json", tc.Function.Name, tc.ID))), tc)
 	var (
 		payload map[string]any
@@ -207,6 +216,12 @@ func (s *skillFileToolSession) handleToolCall(tc model.ToolCall) (string, error)
 		payload, err = s.handleEdit(tc.Function.Arguments)
 	case skillGlobToolName:
 		payload, err = s.handleGlob(tc.Function.Arguments)
+	case skillListProjectDocumentsToolName:
+		payload, err = s.handleListProjectDocuments(ctx, tc.Function.Arguments)
+	case skillReadProjectDocumentToolName:
+		payload, err = s.handleReadProjectDocument(ctx, tc.Function.Arguments)
+	case skillWriteProjectDocumentToolName:
+		payload, err = s.handleWriteProjectDocument(ctx, tc.Function.Arguments)
 	case skillBashToolName:
 		payload, err = s.handleBash(tc.Function.Arguments)
 	case skillPowerShellToolName:
@@ -225,6 +240,181 @@ func (s *skillFileToolSession) handleToolCall(tc model.ToolCall) (string, error)
 		return model.MustJSON(payload), err
 	}
 	return model.MustJSON(payload), nil
+}
+
+func listProjectDocumentsToolSpec() model.ToolSpec {
+	return model.ToolSpec{
+		Type: "function",
+		Function: model.ToolFunction{
+			Name:        skillListProjectDocumentsToolName,
+			Description: "List durable project documents for the active project through the configured project document provider. Does not read raw filesystem paths.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string", "description": "Optional. Must match the active project_id when provided."},
+				},
+			},
+		},
+	}
+}
+
+func readProjectDocumentToolSpec() model.ToolSpec {
+	return model.ToolSpec{
+		Type: "function",
+		Function: model.ToolFunction{
+			Name:        skillReadProjectDocumentToolName,
+			Description: "Read one durable project document by kind through the configured project document provider. Use this for canon/project state instead of reading provider files directly.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string", "description": "Optional. Must match the active project_id when provided."},
+					"kind":       map[string]any{"type": "string", "description": "Stable document kind, such as novel_core, world_rules, power_system, mainline, current_state."},
+				},
+				"required": []string{"kind"},
+			},
+		},
+	}
+}
+
+func writeProjectDocumentToolSpec() model.ToolSpec {
+	return model.ToolSpec{
+		Type: "function",
+		Function: model.ToolFunction{
+			Name:        skillWriteProjectDocumentToolName,
+			Description: "Write or replace a durable project document through the configured project document provider. The provider owns PostgreSQL, Redis, filesystem, S3, or any future backend synchronization.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string", "description": "Optional. Must match the active project_id when provided."},
+					"kind":       map[string]any{"type": "string", "description": "Stable document kind, such as novel_core, world_rules, power_system, mainline, current_state."},
+					"title":      map[string]any{"type": "string", "description": "Human-readable document title."},
+					"body":       map[string]any{"type": "string", "description": "Full markdown body to store as the project document."},
+					"metadata":   map[string]any{"type": "object", "description": "Optional structured metadata."},
+				},
+				"required": []string{"kind", "body"},
+			},
+		},
+	}
+}
+
+func (s *skillFileToolSession) activeProjectIDFromArgs(raw string) (string, error) {
+	activeProjectID := strings.TrimSpace(s.ProjectID)
+	if activeProjectID == "" {
+		return "", fmt.Errorf("project document tools require an active project")
+	}
+	if strings.TrimSpace(raw) == "" {
+		return activeProjectID, nil
+	}
+	var args struct {
+		ProjectID string `json:"project_id"`
+	}
+	if err := json.Unmarshal([]byte(raw), &args); err != nil {
+		return "", err
+	}
+	projectID := strings.TrimSpace(args.ProjectID)
+	if projectID == "" {
+		return activeProjectID, nil
+	}
+	if projectID != activeProjectID {
+		return "", fmt.Errorf("project_id %q does not match active project %q", projectID, activeProjectID)
+	}
+	return projectID, nil
+}
+
+func (s *skillFileToolSession) handleListProjectDocuments(ctx context.Context, raw string) (map[string]any, error) {
+	if s.ProjectDocs == nil {
+		return nil, fmt.Errorf("%s is unavailable without a project document provider", skillListProjectDocumentsToolName)
+	}
+	projectID, err := s.activeProjectIDFromArgs(raw)
+	if err != nil {
+		return nil, err
+	}
+	docs, err := s.ProjectDocs.ListProjectDocuments(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"type":       "project_document_list",
+		"project_id": projectID,
+		"count":      len(docs),
+		"documents":  docs,
+	}, nil
+}
+
+func (s *skillFileToolSession) handleReadProjectDocument(ctx context.Context, raw string) (map[string]any, error) {
+	if s.ProjectDocs == nil {
+		return nil, fmt.Errorf("%s is unavailable without a project document provider", skillReadProjectDocumentToolName)
+	}
+	projectID, err := s.activeProjectIDFromArgs(raw)
+	if err != nil {
+		return nil, err
+	}
+	var args struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal([]byte(raw), &args); err != nil {
+		return nil, err
+	}
+	kind := strings.TrimSpace(args.Kind)
+	if kind == "" {
+		return nil, fmt.Errorf("project document kind is required")
+	}
+	doc, err := s.ProjectDocs.ReadProjectDocument(ctx, projectID, kind)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"type":       "project_document",
+		"project_id": doc.ProjectID,
+		"kind":       doc.Kind,
+		"title":      doc.Title,
+		"body":       doc.Body,
+		"metadata":   doc.Metadata,
+	}, nil
+}
+
+func (s *skillFileToolSession) handleWriteProjectDocument(ctx context.Context, raw string) (map[string]any, error) {
+	if s.ProjectDocs == nil {
+		return nil, fmt.Errorf("%s is unavailable without a project document provider", skillWriteProjectDocumentToolName)
+	}
+	activeProjectID, err := s.activeProjectIDFromArgs(raw)
+	if err != nil {
+		return nil, err
+	}
+	var args ProjectDocumentWriteRequest
+	if err := json.Unmarshal([]byte(raw), &args); err != nil {
+		return nil, err
+	}
+	args.ProjectID = strings.TrimSpace(args.ProjectID)
+	if args.ProjectID == "" {
+		args.ProjectID = activeProjectID
+	}
+	if args.ProjectID != activeProjectID {
+		return nil, fmt.Errorf("project_id %q does not match active project %q", args.ProjectID, activeProjectID)
+	}
+	args.Kind = strings.TrimSpace(args.Kind)
+	if args.Kind == "" {
+		return nil, fmt.Errorf("project document kind is required")
+	}
+	args.Title = strings.TrimSpace(args.Title)
+	if args.Title == "" {
+		args.Title = args.Kind
+	}
+	if strings.TrimSpace(args.Body) == "" {
+		return nil, fmt.Errorf("project document body is required")
+	}
+	result, err := s.ProjectDocs.WriteProjectDocument(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"type":       "project_document",
+		"project_id": result.ProjectID,
+		"kind":       result.Kind,
+		"title":      result.Title,
+		"body_bytes": result.BodyBytes,
+		"synced":     result.Synced,
+	}, nil
 }
 
 func (s *skillFileToolSession) handleRead(raw string) (map[string]any, error) {
@@ -582,17 +772,13 @@ func skillDocumentHint(cmd skill.Command, session *skillFileToolSession) string 
 	}
 	root := filepath.ToSlash(session.WorkspaceRoot)
 	defaultDir := filepath.ToSlash(session.DocumentOutputDir)
-	projectRoot := filepath.ToSlash(session.ProjectRoot)
 	var names []string
 	for _, spec := range specs {
 		names = append(names, spec.Function.Name)
 	}
 	guidance := "When the task produces a durable novel artifact, prefer writing a markdown document under preferred_document_output_dir. If document_path is provided in the tool arguments, use that path. After writing, return a short summary with file path instead of repeating the whole document unless the user explicitly asked for chat-only output."
-	if strings.TrimSpace(session.ProjectID) != "" && strings.TrimSpace(session.ProjectRoot) == "" {
-		guidance += " Project mode is active and project state is database-backed. Treat the injected Active Novel Project Context as current canon. If the result should update long-lived project state, clearly label the target project document kind such as project_brief, world_rules, power_system, mainline, or current_state."
-	}
-	if strings.TrimSpace(session.ProjectRoot) != "" {
-		guidance += " Project mode is active: keep durable novel artifacts under active_project_root. Use 00-project for project briefs, reader contracts, style, and taboo; 01-bible for world and power rules; 02-outline for outlines; 03-drafts for prose drafts; 04-knowledge for shards and ledgers; 05-snapshots for chapter state snapshots; 07-audits for reviews; and 08-fact-cards for evidence-backed facts. preferred_document_output_dir is the default folder for new draft-like artifacts."
+	if strings.TrimSpace(session.ProjectID) != "" {
+		guidance += " Project mode is active and project state is provider-backed. Treat the injected Active Novel Project Context as current canon. If ListProjectDocuments, ReadProjectDocument, or WriteProjectDocument are available, use them for long-lived project state instead of raw file reads or writes. Those tools call the project document provider, which owns PostgreSQL, Redis, filesystem, S3, or any future backend sync. Use stable kinds such as novel_core, project_brief, world_rules, power_system, mainline, or current_state."
 	}
 	available := strings.Join(names, ", ")
 	if strings.Contains(available, skillBashToolName) || strings.Contains(available, skillPowerShellToolName) {
@@ -602,9 +788,6 @@ func skillDocumentHint(cmd skill.Command, session *skillFileToolSession) string 
 	b.WriteString(fmt.Sprintf("workspace_root: %s\n", root))
 	if strings.TrimSpace(session.ProjectID) != "" {
 		b.WriteString(fmt.Sprintf("active_project_id: %s\n", session.ProjectID))
-	}
-	if strings.TrimSpace(session.ProjectRoot) != "" {
-		b.WriteString(fmt.Sprintf("active_project_root: %s\n", projectRoot))
 	}
 	b.WriteString(fmt.Sprintf("preferred_document_output_dir: %s\n", defaultDir))
 	b.WriteString(fmt.Sprintf("allowed_local_tools: %s\n", available))

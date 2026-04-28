@@ -17,6 +17,13 @@ type Message struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type AppSetting struct {
+	Key       string             `json:"key"`
+	Value     string             `json:"value"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ModelProfile struct {
 	ID              string             `json:"id"`
 	Name            string             `json:"name"`
@@ -37,14 +44,17 @@ type ModelProfile struct {
 }
 
 type Project struct {
-	ID          string             `json:"id"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Status      string             `json:"status"`
-	Metadata    []byte             `json:"metadata"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	ID              string             `json:"id"`
+	Name            string             `json:"name"`
+	Description     string             `json:"description"`
+	Status          string             `json:"status"`
+	StorageProvider string             `json:"storage_provider"`
+	StorageBucket   string             `json:"storage_bucket"`
+	StoragePrefix   string             `json:"storage_prefix"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type ProjectDocument struct {

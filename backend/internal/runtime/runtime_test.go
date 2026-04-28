@@ -284,8 +284,8 @@ func TestActivateSkillsEvictsOldestRetainedSkillWhenPoolIsFull(t *testing.T) {
 
 func TestEffectiveSkillMaxTokensClampsDeepSeek(t *testing.T) {
 	rt := newTestRuntime(t)
-	rt.Config.Model.BaseURL = "https://api.deepseek.com"
-	rt.Config.Model.MaxOutput = 409600
+	rt.ModelConfig.BaseURL = "https://api.deepseek.com"
+	rt.ModelConfig.MaxOutput = 409600
 
 	if got := rt.effectiveSkillMaxTokens(); got != 393216 {
 		t.Fatalf("expected deepseek max token clamp, got %d", got)
@@ -364,8 +364,8 @@ func TestRunCarriesReasoningContentBetweenToolRounds(t *testing.T) {
 	}))
 	defer server.Close()
 
-	rt.Config.Model.BaseURL = server.URL
-	rt.Config.Model.APIKeyEnv = "TEST_API_KEY"
+	rt.ModelConfig.BaseURL = server.URL
+	rt.ModelConfig.APIKeyEnv = "TEST_API_KEY"
 	rt.Model = model.NewOpenAICompatible(server.URL, "TEST_API_KEY", "test-model", 5)
 
 	res, err := rt.Run(context.Background(), "write an urban opening")
@@ -409,8 +409,8 @@ func TestRunReturnsSkillOutputDirectWithoutRouterWrap(t *testing.T) {
 	}))
 	defer server.Close()
 
-	rt.Config.Model.BaseURL = server.URL
-	rt.Config.Model.APIKeyEnv = "TEST_API_KEY"
+	rt.ModelConfig.BaseURL = server.URL
+	rt.ModelConfig.APIKeyEnv = "TEST_API_KEY"
 	rt.Model = model.NewOpenAICompatible(server.URL, "TEST_API_KEY", "test-model", 5)
 
 	res, err := rt.Run(context.Background(), "write an urban opening")
@@ -504,6 +504,96 @@ func TestSkillDocumentHintIncludesProjectID(t *testing.T) {
 	if !strings.Contains(hint, "active_project_id: case-file") {
 		t.Fatalf("expected active project id in hint, got %q", hint)
 	}
+	if strings.Contains(hint, "allowed_local_tools: Read, Write, Edit, Glob, Bash, PowerShell, WriteProjectDocument") {
+		t.Fatalf("did not expect project document tool to be exposed when provider is absent, got %q", hint)
+	}
+}
+
+func TestProjectDocumentToolIsBuiltInWhenProjectWriterExists(t *testing.T) {
+	rt := newTestRuntime(t)
+	store, err := runstore.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("runstore.New failed: %v", err)
+	}
+	provider := &recordingProjectDocumentProvider{}
+	session := newSkillFileToolSession(RuntimeConfigView{
+		WorkspaceRoot:     rt.Config.Runtime.WorkspaceRoot,
+		DocumentOutputDir: rt.Config.Runtime.DocumentOutputDir,
+		ProjectID:         "case-file",
+		ProjectDocs:       provider,
+	}, store, "skill-calls/test")
+
+	specs := session.toolSpecs(nil)
+	names := toolSpecNames(specs)
+	if !containsString(names, skillListProjectDocumentsToolName) {
+		t.Fatalf("expected built-in project document list tool, got %v", names)
+	}
+	if !containsString(names, skillReadProjectDocumentToolName) {
+		t.Fatalf("expected built-in project document read tool, got %v", names)
+	}
+	if !containsString(names, skillWriteProjectDocumentToolName) {
+		t.Fatalf("expected built-in project document write tool, got %v", names)
+	}
+	hint := skillDocumentHint(skill.Command{}, session)
+	if !strings.Contains(hint, "WriteProjectDocument") || !strings.Contains(hint, "project document provider") {
+		t.Fatalf("expected project document hint, got %q", hint)
+	}
+
+	args, _ := json.Marshal(map[string]any{
+		"kind":  "novel_core",
+		"title": "小说情感内核",
+		"body":  "# 小说情感内核\n\n读者想要被看见。",
+	})
+	content, err := session.handleToolCallWithContext(context.Background(), model.ToolCall{
+		ID:   "call_project_doc_1",
+		Type: "function",
+		Function: model.FunctionCall{
+			Name:      skillWriteProjectDocumentToolName,
+			Arguments: string(args),
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected project document write to succeed: %v", err)
+	}
+	if len(provider.requests) != 1 {
+		t.Fatalf("expected one project document write, got %#v", provider.requests)
+	}
+	if provider.requests[0].ProjectID != "case-file" || provider.requests[0].Kind != "novel_core" {
+		t.Fatalf("unexpected write request: %#v", provider.requests[0])
+	}
+	if !strings.Contains(content, `"synced": true`) {
+		t.Fatalf("expected tool payload to report sync, got %s", content)
+	}
+
+	listContent, err := session.handleToolCallWithContext(context.Background(), model.ToolCall{
+		ID:   "call_project_doc_2",
+		Type: "function",
+		Function: model.FunctionCall{
+			Name:      skillListProjectDocumentsToolName,
+			Arguments: `{}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected project document list to succeed: %v", err)
+	}
+	if !strings.Contains(listContent, `"count": 1`) || !strings.Contains(listContent, `"novel_core"`) {
+		t.Fatalf("expected list payload to include written doc, got %s", listContent)
+	}
+
+	readContent, err := session.handleToolCallWithContext(context.Background(), model.ToolCall{
+		ID:   "call_project_doc_3",
+		Type: "function",
+		Function: model.FunctionCall{
+			Name:      skillReadProjectDocumentToolName,
+			Arguments: `{"kind":"novel_core"}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected project document read to succeed: %v", err)
+	}
+	if !strings.Contains(readContent, "读者想要被看见") {
+		t.Fatalf("expected read payload to include document body, got %s", readContent)
+	}
 }
 
 func TestSkillContextHintInjectsProjectContext(t *testing.T) {
@@ -512,13 +602,13 @@ func TestSkillContextHintInjectsProjectContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadInvocationCommand failed: %v", err)
 	}
-	rt.Config.Runtime.ProjectID = "case-file"
+	rt.ProjectID = "case-file"
 	rt.ProjectContext = "# Active Novel Project Context\n\n- project_id: case-file\n\n## 世界规则\n\n遗物会保留死者最后三分钟的执念。"
 
 	session := newSkillFileToolSession(RuntimeConfigView{
 		WorkspaceRoot:     rt.Config.Runtime.WorkspaceRoot,
 		DocumentOutputDir: rt.Config.Runtime.DocumentOutputDir,
-		ProjectID:         rt.Config.Runtime.ProjectID,
+		ProjectID:         rt.ProjectID,
 	}, rt.Store, "skill-calls/test")
 
 	hint := rt.skillContextHint(cmd, session)
@@ -708,8 +798,8 @@ func TestExecuteSkillCanPersistDocumentWithWriteTool(t *testing.T) {
 	}))
 	defer server.Close()
 
-	rt.Config.Model.BaseURL = server.URL
-	rt.Config.Model.APIKeyEnv = "TEST_API_KEY"
+	rt.ModelConfig.BaseURL = server.URL
+	rt.ModelConfig.APIKeyEnv = "TEST_API_KEY"
 	rt.Model = model.NewOpenAICompatible(server.URL, "TEST_API_KEY", "test-model", 5)
 
 	res, err := rt.Run(context.Background(), "写一个都市异能悬疑开篇，并把成品落到文档里")
@@ -729,6 +819,52 @@ func TestExecuteSkillCanPersistDocumentWithWriteTool(t *testing.T) {
 	if !strings.Contains(string(content), "尸检报告上的第二组血氧数据忽然自己跳了一下") {
 		t.Fatalf("expected persisted document content, got %q", string(content))
 	}
+}
+
+type recordingProjectDocumentProvider struct {
+	requests []ProjectDocumentWriteRequest
+}
+
+func (p *recordingProjectDocumentProvider) ListProjectDocuments(_ context.Context, projectID string) ([]ProjectDocumentSummary, error) {
+	out := make([]ProjectDocumentSummary, 0, len(p.requests))
+	for _, req := range p.requests {
+		if req.ProjectID != projectID {
+			continue
+		}
+		out = append(out, ProjectDocumentSummary{
+			ProjectID: req.ProjectID,
+			Kind:      req.Kind,
+			Title:     req.Title,
+			BodyBytes: len(req.Body),
+		})
+	}
+	return out, nil
+}
+
+func (p *recordingProjectDocumentProvider) ReadProjectDocument(_ context.Context, projectID, kind string) (ProjectDocumentReadResult, error) {
+	for _, req := range p.requests {
+		if req.ProjectID == projectID && req.Kind == kind {
+			return ProjectDocumentReadResult{
+				ProjectID: req.ProjectID,
+				Kind:      req.Kind,
+				Title:     req.Title,
+				Body:      req.Body,
+				Metadata:  req.Metadata,
+			}, nil
+		}
+	}
+	return ProjectDocumentReadResult{}, fmt.Errorf("project document %q not found", kind)
+}
+
+func (p *recordingProjectDocumentProvider) WriteProjectDocument(_ context.Context, req ProjectDocumentWriteRequest) (ProjectDocumentWriteResult, error) {
+	p.requests = append(p.requests, req)
+	return ProjectDocumentWriteResult{
+		ProjectID: req.ProjectID,
+		Kind:      req.Kind,
+		Title:     req.Title,
+		BodyBytes: len(req.Body),
+		Synced:    true,
+	}, nil
 }
 
 func newTestRuntime(t *testing.T) *Runtime {
@@ -810,7 +946,6 @@ Body`)
 	}
 	return &Runtime{
 		Config: config.Config{
-			Model: config.RuntimeModel{ID: "test-model"},
 			Runtime: config.RuntimeConfig{
 				WorkspaceRoot:        workspaceRoot,
 				DocumentOutputDir:    filepath.Join(workspaceRoot, "docs", "generated"),
@@ -824,8 +959,9 @@ Body`)
 				ActivationScoreRatio: 0.55,
 			},
 		},
-		Registry: reg,
-		Store:    store,
+		ModelConfig: ModelConfig{ID: "test-model", BaseURL: "http://example.invalid", APIKeyEnv: "TEST_API_KEY", MaxOutput: 4096, Temperature: 0.7, TimeoutSeconds: 5},
+		Registry:    reg,
+		Store:       store,
 	}
 }
 

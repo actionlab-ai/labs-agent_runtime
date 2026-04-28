@@ -15,17 +15,69 @@ import (
 
 type Runtime struct {
 	Config         config.Config
+	ModelConfig    ModelConfig
 	Registry       *skill.Registry
 	Model          *model.Client
 	Store          *runstore.Store
 	Debug          bool
+	ProjectID      string
 	ProjectContext string
+	ProjectDocs    ProjectDocumentProvider
 }
 
 type RunResult struct {
 	FinalText string
 	RunDir    string
 	RunID     string
+}
+
+type ProjectDocumentWriteRequest struct {
+	ProjectID string         `json:"project_id"`
+	Kind      string         `json:"kind"`
+	Title     string         `json:"title"`
+	Body      string         `json:"body"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+}
+
+type ProjectDocumentSummary struct {
+	ProjectID string `json:"project_id"`
+	Kind      string `json:"kind"`
+	Title     string `json:"title"`
+	BodyBytes int    `json:"body_bytes"`
+}
+
+type ProjectDocumentReadResult struct {
+	ProjectID string         `json:"project_id"`
+	Kind      string         `json:"kind"`
+	Title     string         `json:"title"`
+	Body      string         `json:"body"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+}
+
+type ProjectDocumentWriteResult struct {
+	ProjectID string `json:"project_id"`
+	Kind      string `json:"kind"`
+	Title     string `json:"title"`
+	BodyBytes int    `json:"body_bytes"`
+	Synced    bool   `json:"synced"`
+}
+
+type ProjectDocumentProvider interface {
+	ListProjectDocuments(context.Context, string) ([]ProjectDocumentSummary, error)
+	ReadProjectDocument(context.Context, string, string) (ProjectDocumentReadResult, error)
+	WriteProjectDocument(context.Context, ProjectDocumentWriteRequest) (ProjectDocumentWriteResult, error)
+}
+
+type ModelConfig struct {
+	Provider       string
+	ID             string
+	BaseURL        string
+	APIKey         string
+	APIKeyEnv      string
+	ContextWindow  int
+	MaxOutput      int
+	Temperature    float64
+	TimeoutSeconds int
 }
 
 type activatedSkillRef struct {
@@ -71,7 +123,26 @@ type toolCallOutcome struct {
 	RetainedSkills    []activatedSkillRef
 }
 
-func New(cfg config.Config) (*Runtime, error) {
+func New(cfg config.Config, modelCfg ModelConfig) (*Runtime, error) {
+	modelCfg.Provider = firstNonEmpty(modelCfg.Provider, "openai_compatible")
+	if modelCfg.ContextWindow <= 0 {
+		modelCfg.ContextWindow = 131072
+	}
+	if modelCfg.MaxOutput <= 0 {
+		modelCfg.MaxOutput = 4096
+	}
+	if modelCfg.Temperature == 0 {
+		modelCfg.Temperature = 0.7
+	}
+	if modelCfg.TimeoutSeconds <= 0 {
+		modelCfg.TimeoutSeconds = 180
+	}
+	if strings.TrimSpace(modelCfg.ID) == "" {
+		return nil, fmt.Errorf("runtime model.id is required")
+	}
+	if strings.TrimSpace(modelCfg.BaseURL) == "" {
+		return nil, fmt.Errorf("runtime model.base_url is required")
+	}
 	reg, err := skill.LoadRegistry(cfg.Runtime.SkillsDir)
 	if err != nil {
 		return nil, err
@@ -80,11 +151,11 @@ func New(cfg config.Config) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := model.NewOpenAICompatible(cfg.Model.BaseURL, cfg.Model.APIKeyEnv, cfg.Model.ID, cfg.Model.TimeoutSeconds)
-	if strings.TrimSpace(cfg.Model.APIKey) != "" {
-		client = model.NewOpenAICompatibleWithAPIKey(cfg.Model.BaseURL, cfg.Model.APIKey, cfg.Model.ID, cfg.Model.TimeoutSeconds)
+	client := model.NewOpenAICompatible(modelCfg.BaseURL, modelCfg.APIKeyEnv, modelCfg.ID, modelCfg.TimeoutSeconds)
+	if strings.TrimSpace(modelCfg.APIKey) != "" {
+		client = model.NewOpenAICompatibleWithAPIKey(modelCfg.BaseURL, modelCfg.APIKey, modelCfg.ID, modelCfg.TimeoutSeconds)
 	}
-	return &Runtime{Config: cfg, Registry: reg, Model: client, Store: store}, nil
+	return &Runtime{Config: cfg, ModelConfig: modelCfg, Registry: reg, Model: client, Store: store}, nil
 }
 
 func (r *Runtime) DryRun(input string) error {
@@ -278,8 +349,8 @@ func (r *Runtime) ExecuteSkill(ctx context.Context, skillID, originalUserInput s
 	fileTools := newSkillFileToolSession(RuntimeConfigView{
 		WorkspaceRoot:     r.Config.Runtime.WorkspaceRoot,
 		DocumentOutputDir: r.Config.Runtime.DocumentOutputDir,
-		ProjectID:         r.Config.Runtime.ProjectID,
-		ProjectRoot:       r.Config.Runtime.ProjectRoot,
+		ProjectID:         r.ProjectID,
+		ProjectDocs:       r.ProjectDocs,
 	}, r.Store, filepath.ToSlash(filepath.Join("skill-calls", safeID)))
 	compiled := ComposeSkillPrompt(cmd, originalUserInput, invocationArgs, r.skillContextHint(cmd, fileTools))
 	_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/compiled-prompt.md", safeID), compiled)
@@ -314,7 +385,7 @@ func (r *Runtime) ExecuteSkill(ctx context.Context, skillID, originalUserInput s
 			return lastText, nil
 		}
 		for _, tc := range msg.ToolCalls {
-			content, err := fileTools.handleToolCall(tc)
+			content, err := fileTools.handleToolCallWithContext(ctx, tc)
 			if err != nil {
 				content = `{"error":` + jsonQuote(err.Error()) + `}`
 			}
@@ -333,9 +404,6 @@ func (r *Runtime) skillContextHint(cmd skill.Command, fileTools *skillFileToolSe
 			return r.ProjectContext
 		}
 		return hint + "\n\n" + r.ProjectContext
-	}
-	if strings.TrimSpace(r.Config.Runtime.ProjectRoot) == "" {
-		return hint
 	}
 	return hint
 }
@@ -427,7 +495,7 @@ func (r *Runtime) writeChatDebug(rel string, req model.ChatRequest) {
 	}
 	payload := map[string]any{
 		"url":                  strings.TrimRight(r.Model.BaseURL, "/") + "/chat/completions",
-		"http_timeout_seconds": r.Config.Model.TimeoutSeconds,
+		"http_timeout_seconds": r.ModelConfig.TimeoutSeconds,
 		"headers": map[string]string{
 			"Content-Type":  "application/json",
 			"Authorization": maskAuthorization(r.Model.APIKey),
@@ -456,8 +524,8 @@ func maskAuthorization(apiKey string) string {
 }
 
 func (r *Runtime) effectiveSkillMaxTokens() int {
-	maxTokens := r.Config.Model.MaxOutput
-	if strings.Contains(strings.ToLower(r.Config.Model.BaseURL), "deepseek.com") && maxTokens > 393216 {
+	maxTokens := r.ModelConfig.MaxOutput
+	if strings.Contains(strings.ToLower(r.ModelConfig.BaseURL), "deepseek.com") && maxTokens > 393216 {
 		return 393216
 	}
 	return maxTokens

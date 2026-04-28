@@ -32,6 +32,12 @@ var knownIntentTerms = []string{
 	"mission",
 	"outline",
 	"plot",
+	"emotional core",
+	"novel core",
+	"story heart",
+	"desire",
+	"recognition",
+	"catharsis",
 	"\u5f00\u5934",
 	"\u5f00\u7bc7",
 	"\u7b2c\u4e00\u7ae0",
@@ -55,6 +61,14 @@ var knownIntentTerms = []string{
 	"\u4eba\u8bbe",
 	"\u4e3b\u7ebf",
 	"\u914d\u89d2",
+	"\u60c5\u611f\u5185\u6838",
+	"\u5c0f\u8bf4\u5185\u6838",
+	"\u65b0\u4e66\u5185\u6838",
+	"\u723d\u611f",
+	"\u8ba4\u53ef\u611f",
+	"\u4ee3\u507f",
+	"\u538b\u8feb",
+	"\u6e34\u671b",
 }
 
 var openingIntentTerms = []string{

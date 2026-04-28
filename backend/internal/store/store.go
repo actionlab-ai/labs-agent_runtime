@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -25,14 +28,26 @@ type Store struct {
 	queries *dbsqlc.Queries
 }
 
+const defaultModelSettingKey = "default_model_id"
+
+type AppSetting struct {
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Project struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Status      string          `json:"status"`
-	Metadata    json.RawMessage `json:"metadata"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Description     string          `json:"description"`
+	Status          string          `json:"status"`
+	StorageProvider string          `json:"storage_provider"`
+	StorageBucket   string          `json:"storage_bucket"`
+	StoragePrefix   string          `json:"storage_prefix"`
+	Metadata        json.RawMessage `json:"metadata"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 type ProjectDocument struct {
@@ -80,18 +95,24 @@ type Run struct {
 }
 
 type CreateProjectParams struct {
-	Name        string          `json:"name"`
-	ID          string          `json:"id,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Metadata    json.RawMessage `json:"metadata,omitempty"`
+	Name            string          `json:"name"`
+	ID              string          `json:"id,omitempty"`
+	Description     string          `json:"description,omitempty"`
+	StorageProvider string          `json:"storage_provider,omitempty"`
+	StorageBucket   string          `json:"storage_bucket,omitempty"`
+	StoragePrefix   string          `json:"storage_prefix,omitempty"`
+	Metadata        json.RawMessage `json:"metadata,omitempty"`
 }
 
 type UpdateProjectParams struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Status      string          `json:"status"`
-	Metadata    json.RawMessage `json:"metadata,omitempty"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Description     string          `json:"description"`
+	Status          string          `json:"status"`
+	StorageProvider string          `json:"storage_provider"`
+	StorageBucket   string          `json:"storage_bucket"`
+	StoragePrefix   string          `json:"storage_prefix"`
+	Metadata        json.RawMessage `json:"metadata,omitempty"`
 }
 
 type UpsertProjectDocumentParams struct {
@@ -189,11 +210,18 @@ func (s *Store) CreateProject(ctx context.Context, arg CreateProjectParams) (Pro
 	if id == "" {
 		id = project.Slug(name)
 	}
+	storage, err := normalizeProjectStorage(id, arg.StorageProvider, arg.StorageBucket, arg.StoragePrefix)
+	if err != nil {
+		return Project{}, err
+	}
 	p, err := s.queries.CreateProject(ctx, dbsqlc.CreateProjectParams{
-		ID:          id,
-		Name:        name,
-		Description: strings.TrimSpace(arg.Description),
-		Metadata:    jsonOrEmpty(arg.Metadata),
+		ID:              id,
+		Name:            name,
+		Description:     strings.TrimSpace(arg.Description),
+		StorageProvider: storage.provider,
+		StorageBucket:   storage.bucket,
+		StoragePrefix:   storage.prefix,
+		Metadata:        jsonOrEmpty(arg.Metadata),
 	})
 	if err != nil {
 		return Project{}, err
@@ -232,12 +260,27 @@ func (s *Store) UpdateProject(ctx context.Context, arg UpdateProjectParams) (Pro
 	if status == "" {
 		status = "active"
 	}
+	id := project.Slug(arg.ID)
+	if strings.TrimSpace(arg.StorageProvider) == "" && strings.TrimSpace(arg.StorageBucket) == "" && strings.TrimSpace(arg.StoragePrefix) == "" {
+		if existing, err := s.GetProject(ctx, id); err == nil {
+			arg.StorageProvider = existing.StorageProvider
+			arg.StorageBucket = existing.StorageBucket
+			arg.StoragePrefix = existing.StoragePrefix
+		}
+	}
+	storage, err := normalizeProjectStorage(id, arg.StorageProvider, arg.StorageBucket, arg.StoragePrefix)
+	if err != nil {
+		return Project{}, err
+	}
 	p, err := s.queries.UpdateProject(ctx, dbsqlc.UpdateProjectParams{
-		ID:          project.Slug(arg.ID),
-		Name:        strings.TrimSpace(arg.Name),
-		Description: strings.TrimSpace(arg.Description),
-		Status:      status,
-		Metadata:    jsonOrEmpty(arg.Metadata),
+		ID:              id,
+		Name:            strings.TrimSpace(arg.Name),
+		Description:     strings.TrimSpace(arg.Description),
+		Status:          status,
+		StorageProvider: storage.provider,
+		StorageBucket:   storage.bucket,
+		StoragePrefix:   storage.prefix,
+		Metadata:        jsonOrEmpty(arg.Metadata),
 	})
 	if err != nil {
 		return Project{}, err
@@ -330,6 +373,49 @@ func (s *Store) DeleteModelProfile(ctx context.Context, id string) error {
 	return s.queries.DeleteModelProfile(ctx, project.Slug(id))
 }
 
+func (s *Store) GetAppSetting(ctx context.Context, key string) (AppSetting, error) {
+	item, err := s.queries.GetAppSetting(ctx, strings.TrimSpace(key))
+	if err != nil {
+		return AppSetting{}, err
+	}
+	return convertAppSetting(item), nil
+}
+
+func (s *Store) UpsertAppSetting(ctx context.Context, key, value string) (AppSetting, error) {
+	item, err := s.queries.UpsertAppSetting(ctx, dbsqlc.UpsertAppSettingParams{
+		Key:   strings.TrimSpace(key),
+		Value: strings.TrimSpace(value),
+	})
+	if err != nil {
+		return AppSetting{}, err
+	}
+	return convertAppSetting(item), nil
+}
+
+func (s *Store) DeleteAppSetting(ctx context.Context, key string) error {
+	return s.queries.DeleteAppSetting(ctx, strings.TrimSpace(key))
+}
+
+func (s *Store) GetDefaultModelID(ctx context.Context) (string, error) {
+	item, err := s.GetAppSetting(ctx, defaultModelSettingKey)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return strings.TrimSpace(item.Value), nil
+}
+
+func (s *Store) SetDefaultModelID(ctx context.Context, modelID string) error {
+	_, err := s.UpsertAppSetting(ctx, defaultModelSettingKey, project.Slug(modelID))
+	return err
+}
+
+func (s *Store) ClearDefaultModelID(ctx context.Context) error {
+	return s.DeleteAppSetting(ctx, defaultModelSettingKey)
+}
+
 func (s *Store) UpsertProjectDocument(ctx context.Context, arg UpsertProjectDocumentParams) (ProjectDocument, error) {
 	doc, err := s.queries.UpsertProjectDocument(ctx, dbsqlc.UpsertProjectDocumentParams{
 		ProjectID: project.Slug(arg.ProjectID),
@@ -390,14 +476,34 @@ func (s *Store) FailRun(ctx context.Context, id int64, message string) (Run, err
 }
 
 func convertProject(p dbsqlc.Project) Project {
+	storageProvider := strings.TrimSpace(p.StorageProvider)
+	if storageProvider == "" {
+		storageProvider = "filesystem"
+	}
+	storagePrefix := strings.TrimSpace(p.StoragePrefix)
+	if storagePrefix == "" {
+		storagePrefix = project.Slug(p.ID)
+	}
 	return Project{
-		ID:          p.ID,
-		Name:        p.Name,
-		Description: p.Description,
-		Status:      p.Status,
-		Metadata:    normalizeJSON(p.Metadata),
-		CreatedAt:   timeFromTimestamptz(p.CreatedAt),
-		UpdatedAt:   timeFromTimestamptz(p.UpdatedAt),
+		ID:              p.ID,
+		Name:            p.Name,
+		Description:     p.Description,
+		Status:          p.Status,
+		StorageProvider: storageProvider,
+		StorageBucket:   p.StorageBucket,
+		StoragePrefix:   storagePrefix,
+		Metadata:        normalizeJSON(p.Metadata),
+		CreatedAt:       timeFromTimestamptz(p.CreatedAt),
+		UpdatedAt:       timeFromTimestamptz(p.UpdatedAt),
+	}
+}
+
+func convertAppSetting(item dbsqlc.AppSetting) AppSetting {
+	return AppSetting{
+		Key:       item.Key,
+		Value:     item.Value,
+		CreatedAt: timeFromTimestamptz(item.CreatedAt),
+		UpdatedAt: timeFromTimestamptz(item.UpdatedAt),
 	}
 }
 
@@ -478,6 +584,39 @@ func optionalProjectID(id string) string {
 		return ""
 	}
 	return project.Slug(id)
+}
+
+type normalizedProjectStorage struct {
+	provider string
+	bucket   string
+	prefix   string
+}
+
+func normalizeProjectStorage(projectID, provider, bucket, prefix string) (normalizedProjectStorage, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" {
+		provider = "filesystem"
+	}
+	bucket = strings.TrimSpace(bucket)
+	prefix = strings.Trim(strings.TrimSpace(prefix), "/")
+	if prefix == "" {
+		prefix = project.Slug(projectID)
+	}
+	switch provider {
+	case "filesystem":
+		clean := path.Clean(strings.ReplaceAll(prefix, "\\", "/"))
+		if clean == "." || strings.HasPrefix(clean, "../") || path.IsAbs(clean) {
+			return normalizedProjectStorage{}, fmt.Errorf("project storage_prefix must stay within the filesystem project root")
+		}
+		prefix = clean
+	case "s3":
+		if bucket == "" {
+			return normalizedProjectStorage{}, fmt.Errorf("project storage_bucket is required when storage_provider is s3")
+		}
+	default:
+		return normalizedProjectStorage{}, fmt.Errorf("project storage_provider must be filesystem or s3")
+	}
+	return normalizedProjectStorage{provider: provider, bucket: bucket, prefix: prefix}, nil
 }
 
 func textFromPg(value pgtype.Text) string {

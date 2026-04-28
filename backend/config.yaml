@@ -1,20 +1,8 @@
-model:
-  provider: openai_compatible
-  id: deepseek-v4-flash
-  base_url: https://api.deepseek.com
-  api_key: ""
-  api_key_env: DEEPSEEK_API_KEY
-  context_window: 1000000
-  max_output_tokens: 32768
-  temperature: 0.7
-  timeout_seconds: 180
 runtime:
   skills_dir: ./skills
   runs_dir: ./runs
   workspace_root: ..
-  document_output_dir: ../docs/08-generated-drafts
-  project_id: ""
-  project_root: ""
+  document_output_dir: ../projects
   max_tool_rounds: 4
   max_skill_tool_rounds: 6
   force_tool_search_first: true
@@ -27,5 +15,33 @@ runtime:
   activation_score_ratio: 0.55
 database:
   url: ""
+  host: 36.138.61.152
+  port: 30432
+  name: codefly
+  user: postgres
+  password: ""
+  sslmode: disable
+  connect_timeout_seconds: 5
   migrations_dir: ./internal/db/migrations
   auto_migrate: true
+redis:
+  enabled: true
+  required: false
+  mode: standalone
+  addrs:
+    - 36.138.61.152:30011
+  # mode: cluster
+  # addrs:
+  #   - 36.138.61.152:30001
+  #   - 36.138.61.152:30002
+  #   - 36.138.61.152:30003
+  #   - 36.138.61.152:30004
+  #   - 36.138.61.152:30005
+  #   - 36.138.61.152:30006
+  password: ""
+  key_prefix: novelrt
+  ttl_seconds: 300
+logging:
+  level: debug
+  encoding: console
+  development: true

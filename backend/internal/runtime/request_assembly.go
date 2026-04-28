@@ -3,7 +3,6 @@ package runtime
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -82,12 +81,12 @@ func (r *Runtime) buildRouterAssembly(userInput string, state runState, conversa
 	messages, steps := buildRouterMessages(systemPrompt, conversation, deferredSkills, retainedRefs)
 
 	chatReq := model.ChatRequest{
-		Model:       r.Config.Model.ID,
+		Model:       r.ModelConfig.ID,
 		Messages:    messages,
 		Tools:       toolSpecs,
 		ToolChoice:  "auto",
 		Temperature: 0.1,
-		MaxTokens:   min(2048, r.Config.Model.MaxOutput),
+		MaxTokens:   min(2048, r.ModelConfig.MaxOutput),
 	}
 	return routerAssembly{
 		Round:              round,
@@ -115,11 +114,11 @@ func (r *Runtime) buildSkillAssembly(cmd skill.Command, compiledPrompt string, r
 	}
 	localTools := describeLocalTools(toolSpecs)
 	chatReq := model.ChatRequest{
-		Model:       firstNonEmpty(cmd.Model, r.Config.Model.ID),
+		Model:       firstNonEmpty(cmd.Model, r.ModelConfig.ID),
 		Messages:    append([]model.Message{{Role: "system", Content: systemText}}, conversation...),
 		Tools:       toolSpecs,
 		ToolChoice:  "auto",
-		Temperature: r.Config.Model.Temperature,
+		Temperature: r.ModelConfig.Temperature,
 		MaxTokens:   r.effectiveSkillMaxTokens(),
 	}
 	return skillAssembly{
@@ -160,11 +159,8 @@ Constraints:
 			Content: "Current round rule: only tool_search should be used to discover a suitable local skill before any direct skill execution.",
 		})
 	}
-	if strings.TrimSpace(r.Config.Runtime.ProjectID) != "" {
-		projectNote := fmt.Sprintf("Active novel project is selected: project_id=%s. Treat follow-up requests such as worldbuilding, opening, outline, or revision as work inside this project unless the user explicitly says otherwise.", r.Config.Runtime.ProjectID)
-		if strings.TrimSpace(r.Config.Runtime.ProjectRoot) != "" {
-			projectNote = fmt.Sprintf("Active novel project is selected: project_id=%s, project_root=%s. Treat follow-up requests such as worldbuilding, opening, outline, or revision as work inside this project unless the user explicitly says otherwise.", r.Config.Runtime.ProjectID, filepath.ToSlash(r.Config.Runtime.ProjectRoot))
-		}
+	if strings.TrimSpace(r.ProjectID) != "" {
+		projectNote := fmt.Sprintf("Active novel project is selected: project_id=%s. Treat follow-up requests such as worldbuilding, opening, outline, or revision as work inside this project unless the user explicitly says otherwise.", r.ProjectID)
 		blocks = append(blocks, promptBlock{
 			Label:   "active_project",
 			Content: projectNote,

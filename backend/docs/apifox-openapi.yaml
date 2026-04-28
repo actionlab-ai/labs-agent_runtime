@@ -14,6 +14,7 @@ tags:
   - name: Projects
   - name: Project Documents
   - name: Models
+  - name: Settings
   - name: Runs
 paths:
   /healthz:
@@ -82,6 +83,8 @@ paths:
               id: urban-rebirth
               name: 都市重生
               description: 都市异能悬疑项目
+              storage_provider: filesystem
+              storage_prefix: urban-rebirth
               metadata: {}
       responses:
         "200":
@@ -129,6 +132,8 @@ paths:
               name: 都市重生
               description: 更新后的项目描述
               status: active
+              storage_provider: filesystem
+              storage_prefix: urban-rebirth
               metadata: {}
       responses:
         "200":
@@ -319,8 +324,51 @@ paths:
     delete:
       tags: [Models]
       summary: Soft delete model profile
+      description: Fails if this model is currently configured as the database default model.
       parameters:
         - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+
+  /v1/settings/default-model:
+    get:
+      tags: [Settings]
+      summary: Get default model setting
+      responses:
+        "200":
+          description: Default model setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DefaultModelResponse"
+    put:
+      tags: [Settings]
+      summary: Set default model setting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DefaultModelRequest"
+            example:
+              model: deepseek-flash
+      responses:
+        "200":
+          description: Default model updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DefaultModelResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Settings]
+      summary: Clear default model setting
       responses:
         "200":
           description: Deleted
@@ -333,7 +381,7 @@ paths:
     post:
       tags: [Runs]
       summary: Execute one runtime run
-      description: Uses project context from PostgreSQL and optionally selects a model profile.
+      description: Uses project context from PostgreSQL and selects a model profile from the database. model is required unless a default model is stored in the database.
       requestBody:
         required: true
         content:
@@ -421,6 +469,16 @@ components:
           type: string
         description:
           type: string
+        storage_provider:
+          type: string
+          enum: [filesystem, s3]
+          default: filesystem
+        storage_bucket:
+          type: string
+          description: Required when storage_provider is s3.
+        storage_prefix:
+          type: string
+          description: Folder name or S3 key prefix for project artifacts.
         metadata:
           $ref: "#/components/schemas/JSONValue"
     UpdateProjectRequest:
@@ -434,6 +492,15 @@ components:
         status:
           type: string
           example: active
+        storage_provider:
+          type: string
+          enum: [filesystem, s3]
+        storage_bucket:
+          type: string
+          description: Required when storage_provider is s3.
+        storage_prefix:
+          type: string
+          description: Folder name or S3 key prefix for project artifacts.
         metadata:
           $ref: "#/components/schemas/JSONValue"
     Project:
@@ -446,6 +513,13 @@ components:
         description:
           type: string
         status:
+          type: string
+        storage_provider:
+          type: string
+          enum: [filesystem, s3]
+        storage_bucket:
+          type: string
+        storage_prefix:
           type: string
         metadata:
           $ref: "#/components/schemas/JSONValue"
@@ -527,6 +601,21 @@ components:
             status:
               type: string
               example: active
+    DefaultModelRequest:
+      type: object
+      required: [model]
+      properties:
+        model:
+          type: string
+    DefaultModelResponse:
+      type: object
+      properties:
+        default_model_id:
+          type: string
+        model:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ModelProfile"
     ModelProfile:
       type: object
       properties:
@@ -568,8 +657,10 @@ components:
       properties:
         project:
           type: string
+          description: Optional current project ID selected by the web UI. If omitted, the run is not bound to project context.
         model:
           type: string
+          description: Required unless a default model is stored in the database.
         input:
           type: string
         dry_run:
