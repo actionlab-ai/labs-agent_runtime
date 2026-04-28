@@ -19,7 +19,7 @@ database:
   port: 30432
   name: codefly
   user: postgres
-  password: ""
+  password: "Postgres@123456"
   sslmode: disable
   connect_timeout_seconds: 5
   migrations_dir: ./internal/db/migrations
@@ -38,7 +38,7 @@ redis:
   #   - 36.138.61.152:30004
   #   - 36.138.61.152:30005
   #   - 36.138.61.152:30006
-  password: ""
+  password: "MyS3cureP@ss"
   key_prefix: novelrt
   ttl_seconds: 300
 logging:

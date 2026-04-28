@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"novel-agent-runtime/internal/config"
+	"novel-agent-runtime/internal/httpapi"
 )
 
 func main() {
@@ -18,16 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
-	if err := serveHTTP(cfg, strings.TrimSpace(*addr), *debug); err != nil {
+	if err := httpapi.Serve(cfg, strings.TrimSpace(*addr), *debug); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return ""
 }

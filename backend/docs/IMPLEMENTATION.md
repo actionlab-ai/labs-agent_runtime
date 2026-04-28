@@ -1,231 +1,153 @@
 # 实现说明
 
-这份文档描述当前 `Novel Agent Runtime` 的实际运行结构，不再站在旧版视角描述。
+这份文档描述当前真实代码结构，不站在旧版本视角。
 
-## 1. 当前到底实现到哪一步
+## 1. 目录职责
 
-当前 runtime 已经实现了：
+### 进程入口
 
-1. 启动时只加载 skill metadata
-2. 首轮只暴露 `tool_search`
-3. `tool_search` 返回：
-   - query 解析
-   - ranking hits
-   - `tool_reference_like` 激活对象
-   - activation window
-   - retained discovered-skill pool
-4. 下一轮动态重建 tools 列表
-5. 激活后的 skill tool 可暴露 skill 自己声明的 `tool_input_schema`
-6. skill executor 内部支持：
-   - `Read`
-   - `Write`
-   - `Edit`
-   - `Glob`
-   - `Bash`
-   - `PowerShell`
-7. 小说类 durable output 可以直接落成 markdown 文档
-8. skill 执行成功后，默认直接返回 skill 输出或文档摘要
-9. request assembly 会把预处理后的 messages / tools / prompt / final chat request 落盘
-10. response analysis 会把每轮是否发生 tool call 结构化落盘
+- [main.go](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/cmd/novelrt/main.go)
 
-## 2. 关键调用链
+只做三件事：
 
-当前主链可以概括为：
+1. 解析命令行参数
+2. 加载配置
+3. 调用 `httpapi.Serve(...)`
 
-```text
-用户输入
--> Router 首轮只看到 tool_search
--> 模型调用 tool_search
--> runtime 返回 hits + tool_reference_like + activation plan
--> runtime 重建下一轮 tools
--> 模型调用 activated skill tool
--> runtime 按需加载完整 SKILL.md
--> skill executor 发起第二次模型调用
--> skill executor 如有需要继续调用 Read / Write / Edit / Glob / Bash / PowerShell
--> 成功后返回 skill 输出或文档路径摘要
-```
+### HTTP API 层
 
-## 3. 现在的请求装配器长什么样
+- [internal/httpapi](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/internal/httpapi)
 
-当前 runtime 不再是“拿着 messages 和 tools 直接发模型”。
+这层负责：
 
-现在每轮请求前，都会先显式 build assembly。
+- 构建 Gin router
+- 注册各资源路由
+- 装配 store / cache / filesystem 适配器
+- 固定 workflow 调度
+- 通用 `/v1/runs` 调度
+- service 层编排
 
-### Router assembly
+当前子文件分工：
 
-每轮 router 会先组装：
+- `app.go`: 服务启动与 router 装配
+- `api_types.go`: HTTP request DTO 和 `appStore` 接口
+- `service_errors.go`: service 层状态错误
+- `runtime_factory.go`: 共享 runtime/session 装配
+- `run_service.go`: `/v1/runs` service
+- `workflow_service.go`: 固定 workflow service
+- `routes_*.go`: 各资源路由
+- `workflow_*.go`: 固定 workflow 路由、计划、持久化
+- `project_document_provider.go`: runtime 项目文档 provider
+- `project_store.go`: project store adapter
+- `model_store.go`: model store adapter
+- `stores.go`: store adapter 基础类型
+- `http_helpers.go`: 公共 helper
 
-1. `system prompt blocks`
-2. `<available-deferred-skills>` reminder
-3. `<retained-skill-tools>` reminder
-4. live conversation
-5. final tool specs
-6. final chat request
+### 运行时与业务层
 
-然后落盘到：
+- `internal/runtime`
+- `internal/workflow`
+- `internal/skill`
+- `internal/project`
+- `internal/store`
 
-- `router/round-XX-assembly.json`
-- `router/round-XX-assembly.md`
+这里才是真正的业务能力实现。
 
-### Skill assembly
+## 2. 两条主要执行链
 
-每轮 skill executor 会先组装：
-
-1. executor system prompt
-2. compiled skill prompt
-3. local tool pack
-4. final chat request
-
-然后落盘到：
-
-- `skill-calls/<skill>/round-XX-assembly.json`
-- `skill-calls/<skill>/round-XX-assembly.md`
-
-## 4. 为什么这层很重要
-
-这层是当前 Go runtime 向 `novelcode` 靠近时最关键的一步之一。
-
-因为 `novelcode` 的强点并不只是：
-
-- 有 `ToolSearch`
-- 有 `Read / Write / Edit / Glob`
-
-而是它在真正发 API 请求前，会先做一遍：
-
-- messages 预处理
-- deferred tools 处理
-- final tool schema 装配
-- final system prompt 组装
-
-现在 Go 版虽然还没有 `novelcode/messages.ts` 那么重的 transcript repair / compaction 体系，但已经有了清晰的 request assembly 层。
-
-## 5. 现在比旧版强在哪
-
-旧版更像这样：
+### 通用运行链
 
 ```text
-tool_search
--> 返回 skill metadata
--> 模型挑一个 skill_id
--> 调 generic skill_call
+/v1/runs
+-> 选择模型
+-> 读取项目上下文
+-> Runtime.Run(...)
+-> router 可调用 tool_search
+-> 动态激活 skill tool
+-> skill executor 执行 skill
 ```
 
-新版更像这样：
+### 固定 workflow 链
 
 ```text
-tool_search
--> 返回激活引用和可调用面变化
--> 下一轮可用 tools 真被重建
--> 模型优先调用 activated skill tool
+/v1/workflows/project-kickoff
+或
+/v1/workflows/project-kernel
+-> 固定选中 skill
+-> SequentialWorkflowRunner
+-> Runtime.ExecuteSkill(...)
+-> 结果写回项目文档
 ```
 
-也就是说，旧版 search 更像“推荐”。
-新版 search 已经是“动态改变后续能力面”。
+## 3. 当前固定 workflow 映射
 
-## 6. skill-specific schema 是怎么接进来的
+### `project-kickoff`
 
-如果 skill frontmatter 里声明了：
+- 固定 skill: `novel-project-kickoff`
+- 固定写回:
+  - `project_brief`
+  - `reader_contract`
+  - `style_guide`
+  - `taboo`
 
-- `tool_description`
-- `tool_contract`
-- `tool_output_contract`
-- `tool_input_schema`
+### `project-kernel`
 
-那么激活后的 skill tool 就不再只是：
+- 固定 skill: `novel-emotional-core`
+- 固定写回:
+  - `novel_core`
 
-```json
-{"task":"..."}
-```
+## 4. skill 到模型请求的真实封装
 
-而是可以直接暴露：
+服务端不会把 `skill_id` 裸发给模型。
 
-- `premise`
-- `protagonist`
-- `power`
-- `setting`
-- `must_use`
-- `constraints`
+实际过程在：
 
-这种结构化输入。
+- [ExecuteSkill](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/internal/runtime/runtime.go:343)
+- [ComposeSkillPrompt](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/internal/runtime/runtime.go:411)
+- [skillDocumentHint](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/internal/runtime/file_tools.go:768)
 
-这让当前 Go runtime 比之前更接近“真实工具 schema”的感觉。
+它会组装出一份完整 prompt，包含：
 
-## 7. 为什么还保留 `skill_call`
+1. Skill Metadata
+2. Skill Tooling
+3. Base Directory
+4. Activated Tool Arguments
+5. Skill Instruction
+6. Original User Request
+7. Current Skill Task
+8. Output Rule
 
-`skill_call` 还在，但现在是兼容兜底层，不是主路径。
+然后再把 `tools` 一起挂到模型请求里。
 
-保留它的原因是：
+## 5. 为什么这次要把 cmd 层继续下沉
 
-1. 旧 prompt / 旧习惯仍然能过渡
-2. 未来某些 skill-specific tool 还没完全稳定时，有一个统一 fallback
-3. 出问题时更容易做回退
+之前的问题不是“文件多”，而是“HTTP 细节、store 适配、workflow 编排、入口装配都堆在 cmd 目录里”。
 
-但从 router prompt 到 tool spec 设计，当前都在明确鼓励模型优先调用 activated skill tool。
+这会带来三个维护问题：
 
-## 8. 文件工具层现在怎么接入
+1. 读入口时看不出真正服务边界
+2. 加新接口时容易继续堆大文件
+3. 测试和实现都绑在 `package main`
 
-当前本地工具不在 router 顶层直接暴露，而是在 skill executor 内部按需暴露。
+所以现在把 HTTP 层整体下沉到 `internal/httpapi`，目的是：
+
+1. `cmd` 只保留可执行入口
+2. `httpapi` 成为可独立测试的服务层
+3. 后续继续拆子模块时，有稳定的承载位置
+
+## 6. 当前边界
+
+现在已经完成的是“服务层结构整理”，不是业务协议重写。
 
 也就是说：
 
-- router 负责发现和激活 skill
-- skill executor 负责在被激活后，决定是否读写文档，或是否执行终端命令
+- API 路径没变
+- workflow 语义没变
+- runtime 行为没变
 
-这很适合小说工作流，因为：
+变化的是：
 
-- 搜索和激活逻辑保持干净
-- 文档操作更贴近 skill 自己的业务上下文
-- shell 操作也被限制在 skill 局部上下文里，不会污染 router 层
-- 产物能直接落到 markdown 文件，而不是只能回到终端
-
-## 9. 响应分析现在怎么落盘
-
-当前 router 和 skill executor 每轮响应后，都会额外生成：
-
-- `router/round-XX-response-analysis.json`
-- `skill-calls/<skill>/round-XX-response-analysis.json`
-
-这里面会直接告诉你：
-
-- 这一轮有没有 `tool_calls`
-- tool name 是什么
-- finish reason 是什么
-- 文本内容是什么
-
-这让“看模型到底是不是在调工具”变得简单很多。
-
-## 10. 当前已知边界
-
-### 边界 1：还没有原生 `tool_reference`
-
-我们现在的 `tool_reference_like` 是 Go runtime 里的等价物，不是 wire-level 的原生 `tool_reference`。
-
-### 边界 2：retained pool 还只是单次 Run 内记忆
-
-它还没有变成 transcript / mem 驱动的跨轮恢复机制。
-
-### 边界 3：skill 依然会进入一次 skill executor 模型调用
-
-也就是说，我们现在更像：
-
-```text
-发现 skill 工具
--> 把结构化参数交给 skill executor
-```
-
-而不是：
-
-```text
-发现真实底层工具
--> 直接在同一模型回合里完成一切
-```
-
-但对“小说 skill runtime”这个产品目标来说，这条路是合理的。
-
-## 11. 当前最值得继续打磨的方向
-
-按优先级看，下一步最值钱的是：
-
-1. 增加“未 discover 先误调用”的自修复提示
-2. 等 mem 系统稳定后，再做跨轮 discovered memory
-3. 在 tool 层稳定后，再继续扩 `opening / outline / rewrite` 这类 skill contract
+- 目录更清楚
+- 依赖更集中
+- route 层变薄
+- 复杂编排开始下沉到 service 层

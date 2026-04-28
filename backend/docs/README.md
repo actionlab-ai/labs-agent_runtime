@@ -1,102 +1,58 @@
 # 文档总览
 
-这是当前 `backend/docs` 的主入口。
+截至 `2026-04-28`，后端当前可以分成三层理解：
 
-如果你只想先知道“现在整体做到哪了”，先看这份。
+1. 进程入口层
+   - [main.go](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/cmd/novelrt/main.go)
+   - 只负责读取配置并启动 HTTP 服务。
+2. HTTP API 层
+   - [internal/httpapi](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/internal/httpapi)
+   - 负责路由、workflow 编排、run 编排、项目文档落库。
+3. 运行时与业务层
+   - `internal/runtime`
+   - `internal/workflow`
+   - `internal/skill`
+   - `internal/project`
+   - `internal/store`
 
-## 当前整体进度
+## 现在最关键的接口
 
-截至 `2026-04-27`，当前进度可以分成几层：
+- `POST /v1/runs`
+  - 通用入口。
+  - 允许 router、`tool_search` 和动态 skill tool 激活。
+- `POST /v1/workflows/project-kickoff`
+  - 固定执行 `novel-project-kickoff`。
+  - 负责项目定调。
+- `POST /v1/workflows/project-kernel`
+  - 固定执行 `novel-emotional-core`。
+  - 负责情感内核。
+  - 现在支持“信息不足先反问，不落正式 novel_core”。
 
-### Tool Layer
+## 这轮最重要的变化
 
-- 已完成：`tool_search -> activation -> retained pool -> skill execution`
-- 已完成：`tool_reference_like`
-- 已完成：skill-specific `tool_input_schema`
-- 已完成：skill executor 内部 `Read / Write / Edit / Glob / Bash / PowerShell`
-- 已完成：router / skill executor request assembly 落盘
-- 已完成：默认文档落地目录 [docs/08-generated-drafts](../../docs/08-generated-drafts/README.md)
-- 已完成：DeepSeek 调试链路与 `-debug` 落盘
-- 待做：未 discover 先误调用时的自修复提示
-- 暂缓：跨轮 discovered memory，等 mem 系统稳定后推进
+- `novel-emotional-core` 改成了明确的 `clarify_first` 契约。
+- `project-kernel` 现在会返回：
+  - `response_mode`
+  - `needs_input`
+- 当模型输出的是澄清问题时：
+  - `response_mode=clarification`
+  - `needs_input=true`
+  - 不会把结果落成正式 `novel_core`
+- 当模型输出的是正式内核文档时：
+  - `response_mode=document`
+  - `needs_input=false`
+  - 会落库为 `novel_core`
 
-### Skill Layer
+## 推荐阅读顺序
 
-- 已完成：`webnovel-opening-sniper` 的基础 tool contract
-- 已完成：`opening_v1` 的初步输出约束
-- 已完成：`novel-idea-bootstrap` 的 `bootstrap_v1` 起盘与澄清约束
-- 待做：`outline_v1`
-- 待做：`rewrite_v1`
-- 未开始：大规模小说 skill 库扩展
-
-### Runtime 体验层
-
-- 已完成：skill 成功后 direct return
-- 已完成：debug 模式保存 router / skill executor 请求与响应
-- 已完成：DeepSeek `reasoning_content` 兼容
-- 已完成：DeepSeek token ceiling 保护
-
-## 当前推荐阅读顺序
-
-1. [CONFIG.md](CONFIG.md)
-2. [BUSINESS_ARCHITECTURE.md](BUSINESS_ARCHITECTURE.md)
-3. [SKILL_WORKFLOW_RUNTIME.md](SKILL_WORKFLOW_RUNTIME.md)
-4. [FULL_REQUEST_FLOW.md](FULL_REQUEST_FLOW.md)
-5. [IMPLEMENTATION.md](IMPLEMENTATION.md)
-6. [FILE_TOOLS_AND_DOCUMENT_OUTPUT.md](FILE_TOOLS_AND_DOCUMENT_OUTPUT.md)
-7. [SEARCH_PIPELINE.md](SEARCH_PIPELINE.md)
-8. [TOOL_SEARCH_VS_NOVELCODE.md](TOOL_SEARCH_VS_NOVELCODE.md)
-9. [DISCOVERED_SKILL_POOL.md](DISCOVERED_SKILL_POOL.md)
-10. [SKILL_OUTPUT_CONTRACTS.md](SKILL_OUTPUT_CONTRACTS.md)
-11. [NEXT_STEPS.md](NEXT_STEPS.md)
-
-## 各文档现在各自负责什么
-
-- `CONFIG.md`
-  - 当前真实配置、环境变量覆盖和 HTTP 服务启动参数
-- `BUSINESS_ARCHITECTURE.md`
-  - 当前业务能力、数据流和下一步 workflow 产品闭环的总览图
-- `SKILL_WORKFLOW_RUNTIME.md`
-  - SkillProvider / ContextProvider / SkillRunner / WorkflowRunner 的边界，以及本地 skill 与 PostgreSQL 项目上下文如何协作
-- `IMPLEMENTATION.md`
-  - 当前运行时架构和调用链
-- `FULL_REQUEST_FLOW.md`
-  - 从用户输入到最终模型请求的完整 assembly 流程
-- `FILE_TOOLS_AND_DOCUMENT_OUTPUT.md`
-  - `Read / Write / Edit / Glob` 以及文档落地策略
-- `SEARCH_PIPELINE.md`
-  - `tool_search` 的搜索、排序、激活和 schema 暴露机制
-- `TOOL_SEARCH_VS_NOVELCODE.md`
-  - 和本地 `novelcode` 的真实差距
-- `DISCOVERED_SKILL_POOL.md`
-  - retained pool 为什么重要
-- `SKILL_OUTPUT_CONTRACTS.md`
-  - 为什么 tool 层稳定后还要做 skill 输出 contract
-- `NEXT_STEPS.md`
-  - 当前真实 roadmap
-- `CHANGELOG-v0.2.md`
-  - 历史归档，不代表当前状态
-
-## 当前最关键的判断
-
-现在项目不该再被理解成：
-
-```text
-一个简单的 skill 检索器
-```
-
-而应该理解成：
-
-```text
-一个正在往 novelcode 风格推进的 Go 版 deferred skill runtime
-```
-
-只是现在仍然处在：
-
-- tool 层已基本成型
-- memory 层还没开始接入
-- 小说 skill 库还没大规模扩展
-- 文件工具层已经具备“把 skill 产物真实落到文档”的基础能力
-- 请求装配层已经具备“把每轮真实发给模型的内容逐轮落盘”的基础能力
-
-这个阶段。
+1. [BUSINESS_ARCHITECTURE.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/BUSINESS_ARCHITECTURE.md)
+2. [IMPLEMENTATION.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/IMPLEMENTATION.md)
+3. [PROJECT_KICKOFF_FLOW.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/PROJECT_KICKOFF_FLOW.md)
+4. [FIXED_WORKFLOW_MODEL_REQUEST.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/FIXED_WORKFLOW_MODEL_REQUEST.md)
+5. [SKILL_WORKFLOW_RUNTIME.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/SKILL_WORKFLOW_RUNTIME.md)
+6. [FULL_REQUEST_FLOW.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/FULL_REQUEST_FLOW.md)
+7. [SEARCH_PIPELINE.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/SEARCH_PIPELINE.md)
+8. [FILE_TOOLS_AND_DOCUMENT_OUTPUT.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/FILE_TOOLS_AND_DOCUMENT_OUTPUT.md)
+9. [SQL_RETRIEVAL_ARCHITECTURE.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/SQL_RETRIEVAL_ARCHITECTURE.md)
+10. [CONFIG.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/CONFIG.md)
+11. [NEXT_STEPS.md](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/docs/NEXT_STEPS.md)

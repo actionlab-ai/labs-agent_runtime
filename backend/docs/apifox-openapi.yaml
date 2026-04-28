@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: |
     Apifox import spec for project management, model management, project documents,
-    skills listing, and runtime runs.
+    skills listing, general runtime runs, and fixed bootstrap workflows.
 servers:
   - url: http://localhost:8080
     description: Local development server
@@ -15,6 +15,7 @@ tags:
   - name: Project Documents
   - name: Models
   - name: Settings
+  - name: Workflows
   - name: Runs
 paths:
   /healthz:
@@ -380,8 +381,12 @@ paths:
   /v1/runs:
     post:
       tags: [Runs]
-      summary: Execute one runtime run
-      description: Uses project context from PostgreSQL and selects a model profile from the database. model is required unless a default model is stored in the database.
+      summary: Execute one general runtime run
+      description: |
+        General routed runtime entrypoint. Uses project context from PostgreSQL and selects a model profile
+        from the database. model is required unless a default model is stored in the database.
+        This path still goes through router skill discovery. For deterministic early novel project
+        initialization, use /v1/workflows/project-kickoff or /v1/workflows/project-kernel instead.
       requestBody:
         required: true
         content:
@@ -417,6 +422,115 @@ paths:
                     nullable: true
                     allOf:
                       - $ref: "#/components/schemas/ModelProfile"
+        "400":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /v1/workflows/project-kickoff:
+    post:
+      tags: [Workflows]
+      summary: Execute fixed project kickoff workflow
+      description: |
+        Deterministic first-step novel project kickoff.
+        This path bypasses router tool_search and directly runs novel-project-kickoff.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixedWorkflowRequest"
+            example:
+              project: urban-safe-growth
+              model: deepseek-flash
+              input: Build the first-step project direction for a male-reader urban rebirth novel with safety fantasy and steady growth.
+              dry_run: false
+              arguments:
+                platform: fanqie
+                audience: male
+      responses:
+        "200":
+          description: Workflow run result or dry-run plan
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/FixedWorkflowDryRunResponse"
+                  - $ref: "#/components/schemas/FixedWorkflowResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /v1/workflows/project-kernel:
+    post:
+      tags: [Workflows]
+      summary: Execute fixed project kernel workflow
+      description: |
+        Deterministic second-step emotional-core workflow for a novel project.
+        This path bypasses router tool_search and directly runs novel-emotional-core.
+        If the model output is a finalized "# 小说情感内核" document, the server persists
+        it as novel_core and returns response_mode=document.
+        If the model output is a clarification questionnaire headed by
+        "# 需要补充的信息", the server does not persist novel_core and returns
+        response_mode=clarification plus needs_input=true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixedWorkflowRequest"
+            example:
+              project: urban-safe-growth
+              model: deepseek-flash
+              input: Build the emotional core and long-term reader payoff for this novel.
+              dry_run: false
+      responses:
+        "200":
+          description: Workflow run result or dry-run plan
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/FixedWorkflowDryRunResponse"
+                  - $ref: "#/components/schemas/FixedWorkflowResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /v1/workflows/project-bootstrap:
+    post:
+      tags: [Workflows]
+      summary: Execute composed project bootstrap workflow stage
+      description: |
+        Composed workflow entrypoint for later bootstrap stages.
+        Supported stages:
+        - kickoff: run novel-project-kickoff
+        - kernel: run novel-emotional-core
+        - world_power: run novel-idea-bootstrap with focus_scope=world_and_power
+        - power_only: run novel-idea-bootstrap with focus_scope=power_only
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectBootstrapWorkflowRequest"
+            example:
+              project: urban-safe-growth
+              model: deepseek-flash
+              stage: world_power
+              input: Build the world and power baseline after kickoff and kernel are done.
+              dry_run: false
+      responses:
+        "200":
+          description: Workflow run result or dry-run plan
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/FixedWorkflowDryRunResponse"
+                  - $ref: "#/components/schemas/FixedWorkflowResponse"
         "400":
           $ref: "#/components/responses/Error"
         "500":
@@ -668,6 +782,182 @@ components:
           default: false
         debug:
           type: boolean
+    ProjectBootstrapWorkflowRequest:
+      type: object
+      required: [project, input]
+      properties:
+        project:
+          type: string
+          description: Active project ID. Required because bootstrap writes durable project documents.
+        model:
+          type: string
+          description: Required unless a default model is stored in the database.
+        stage:
+          type: string
+          description: Fixed workflow stage selector.
+          enum: [kickoff, kernel, world_power, power_only]
+          default: kickoff
+        input:
+          type: string
+          description: User request for this workflow stage.
+        dry_run:
+          type: boolean
+          default: false
+        debug:
+          type: boolean
+        arguments:
+          $ref: "#/components/schemas/JSONValue"
+    FixedWorkflowRequest:
+      type: object
+      required: [project, input]
+      properties:
+        project:
+          type: string
+          description: Active project ID. Required because the fixed workflow writes durable project documents.
+        model:
+          type: string
+          description: Required unless a default model is stored in the database.
+        input:
+          type: string
+          description: User request for the fixed workflow.
+        dry_run:
+          type: boolean
+          default: false
+        debug:
+          type: boolean
+        arguments:
+          $ref: "#/components/schemas/JSONValue"
+    WorkflowStepPlan:
+      type: object
+      properties:
+        id:
+          type: string
+        skill_id:
+          type: string
+        arguments:
+          $ref: "#/components/schemas/JSONValue"
+    WorkflowSkillOutput:
+      type: object
+      properties:
+        skill_id:
+          type: string
+        text:
+          type: string
+        run_id:
+          type: string
+        run_dir:
+          type: string
+    WorkflowStepResult:
+      type: object
+      properties:
+        step_id:
+          type: string
+        output:
+          $ref: "#/components/schemas/WorkflowSkillOutput"
+    WorkflowOutput:
+      type: object
+      properties:
+        workflow_id:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowStepResult"
+    WorkflowDocumentUpdate:
+      type: object
+      properties:
+        kind:
+          type: string
+        title:
+          type: string
+        body_bytes:
+          type: integer
+    FixedWorkflowDryRunResponse:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          example: true
+        workflow_id:
+          type: string
+          example: project-bootstrap
+        stage:
+          type: string
+          example: kickoff
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowStepPlan"
+        arguments:
+          $ref: "#/components/schemas/JSONValue"
+        run_id:
+          type: string
+        run_dir:
+          type: string
+        project:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Project"
+        model:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ModelProfile"
+    FixedWorkflowResponse:
+      type: object
+      properties:
+        workflow_id:
+          type: string
+          example: project-bootstrap
+        stage:
+          type: string
+          example: kickoff
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowStepPlan"
+        workflow_output:
+          $ref: "#/components/schemas/WorkflowOutput"
+        updated_documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowDocumentUpdate"
+        response_mode:
+          type: string
+          description: |
+            document: the workflow produced a persistable final document.
+            clarification: the workflow is asking for missing information and did not persist canon.
+          enum: [document, clarification]
+        needs_input:
+          type: boolean
+          description: True when the workflow is waiting for more user input before finalizing.
+        final_text:
+          type: string
+        run_id:
+          type: string
+        run_dir:
+          type: string
+        db_run:
+          $ref: "#/components/schemas/Run"
+        project:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Project"
+        model:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ModelProfile"
+    ProjectBootstrapWorkflowDryRunResponse:
+      allOf:
+        - $ref: "#/components/schemas/FixedWorkflowDryRunResponse"
+    ProjectBootstrapWorkflowResponse:
+      allOf:
+        - $ref: "#/components/schemas/FixedWorkflowResponse"
     Run:
       type: object
       properties:

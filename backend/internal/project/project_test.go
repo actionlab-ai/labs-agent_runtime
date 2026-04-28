@@ -36,3 +36,31 @@ func TestBuildContextIncludesProjectAndDocuments(t *testing.T) {
 		t.Fatalf("expected document body, got %q", text)
 	}
 }
+
+func TestExtractDocumentDraftsParsesStructuredWorkflowOutput(t *testing.T) {
+	drafts := ExtractDocumentDrafts(`## project_brief
+
+项目一句话定位。
+
+## reader_contract
+
+读者会在前二十章拿到稳定的安全感反馈。
+
+## ignored_section
+
+这个分节不应该被持久化。
+
+## taboo
+
+不要苦大仇深。`)
+
+	if len(drafts) != 3 {
+		t.Fatalf("expected three persistable drafts, got %#v", drafts)
+	}
+	if drafts[0].Kind != "project_brief" || drafts[1].Kind != "reader_contract" || drafts[2].Kind != "taboo" {
+		t.Fatalf("unexpected draft kinds: %#v", drafts)
+	}
+	if drafts[0].Title != "项目简报" || drafts[1].Title != "读者承诺" || drafts[2].Title != "禁区与避坑" {
+		t.Fatalf("unexpected default titles: %#v", drafts)
+	}
+}
