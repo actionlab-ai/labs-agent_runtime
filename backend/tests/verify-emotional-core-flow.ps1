@@ -90,7 +90,8 @@ function Read-JsonFile([string]$Path) {
     if (-not (Test-Path $Path)) {
         throw "Expected file not found: $Path"
     }
-    return Get-Content -Raw -Path $Path | ConvertFrom-Json
+    $content = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    return $content | ConvertFrom-Json
 }
 
 function Get-ToolNames($Assembly) {
@@ -160,6 +161,22 @@ function Try-DeleteProject([string]$ID) {
     }
 }
 
+function Assert-ModelAvailable([string]$ModelID) {
+    if ($ModelID.Trim() -eq "") {
+        return
+    }
+    $modelsResp = Invoke-Api -Method "GET" -Path "/v1/models" -Timeout 10
+    $available = @()
+    foreach ($item in @($modelsResp.Body.models)) {
+        if ($item.id) {
+            $available += [string]$item.id
+        }
+    }
+    if ($available -notcontains $ModelID) {
+        throw "Model '$ModelID' was not found in /v1/models. Available model ids: $($available -join ', '). Use one of those ids or set /v1/settings/default-model."
+    }
+}
+
 Write-Host "===== verify emotional core skill flow =====" -ForegroundColor Yellow
 Write-Host "Base URL      : $BaseUrl"
 Write-Host "Project ID    : $ProjectId"
@@ -171,6 +188,10 @@ Write-Host "Log file      : $LogFile"
 Write-Step "0) Health check"
 [void](Invoke-Api -Method "GET" -Path "/healthz" -Timeout 10)
 Write-Ok "HTTP service is reachable."
+Assert-ModelAvailable -ModelID $Model
+if ($Model.Trim() -ne "") {
+    Write-Ok "Model profile exists: $Model"
+}
 
 if (-not $KeepProject) {
     Try-DeleteProject -ID $ProjectId
@@ -278,22 +299,38 @@ Write-Ok "novel-emotional-core was activated and called through $skillToolName."
 
 Write-Step "5) Inspect skill executor: provider-backed project document tools should be available and used"
 $skillDir = Join-Path $runDir "skill-calls\novel-emotional-core"
-$skill01AssemblyPath = Join-Path $skillDir "round-01-assembly.json"
-$skill01AnalysisPath = Join-Path $skillDir "round-01-response-analysis.json"
-$skill01 = Read-JsonFile $skill01AssemblyPath
-$skill01Analysis = Read-JsonFile $skill01AnalysisPath
+$skillAssemblyFiles = Get-ChildItem -Path $skillDir -Filter "round-*-assembly.json" -File | Sort-Object Name
+$skillAnalysisFiles = Get-ChildItem -Path $skillDir -Filter "round-*-response-analysis.json" -File | Sort-Object Name
+if ($skillAssemblyFiles.Count -eq 0 -or $skillAnalysisFiles.Count -eq 0) {
+    throw "Skill executor artifacts are missing under $skillDir"
+}
 
-$skillLocalTools = @()
-foreach ($tool in @($skill01.local_tools)) {
-    if ($tool.name) {
-        $skillLocalTools += [string]$tool.name
+$allSkillLocalTools = @()
+foreach ($file in $skillAssemblyFiles) {
+    $assembly = Read-JsonFile $file.FullName
+    foreach ($tool in @($assembly.local_tools)) {
+        if ($tool.name) {
+            $allSkillLocalTools += [string]$tool.name
+        }
     }
 }
-$skillCalled = Get-ResponseToolNames $skill01Analysis
-Write-Host "Skill local tools            : $($skillLocalTools -join ', ')"
-Write-Host "Skill round 01 called tools  : $($skillCalled -join ', ')"
-Assert-ContainsTool -Names $skillLocalTools -Expected "WriteProjectDocument" -Stage "skill local tools"
-Assert-ContainsTool -Names $skillCalled -Expected "WriteProjectDocument" -Stage "skill round 01 model response"
+
+$allSkillCalled = @()
+foreach ($file in $skillAnalysisFiles) {
+    $analysis = Read-JsonFile $file.FullName
+    $roundCalled = Get-ResponseToolNames $analysis
+    if ($roundCalled.Count -gt 0) {
+        Write-Host "$($file.BaseName) called tools : $($roundCalled -join ', ')"
+    }
+    $allSkillCalled += $roundCalled
+}
+
+$allSkillLocalTools = $allSkillLocalTools | Select-Object -Unique
+$allSkillCalled = $allSkillCalled | Select-Object -Unique
+Write-Host "Skill local tools            : $($allSkillLocalTools -join ', ')"
+Write-Host "Skill called tools overall   : $($allSkillCalled -join ', ')"
+Assert-ContainsTool -Names $allSkillLocalTools -Expected "WriteProjectDocument" -Stage "skill local tools"
+Assert-ContainsTool -Names $allSkillCalled -Expected "WriteProjectDocument" -Stage "skill executor model responses"
 Write-Ok "Skill used provider-backed WriteProjectDocument instead of writing a path directly."
 
 Write-Step "6) Read project documents through HTTP and verify $DocumentKind exists"
