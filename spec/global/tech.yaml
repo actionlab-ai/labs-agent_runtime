@@ -1,0 +1,55 @@
+tech:
+  language:
+    name: go
+    version: 1.26.2
+
+  http:
+    framework: gin
+    mode: http_only
+    api_contract: backend/docs/apifox-openapi.yaml
+
+  database:
+    type: postgres
+    driver: pgx/v5
+    pool: pgxpool
+    typed_sql: sqlc
+    migrations: golang-migrate
+    forbidden:
+      - lib/pq
+      - handwritten_postgres_sdk
+      - string_concatenated_sql_for_user_inputs
+
+  cache:
+    type: redis
+    client: go-redis/v9
+    supported_modes:
+      - cluster
+      - standalone
+    serialization: json
+    role: cache_projection
+
+  logging:
+    library: zap
+    encoding: json_or_console_from_config
+    required_for:
+      - startup
+      - http_request
+      - postgres_operation
+      - redis_cache_operation
+      - filesystem_projection
+      - runtime_run
+      - workflow_run
+      - skill_session
+
+  runtime:
+    model_api: openai_compatible_chat_completions
+    model_config_source: postgres_model_profiles
+    skill_source: local_skill_directory
+    debug_artifacts: runstore
+
+  providers:
+    project_document_provider:
+      current: filesystem_projection_plus_postgres
+      future:
+        - s3
+      rule: business_logic_calls_provider_interface_not_backend_specific_sdk

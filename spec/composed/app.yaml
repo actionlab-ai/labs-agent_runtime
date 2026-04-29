@@ -1,0 +1,57 @@
+app:
+  name: novel-agent-runtime
+  mode: http_only
+
+  modules:
+    - project
+    - model
+    - project_document
+    - filesystem_provider
+    - runtime
+    - workflow
+    - skill_session
+
+  startup_order_ref: spec/global/lifecycle.yaml
+  data_flow_ref: spec/global/data_flow.yaml
+  invariants_ref: spec/global/invariants.yaml
+
+  request_paths:
+    project_management:
+      - POST /v1/projects
+      - GET /v1/projects
+      - GET /v1/projects/{id}
+      - PATCH /v1/projects/{id}
+      - DELETE /v1/projects/{id}
+    model_management:
+      - POST /v1/models
+      - GET /v1/models
+      - PATCH /v1/models/{id}
+      - DELETE /v1/models/{id}
+      - PUT /v1/settings/default-model
+    project_documents:
+      - GET /v1/projects/{id}/documents
+      - PUT /v1/projects/{id}/documents/{kind}
+    runtime:
+      - POST /v1/runs
+    workflows:
+      - POST /v1/workflows/project-kickoff
+      - POST /v1/workflows/project-kernel
+      - POST /v1/workflows/project-bootstrap
+    skill_sessions:
+      - POST /v1/skill-sessions
+      - GET /v1/skill-sessions/{id}
+      - POST /v1/skill-sessions/{id}/turns
+
+  product_sequence_for_new_book:
+    - create_project
+    - project_kickoff_or_skill_session_for_initial_direction
+    - project_kernel_emotional_core_before_worldbuilding
+    - worldbuilding_and_power_system
+    - opening_or_chapter_work
+
+  storage_sequence:
+    - config_loads_database_and_redis_connection_only
+    - migrations_prepare_postgres_schema
+    - sqlc_generated_queries_access_postgres
+    - service_wrappers_apply_pg_cache_provider_flow
+    - runtime_uses_loaded_project_and_model_context

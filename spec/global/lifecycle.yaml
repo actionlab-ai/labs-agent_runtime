@@ -1,0 +1,45 @@
+lifecycle:
+  startup:
+    order:
+      - load_config_yaml_and_env_overrides
+      - init_zap_logger
+      - open_postgres_connection_string_from_database_config
+      - run_golang_migrate_when_auto_migrate_enabled
+      - open_pgx_store
+      - open_redis_config_cache_when_enabled
+      - create_project_filesystem_provider
+      - create_skill_session_manager
+      - build_gin_router_and_register_routes
+      - start_http_server
+    must_fail_startup:
+      - config_load_error
+      - logger_open_error
+      - postgres_open_error
+      - migration_error
+      - redis_open_error_when_redis_required_true
+    may_continue:
+      - redis_open_error_when_redis_required_false
+
+  request_context:
+    every_http_request:
+      - attach_request_id
+      - attach_request_scoped_zap_logger
+      - log_http_request_start
+      - log_http_request_completed
+      - recover_panic_as_500
+
+  shutdown:
+    order:
+      - stop_http_server_process
+      - close_postgres_store
+      - close_redis_cache
+      - sync_logger
+
+  cli_policy:
+    product_mode: http_only
+    cli_allowed_for:
+      - local_go_run_entrypoint_to_start_http_server
+    cli_forbidden_for:
+      - project_business_flow
+      - model_management_flow
+      - workflow_execution_flow

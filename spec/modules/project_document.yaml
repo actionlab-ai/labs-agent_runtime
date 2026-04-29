@@ -1,0 +1,85 @@
+module:
+  id: project_document
+  purpose: Store durable novel canon and project artifacts under a project.
+
+ownership:
+  source_of_truth: postgres.project_documents
+  provider_projection: filesystem document files when project.storage_provider=filesystem
+  runtime_tool_boundary: runtime.ProjectDocumentProvider
+  code:
+    routes: backend/internal/httpapi/routes_projects.go
+    provider_adapter: backend/internal/httpapi/project_document_provider.go
+    project_store: backend/internal/httpapi/project_store.go
+    runtime_tools: backend/internal/runtime/file_tools.go
+    filesystem_provider: backend/internal/projectfs
+
+data_model:
+  fields:
+    project_id: owner project id
+    kind: stable document kind such as novel_core, project_brief, world_rules, current_state
+    title: human title
+    body: markdown body
+    metadata: json metadata
+    timestamps: postgres created_at and updated_at
+
+flows:
+  upsert_document_via_http:
+    order:
+      - validate_project_id_and_kind
+      - upsert_postgres_project_document
+      - read_postgres_project
+      - sync_filesystem_document_if_provider_filesystem
+      - sync_filesystem_project_meta
+      - async_set_project_cache
+      - return_postgres_document
+
+  write_document_via_skill_tool:
+    order:
+      - skill_calls_WriteProjectDocument
+      - runtime_validates_active_project_id
+      - provider_adapter_calls_project_store_upsert
+      - project_store_follows_upsert_document_via_http_flow
+      - tool_result_returns_kind_title_body_bytes_synced
+
+  list_documents:
+    order:
+      - query_postgres_project_documents
+      - return_document_list
+    cache_policy: no_document_body_cache_currently
+
+  read_document_via_skill_tool:
+    order:
+      - skill_calls_ReadProjectDocument
+      - runtime_validates_active_project_id
+      - provider_adapter_reads_postgres_document
+      - tool_result_returns_body_and_metadata
+
+provider_boundary:
+  rule: Skills and workflows must not know if project documents are filesystem or S3 backed.
+  allowed_tools:
+    - ListProjectDocuments
+    - ReadProjectDocument
+    - WriteProjectDocument
+  forbidden_for_durable_canon:
+    - direct Write file tool to project provider paths
+    - direct filesystem package use from business workflow
+    - direct S3 SDK use from skill runtime
+
+api:
+  list: GET /v1/projects/{id}/documents
+  upsert: PUT /v1/projects/{id}/documents/{kind}
+
+invariants:
+  - document_pg_write_precedes_provider_projection
+  - provider_projection_matches_postgres_document
+  - active_project_id_required_for_runtime_document_tools
+  - project_id_argument_must_match_active_project
+
+verification:
+  existing:
+    - backend/internal/httpapi/server_test.go
+    - backend/tests/verify-emotional-core-flow.ps1
+  required_when_changed:
+    - upsert_document_creates_pg_row_and_filesystem_file
+    - WriteProjectDocument_updates_pg_and_provider_projection
+    - mismatched_project_id_tool_call_fails

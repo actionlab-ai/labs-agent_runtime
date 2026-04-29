@@ -1,0 +1,45 @@
+spec_contract:
+  name: novel-agent-runtime
+  purpose: >
+    Make architecture intent explicit before code generation. AI agents must use
+    these specs as the source of design truth when implementing or modifying code.
+
+ai_execution:
+  required_order:
+    - read_relevant_global_specs
+    - read_relevant_module_specs
+    - inspect_current_code_before_editing
+    - implement_minimal_change
+    - update_or_add_verification
+    - report_spec_invariants_verified
+  forbidden:
+    - bypass_postgres_as_source_of_truth
+    - introduce_new_storage_sdk_when_provider_exists
+    - write_project_files_directly_from_business_code
+    - store_model_runtime_config_in_config_file
+    - create_business_specific_session_state_inside_runtime
+    - add_cli_entrypoints_for_product_flows
+  required_outputs:
+    - changed_files
+    - affected_specs
+    - verification_commands_or_scripts
+    - known_gaps
+
+source_of_truth:
+  architecture: spec/
+  database_schema: backend/internal/db/migrations
+  typed_sql: backend/internal/db/sqlc
+  http_contract: backend/docs/apifox-openapi.yaml
+
+review_policy:
+  first_review_design:
+    - flow_order
+    - source_of_truth
+    - cache_policy
+    - provider_boundary
+    - session_boundary
+    - failure_policy
+  then_review_code:
+    - only_changed_high_risk_paths
+    - generated_sql_and_migrations
+    - tests_or_verification_scripts

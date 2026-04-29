@@ -1,0 +1,95 @@
+module:
+  id: runtime
+  purpose: Orchestrate model calls, skill discovery, tool execution, and project-aware context.
+
+ownership:
+  source_of_truth:
+    model_config: postgres model profiles resolved by httpapi runtimeFactory
+    project_context: postgres project and project_documents
+    skills: local skills directory
+  debug_artifacts: runstore under runtime.runs_dir
+  code:
+    runtime: backend/internal/runtime
+    model_client: backend/internal/model
+    skill_registry: backend/internal/skill
+    runtime_factory: backend/internal/httpapi/runtime_factory.go
+
+flows:
+  general_run:
+    api: POST /v1/runs
+    order:
+      - resolve_model_id_explicit_or_default
+      - load_model_profile_cache_first_then_postgres
+      - load_optional_project_context
+      - build_runtime
+      - create_db_run
+      - run_router_rounds
+      - finish_or_fail_db_run
+    router_round:
+      - build_router_assembly
+      - expose_tool_search_first_when_configured
+      - call_model_chat_completions
+      - execute_tool_calls
+      - retain_activated_skill_tools
+      - return_final_text_when_no_tool_calls_or_direct_skill_output
+
+  skill_execution:
+    order:
+      - load_skill_invocation_command
+      - compose_skill_prompt_from_metadata_tooling_context_and_user_input
+      - expose_builtin_skill_tools
+      - call_model_chat_completions
+      - execute_tool_calls
+      - return_completed_or_needs_input
+    builtin_tools:
+      always_available:
+        - AskHuman
+      allowed_by_skill_frontmatter:
+        - Read
+        - Write
+        - Edit
+        - Glob
+        - Bash
+        - PowerShell
+      project_provider_tools_when_active_project_exists:
+        - ListProjectDocuments
+        - ReadProjectDocument
+        - WriteProjectDocument
+
+  skill_tool_search:
+    order:
+      - router_calls_tool_search
+      - registry_searches_local_skills
+      - runtime_returns_hits_and_tool_references
+      - selected_skill_tools_are_retained
+      - later_rounds_can_call_retained_skill_tool_directly
+
+boundaries:
+  runtime_may:
+    - build_model_requests
+    - expose_tools
+    - execute_provider_backed_tools
+    - pause_on_AskHuman
+    - write_debug_artifacts
+  runtime_must_not:
+    - own_business_specific_workflow_state
+    - directly manage PostgreSQL CRUD outside provider/service interfaces
+    - choose model config from config.yaml
+    - bypass project document provider for durable canon
+
+invariants:
+  - model_profile_required_for_model_calls
+  - active_project_context_injected_when_project_selected
+  - tool_search_gate_respected_when_force_tool_search_first_true
+  - provider_document_tools_validate_active_project_id
+  - runstore_debug_artifacts_not_source_of_truth
+
+verification:
+  existing:
+    - backend/internal/runtime/runtime_test.go
+    - backend/tests/verify-emotional-core-flow.ps1
+  required_when_changed:
+    - router_tool_search_first_round
+    - retained_skill_tool_call
+    - WriteProjectDocument_provider_path
+    - AskHuman_pause_resume

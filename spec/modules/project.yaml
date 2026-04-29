@@ -1,0 +1,100 @@
+module:
+  id: project
+  purpose: Manage novel projects as the top-level business resource.
+
+ownership:
+  source_of_truth: postgres.projects
+  cache_projection: redis key novelrt:project:{project_id}
+  provider_projection: filesystem project directory when storage_provider=filesystem
+  code:
+    http_routes: backend/internal/httpapi/routes_projects.go
+    service_wrapper: backend/internal/httpapi/project_store.go
+    db_store: backend/internal/store
+    sqlc: backend/internal/db/sqlc/projects.sql.go
+    migrations: backend/internal/db/migrations
+    filesystem_provider: backend/internal/projectfs
+
+data_model:
+  fields:
+    id: stable project id, slug-compatible
+    name: human project name
+    description: optional project description
+    status: active or deleted
+    storage_provider: filesystem now, s3 later
+    storage_bucket: remote bucket or empty for filesystem
+    storage_prefix: provider object prefix or local folder name
+    metadata: json metadata
+    created_at: postgres timestamp
+    updated_at: postgres timestamp
+
+flows:
+  create:
+    order:
+      - validate_http_request
+      - insert_postgres_project
+      - sync_filesystem_project_meta_if_provider_filesystem
+      - async_set_redis_project_cache
+      - return_project_from_postgres
+    failure_policy:
+      postgres_error: fail_request
+      filesystem_sync_error: fail_request
+      redis_error: log_warning_do_not_fail_request
+
+  get:
+    order:
+      - read_redis_project_cache
+      - if_hit_return_cached_project
+      - if_miss_read_postgres_project
+      - backfill_redis_project_cache
+      - return_project_from_postgres
+    failure_policy:
+      redis_error: log_warning_then_read_postgres
+      postgres_error: fail_request
+
+  list:
+    order:
+      - query_postgres_projects
+      - async_set_cache_for_each_project
+      - return_postgres_projects
+
+  update:
+    order:
+      - read_previous_postgres_project_for_provider_move
+      - update_postgres_project
+      - move_filesystem_project_if_storage_prefix_changed
+      - sync_filesystem_project_meta_if_provider_filesystem
+      - async_set_redis_project_cache
+      - return_project_from_postgres
+
+  delete:
+    order:
+      - read_previous_postgres_project_and_documents_for_projection
+      - delete_or_soft_delete_postgres_project
+      - sync_filesystem_meta_as_deleted_if_provider_filesystem
+      - async_delete_redis_project_cache
+      - return_deleted_true
+    rule: cache_delete_must_never_happen_before_postgres_delete_success
+
+api:
+  list: GET /v1/projects
+  create: POST /v1/projects
+  get: GET /v1/projects/{id}
+  update: PATCH /v1/projects/{id}
+  delete: DELETE /v1/projects/{id}
+
+invariants:
+  - postgres_is_source_of_truth
+  - redis_cache_is_optional
+  - filesystem_is_projection_not_primary_storage
+  - create_project_must_create_filesystem_meta_when_provider_filesystem
+  - delete_must_delete_pg_before_cache
+
+verification:
+  existing:
+    - backend/internal/httpapi/server_test.go
+    - backend/tests/verify-project-cache.ps1
+  required_when_changed:
+    - create_project_pg_then_cache_observable_logs
+    - get_project_cache_hit_and_cache_miss
+    - delete_project_pg_then_cache_delete
+    - filesystem_meta_created_or_updated

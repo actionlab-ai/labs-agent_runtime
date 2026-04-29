@@ -1,0 +1,66 @@
+resolved:
+  generated_by: manual_current_state_summary
+  last_updated: 2026-04-29
+
+  startup:
+    - load config
+    - init zap logger
+    - open postgres
+    - run migrations when enabled
+    - open sqlc-backed store over pgx
+    - open redis cache when enabled
+    - create filesystem project provider
+    - create skill session manager
+    - register gin routes
+    - start HTTP server
+
+  postgres:
+    owns:
+      - projects
+      - project_documents
+      - model_profiles
+      - app_settings.default_model_id
+      - runs
+    migration_dir: backend/internal/db/migrations
+    sqlc_dir: backend/internal/db/sqlc
+
+  redis:
+    owns_cache_keys:
+      - novelrt:project:{project_id}
+      - novelrt:model:{profile_id}
+      - novelrt:setting:default_model_id
+    rule: cache first for reads, postgres fallback on miss, async cache sync after postgres writes.
+
+  filesystem_provider:
+    owns_projection:
+      - projects/{storage_prefix}/meta.json
+      - projects/{storage_prefix}/documents/{kind}.md
+      - projects/{storage_prefix}/documents/{kind}.meta.json
+    rule: projection follows postgres; it is not source of truth.
+
+  runtime:
+    general_run:
+      entry: POST /v1/runs
+      discovery: tool_search
+      retained_skill_tools: true
+    fixed_workflow:
+      entry:
+        - POST /v1/workflows/project-kickoff
+        - POST /v1/workflows/project-kernel
+        - POST /v1/workflows/project-bootstrap
+      discovery: bypassed_for_deterministic_steps
+    skill_session:
+      entry:
+        - POST /v1/skill-sessions
+        - POST /v1/skill-sessions/{id}/turns
+      askhuman: first_class_builtin_tool
+
+  implemented_invariants:
+    - postgres source of truth
+    - redis optional cache projection
+    - model config comes from database
+    - default model setting is database-backed
+    - project documents write through provider boundary
+    - filesystem provider mirrors project and document state
+    - runtime can pause on AskHuman
+    - skillsession manager owns reusable session state

@@ -1,0 +1,60 @@
+generation:
+  purpose: Rules for AI agents that generate code in this repository.
+
+  required_prompt_shape:
+    - state_the_module_spec_files_read
+    - state_the_flow_being_changed
+    - state_the_invariants_that_must_hold
+    - implement_minimal_code_change
+    - update_http_contract_when_api_changes
+    - add_or_update_verification
+
+  layer_rules:
+    http_handler:
+      - parse_and_validate_request
+      - call_service_or_store_wrapper
+      - map_errors_to_http_status
+      - never_directly_call_sqlc_for_business_flow
+    service_or_store_wrapper:
+      - enforce_flow_order_from_spec
+      - own_cache_synchronization
+      - own_provider_projection_calls
+      - emit_zap_logs_for_each external boundary
+    repository:
+      - use_sqlc_generated_queries
+      - use_pgx_v5_or_pgxpool
+      - never_access_redis
+      - never_access_filesystem_provider
+    cache:
+      - use_go_redis_v9
+      - serialize_json
+      - return_cache_miss_as_typed_error
+      - never_make_cache_authoritative
+    runtime:
+      - call_provider_interfaces_for_project_documents
+      - write_debug_artifacts_to_runstore_only
+      - never_own_business_specific_session_control
+    provider:
+      - hide_backend_specific_storage_details
+      - accept_business_objects_not_http_payloads
+
+  verification_rules:
+    every_flow_change_must_verify:
+      - success_path
+      - postgres_failure_path_when_relevant
+      - redis_failure_or_miss_path_when_relevant
+      - provider_projection_path_when_relevant
+      - log_or_artifact_that_makes_flow_transparent
+    acceptable_verification:
+      - go_test
+      - powershell_script_for_http_pg_redis_flow
+      - apifox_openapi_example_update
+      - runstore_artifact_assertion
+
+  forbidden_shortcuts:
+    - introduce_string_built_sql
+    - write_project_files_directly_from_skill_business_logic
+    - add_new_config_model_block
+    - hide_flow_in_unlogged_background_process
+    - treat_redis_as_source_of_truth
+    - add_business_workflow_state_to_runtime_package

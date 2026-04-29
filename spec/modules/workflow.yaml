@@ -1,0 +1,83 @@
+module:
+  id: workflow
+  purpose: Provide deterministic product flows that call explicit skills without router ambiguity.
+
+ownership:
+  code:
+    routes: backend/internal/httpapi/workflows.go
+    service: backend/internal/httpapi/workflow_service.go
+    plans: backend/internal/httpapi/workflow_plan.go
+    persistence: backend/internal/httpapi/workflow_persistence.go
+    runner: backend/internal/workflow
+
+api:
+  project_kickoff: POST /v1/workflows/project-kickoff
+  project_kernel: POST /v1/workflows/project-kernel
+  project_bootstrap: POST /v1/workflows/project-bootstrap
+
+flows:
+  fixed_workflow:
+    order:
+      - parse_http_request
+      - build_fixed_workflow_plan
+      - resolve_required_project_context
+      - resolve_model_profile_explicit_or_default
+      - ensure_required_skills_exist
+      - create_db_run
+      - run_steps_sequentially
+      - persist_workflow_documents_when_output_is_document
+      - finish_or_fail_db_run
+      - return_response_mode_document_or_clarification
+
+  project_kickoff:
+    skill: novel-project-kickoff
+    persistence:
+      mode: extract_sections
+      document_kinds:
+        - project_brief
+        - reader_contract
+        - style_guide
+        - taboo
+
+  project_kernel:
+    skill: novel-emotional-core
+    persistence:
+      mode: single_document
+      document_kind: novel_core
+    rule: emotional core should happen before worldbuilding when starting a webnovel project.
+
+  project_bootstrap:
+    stages:
+      kickoff: novel-project-kickoff
+      kernel: novel-emotional-core
+      world_power: novel-idea-bootstrap
+      power_only: novel-idea-bootstrap
+
+boundaries:
+  workflow_may:
+    - select explicit skill ids
+    - set product-level arguments
+    - persist known document outputs
+  workflow_must_not:
+    - implement its own human pause/resume state machine
+    - bypass project document provider
+    - perform ad hoc skill search for deterministic early product steps
+
+relation_to_skill_sessions:
+  current_fixed_workflows: single_request_response_with_clarification_response_mode
+  future_interactive_workflows: should_delegate_pause_resume_to_skill_session_module
+
+invariants:
+  - fixed_workflows_require_project
+  - fixed_workflows_resolve_model_from_db
+  - workflow_document_persistence_goes_through_project_store
+  - clarification_output_must_not_persist_canon
+
+verification:
+  existing:
+    - backend/internal/httpapi/workflows_test.go
+    - backend/tests/verify-emotional-core-flow.ps1
+  required_when_changed:
+    - dry_run_returns_plan_without_execution
+    - project_kernel_persists_novel_core_only_for_document_response
+    - clarification_response_sets_needs_input_true

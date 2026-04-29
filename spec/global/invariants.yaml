@@ -1,0 +1,45 @@
+invariants:
+  - id: db_write_precedes_cache_write
+    rule: Redis writes must happen only after PostgreSQL writes succeed.
+    verify_by:
+      - unit_test_store_wrapper_order
+      - log_order_pg_then_cache
+
+  - id: cache_not_source_of_truth
+    rule: Redis data must never override a fresh PostgreSQL result when PostgreSQL is queried.
+    verify_by:
+      - cache_miss_fallback_test
+      - corrupt_cache_fallback_test
+
+  - id: delete_precedes_cache_delete
+    rule: Deletion must update PostgreSQL before deleting Redis cache keys.
+    verify_by:
+      - delete_flow_test
+      - verify_project_cache_script
+
+  - id: model_config_not_loaded_from_config_file
+    rule: Runtime model endpoint, API key, and parameters must come from database model profiles.
+    verify_by:
+      - config_does_not_parse_model_block
+      - run_without_model_uses_default_model_setting
+
+  - id: project_context_requires_selected_project
+    rule: Workflow and skill-session project work must resolve an active project before runtime execution.
+    verify_by:
+      - http_400_on_missing_project_for_workflow_or_skill_session
+
+  - id: provider_boundary_for_project_documents
+    rule: Skills must use provider-backed project document tools for durable canon, not direct filesystem writes.
+    verify_by:
+      - skill_tool_contract_test
+      - document_written_to_pg_and_provider_projection
+
+  - id: runtime_not_business_session_owner
+    rule: Runtime can pause and resume a skill execution, but reusable session orchestration belongs to skillsession.Manager.
+    verify_by:
+      - skill_session_start_continue_test
+
+  - id: askhuman_no_side_effects
+    rule: AskHuman must only return a pending human input request; it must not mutate project, model, cache, or provider state.
+    verify_by:
+      - askhuman_runtime_pause_test

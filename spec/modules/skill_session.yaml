@@ -1,0 +1,94 @@
+module:
+  id: skill_session
+  purpose: Provide a reusable pause/resume controller for interactive skills.
+
+ownership:
+  session_orchestrator: backend/internal/skillsession
+  runtime_pause_resume: backend/internal/runtime
+  http_controller: backend/internal/httpapi/skill_sessions.go
+  current_storage: in_memory
+  future_storage_options:
+    - postgres
+    - redis
+
+api:
+  start: POST /v1/skill-sessions
+  get: GET /v1/skill-sessions/{id}
+  continue: POST /v1/skill-sessions/{id}/turns
+
+flows:
+  start:
+    order:
+      - validate_project_skill_input
+      - resolve_project_context_required
+      - resolve_model_profile_explicit_or_default
+      - build_runtime_with_project_document_provider
+      - execute_skill_interactive
+      - if_model_calls_AskHuman_store_pending_state
+      - return_status_needs_input_or_completed
+
+  askhuman_pause:
+    order:
+      - model_emits_AskHuman_tool_call
+      - runtime_validates_questions
+      - runtime_writes_debug_request_artifact
+      - runtime_returns_SkillRunStatusNeedsInput
+      - skillsession_manager_stores_SkillExecutionState
+      - http_returns_ask_human_payload
+
+  continue:
+    order:
+      - validate_session_exists_and_waiting_for_input
+      - convert_human_answers_to_tool_result
+      - append_tool_result_to_existing_conversation
+      - resume_runtime_skill_loop
+      - update_session_snapshot
+      - return_completed_or_next_needs_input
+
+state:
+  snapshot:
+    id: session id
+    status: needs_input or completed
+    project_id: active project
+    skill_id: explicit skill
+    request: original user request
+    ask_human: pending question payload
+    final_text: final skill output when completed
+    run_id: debug run id
+    run_dir: debug run directory
+    turns: user and assistant summaries
+  runtime_state:
+    conversation: model messages including pending assistant tool call
+    pending_tool_call_id: AskHuman tool call id
+    read_state: local file read state for safe edits
+
+boundaries:
+  AskHuman:
+    role: gather missing human input
+    side_effects: none
+    max_questions: 4
+    max_options_per_question: 4
+  skillsession_manager:
+    role: reusable product session state machine
+    must_not:
+      - write_project_documents_directly
+      - know_business_specific_skill_rules
+  runtime:
+    role: low-level execution loop and pause/resume primitive
+    must_not:
+      - become a project-kernel-specific session controller
+
+invariants:
+  - session_continue_requires_needs_input_status
+  - AskHuman_has_no_provider_or_database_side_effects
+  - human_answers_resume_same_conversation
+  - project_context_resolved_before_skill_start
+
+verification:
+  existing:
+    - backend/internal/skillsession/manager_test.go
+    - backend/internal/runtime/runtime_test.go
+  required_when_changed:
+    - start_returns_needs_input_when_skill_calls_AskHuman
+    - continue_injects_answers_as_tool_result
+    - completed_session_cannot_continue

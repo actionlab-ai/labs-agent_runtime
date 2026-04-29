@@ -1,0 +1,50 @@
+data_flow:
+  source_of_truth:
+    primary: postgres
+    cache: redis
+    filesystem: provider_projection
+    run_artifacts: local_runstore_debug_artifacts
+
+  write:
+    order:
+      - validate_request
+      - write_postgres
+      - sync_required_provider_projection
+      - schedule_cache_sync
+      - return_postgres_result
+    rules:
+      - postgres_success_required_before_cache_sync
+      - provider_projection_may_fail_when_required_for_local_filesystem_consistency
+      - redis_failure_must_not_rollback_postgres
+
+  read:
+    order:
+      - try_redis
+      - on_cache_hit_return_cached_record
+      - on_cache_miss_query_postgres
+      - backfill_redis
+      - return_postgres_result
+    rules:
+      - cache_is_never_authoritative
+      - cache_decode_error_is_treated_as_cache_error_and_falls_back_to_postgres_when_possible
+      - postgres_error_is_request_error
+
+  delete:
+    order:
+      - read_existing_postgres_record_when_needed_for_projection
+      - delete_or_soft_delete_postgres
+      - sync_required_provider_projection
+      - schedule_cache_delete
+      - return_delete_result
+    rules:
+      - postgres_delete_precedes_cache_delete
+      - cache_delete_is_async
+      - provider_projection_must_not_resurrect_deleted_postgres_data
+
+  async_cache:
+    mechanism: goroutine
+    timeout: 5s
+    logging:
+      start: cache.sync.start
+      success: cache.sync.done
+      failure: cache.sync.failed

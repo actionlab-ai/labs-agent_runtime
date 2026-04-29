@@ -1,0 +1,29 @@
+consistency:
+  model: postgres_strong_cache_eventual
+
+  principles:
+    - postgres_is_source_of_truth
+    - redis_is_performance_projection
+    - filesystem_is_project_provider_projection
+    - runtime_runstore_is_debug_trace_not_business_storage
+
+  allowed_staleness:
+    redis:
+      allowed: true
+      reason: cache sync is asynchronous after successful PostgreSQL writes.
+    filesystem_provider:
+      allowed: false_for_filesystem_project_creation_and_document_write
+      reason: current filesystem provider is the user's visible project artifact surface.
+
+  conflict_resolution:
+    redis_vs_postgres: postgres_wins
+    filesystem_vs_postgres: postgres_wins_then_resync_filesystem
+    model_config_file_vs_postgres: postgres_wins
+
+  failure_policy:
+    postgres_failure: fail_request
+    migration_failure: fail_startup
+    redis_required_failure: fail_startup
+    redis_optional_failure: log_warning_and_continue_without_cache
+    async_cache_failure: log_warning_do_not_fail_main_flow
+    filesystem_projection_failure_on_project_write: fail_request

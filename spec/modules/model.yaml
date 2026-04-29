@@ -1,0 +1,117 @@
+module:
+  id: model
+  purpose: Manage OpenAI-compatible model profiles and the database default model setting.
+
+ownership:
+  source_of_truth:
+    model_profiles: postgres.model_profiles
+    default_model: postgres.app_settings key default_model_id
+  cache_projection:
+    model_profile: redis key novelrt:model:{profile_id}
+    default_model: redis key novelrt:setting:default_model_id
+  code:
+    routes: backend/internal/httpapi/routes_models.go
+    service_wrapper: backend/internal/httpapi/model_store.go
+    runtime_resolution: backend/internal/httpapi/runtime_factory.go
+    sqlc:
+      - backend/internal/db/sqlc/model_profiles.sql.go
+      - backend/internal/db/sqlc/app_settings.sql.go
+
+data_model:
+  model_profile:
+    id: profile id selected by API callers
+    model_id: provider model id sent to chat/completions
+    base_url: OpenAI-compatible base URL
+    api_key: stored directly in PostgreSQL, not config env indirection
+    provider: openai_compatible
+    context_window: context limit
+    max_output_tokens: generation output cap
+    temperature: generation temperature
+    timeout_seconds: HTTP model timeout
+    status: active or inactive
+  default_model:
+    value: model profile id
+    rule: must reference an existing active model when used
+
+flows:
+  create_model_profile:
+    order:
+      - validate_http_request
+      - insert_postgres_model_profile
+      - async_set_redis_model_cache
+      - return_sanitized_profile
+    response_policy:
+      - never_return_raw_api_key_in_list
+      - expose_api_key_set_boolean
+
+  get_model_profile:
+    order:
+      - read_redis_model_cache
+      - on_hit_return_profile
+      - on_miss_read_postgres_profile
+      - backfill_redis_model_cache
+      - return_profile
+
+  update_model_profile:
+    order:
+      - update_postgres_model_profile
+      - async_set_redis_model_cache
+      - return_sanitized_profile
+
+  delete_model_profile:
+    order:
+      - check_default_model_guard
+      - delete_postgres_model_profile
+      - async_delete_redis_model_cache
+      - return_deleted_true
+    guard:
+      - cannot_delete_profile_currently_used_by_default_model
+
+  set_default_model:
+    order:
+      - validate_model_profile_exists
+      - write_postgres_app_setting
+      - async_set_redis_default_model
+      - return_default_model_id
+
+  clear_default_model:
+    order:
+      - delete_postgres_app_setting
+      - async_delete_redis_default_model
+      - return_deleted_true
+
+  runtime_model_resolution:
+    order:
+      - if_request_model_present_use_it
+      - else_read_default_model_id_cache_first_then_postgres
+      - load_model_profile_cache_first_then_postgres
+      - reject_empty_model
+      - reject_inactive_model
+      - build_runtime_model_config
+    rule: config.yaml must not contain model provider, endpoint, or api key.
+
+api:
+  list_models: GET /v1/models
+  create_model: POST /v1/models
+  get_model: GET /v1/models/{id}
+  update_model: PATCH /v1/models/{id}
+  delete_model: DELETE /v1/models/{id}
+  get_default_model: GET /v1/settings/default-model
+  set_default_model: PUT /v1/settings/default-model
+  clear_default_model: DELETE /v1/settings/default-model
+
+invariants:
+  - database_model_profiles_are_runtime_source
+  - raw_api_key_not_returned_by_list_api
+  - default_model_delete_guard
+  - explicit_request_model_overrides_default_model
+  - inactive_model_cannot_run
+
+verification:
+  existing:
+    - backend/internal/httpapi/server_test.go
+  required_when_changed:
+    - default_model_cache_hit_miss
+    - delete_default_model_guard
+    - run_without_model_uses_db_default
+    - model_list_hides_api_key

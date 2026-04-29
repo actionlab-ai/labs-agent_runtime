@@ -1,0 +1,59 @@
+module:
+  id: filesystem_provider
+  purpose: Provide the current local project artifact projection behind the provider boundary.
+
+ownership:
+  source_of_truth: postgres
+  projection_root: backend runtime.workspace_root/projects
+  code:
+    provider: backend/internal/projectfs
+    caller: backend/internal/httpapi/project_store.go
+
+directory_contract:
+  project_directory: "{workspace_root}/projects/{storage_prefix}"
+  project_meta: "{project_directory}/meta.json"
+  documents_directory: "{project_directory}/documents"
+  document_body: "{documents_directory}/{kind}.md"
+  document_meta: "{documents_directory}/{kind}.meta.json"
+
+flows:
+  sync_project:
+    order:
+      - ensure_project_directory
+      - ensure_documents_directory
+      - write_meta_json_with_project_and_document_summary
+    input:
+      - postgres_project
+      - postgres_project_documents
+
+  sync_document:
+    order:
+      - ensure_project_and_documents_directory
+      - write_document_markdown_body
+      - write_document_meta_json
+      - caller_syncs_project_meta_after_document
+
+  move_project:
+    order:
+      - compare_previous_storage_prefix_and_new_storage_prefix
+      - move_directory_when_changed
+      - sync_project_meta_after_move
+
+rules:
+  - filesystem_provider_is_projection_not_source_of_truth
+  - all_project_file_paths_must_derive_from_project_storage_prefix
+  - business_logic_must_call_project_store_or_provider_interface
+  - future_s3_provider_must_implement_same_project_document_semantics
+
+failure_policy:
+  sync_project_failure: fail_project_create_or_update
+  sync_document_failure: fail_document_upsert
+  delete_meta_sync_failure: log_warning_after_pg_delete
+
+verification:
+  existing:
+    - backend/internal/httpapi/server_test.go
+  required_when_changed:
+    - project_create_writes_meta_json
+    - document_upsert_writes_markdown_and_meta_json
+    - storage_prefix_update_moves_projection
