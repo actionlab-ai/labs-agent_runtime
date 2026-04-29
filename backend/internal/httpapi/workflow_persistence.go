@@ -50,8 +50,12 @@ func loadProjectContextPack(ctx context.Context, db workflow.ProjectStore, proje
 
 func persistWorkflowDocuments(ctx context.Context, projects projectConfigStore, projectID string, plan fixedWorkflowPlan, out workflow.WorkflowOutput) (workflowPersistenceResult, error) {
 	finalText := strings.TrimSpace(workflowFinalText(out))
+	policy := project.DefaultDocumentPolicy()
+	if strings.TrimSpace(projectID) != "" {
+		policy = projects.ProjectDocumentPolicy(ctx)
+	}
 	if strings.TrimSpace(projectID) == "" {
-		return inferWorkflowPersistenceResult(plan, finalText, nil), nil
+		return inferWorkflowPersistenceResult(plan, finalText, nil, policy), nil
 	}
 
 	switch plan.PersistMode {
@@ -60,24 +64,25 @@ func persistWorkflowDocuments(ctx context.Context, projects projectConfigStore, 
 		if err != nil {
 			return workflowPersistenceResult{}, err
 		}
-		return inferWorkflowPersistenceResult(plan, finalText, docs), nil
+		return inferWorkflowPersistenceResult(plan, finalText, docs, policy), nil
 	case "", persistModeExtractSections:
 		docs, err := persistExtractedWorkflowDocuments(ctx, projects, projectID, out)
 		if err != nil {
 			return workflowPersistenceResult{}, err
 		}
-		return inferWorkflowPersistenceResult(plan, finalText, docs), nil
+		return inferWorkflowPersistenceResult(plan, finalText, docs, policy), nil
 	default:
 		return workflowPersistenceResult{}, fmt.Errorf("unsupported workflow persist mode %q", plan.PersistMode)
 	}
 }
 
 func persistExtractedWorkflowDocuments(ctx context.Context, projects projectConfigStore, projectID string, out workflow.WorkflowOutput) ([]workflowDocumentUpdate, error) {
+	policy := projects.ProjectDocumentPolicy(ctx)
 	seen := map[string]workflowDocumentUpdate{}
 	for _, step := range out.Steps {
-		drafts := project.ExtractDocumentDrafts(step.Output.Text)
+		drafts := project.ExtractDocumentDraftsWithPolicy(step.Output.Text, policy)
 		for _, draft := range drafts {
-			doc, err := upsertWorkflowDocument(ctx, projects, projectID, out.WorkflowID, step, draft.Kind, firstNonEmpty(draft.Title, project.DefaultDocumentTitle(draft.Kind)), draft.Body)
+			doc, err := upsertWorkflowDocument(ctx, projects, projectID, out.WorkflowID, step, draft.Kind, firstNonEmpty(draft.Title, policy.Title(draft.Kind)), draft.Body)
 			if err != nil {
 				return nil, err
 			}
@@ -88,19 +93,20 @@ func persistExtractedWorkflowDocuments(ctx context.Context, projects projectConf
 			}
 		}
 	}
-	return sortWorkflowDocumentUpdates(seen), nil
+	return sortWorkflowDocumentUpdates(seen, policy), nil
 }
 
 func persistSingleWorkflowDocument(ctx context.Context, projects projectConfigStore, projectID string, plan fixedWorkflowPlan, out workflow.WorkflowOutput) ([]workflowDocumentUpdate, error) {
 	finalText := strings.TrimSpace(workflowFinalText(out))
-	if finalText == "" || !shouldPersistSingleWorkflowDocument(plan, finalText) {
+	policy := projects.ProjectDocumentPolicy(ctx)
+	if finalText == "" || !shouldPersistSingleWorkflowDocument(plan, finalText, policy) {
 		return nil, nil
 	}
 	step := workflow.WorkflowStepOutput{}
 	if len(out.Steps) > 0 {
 		step = out.Steps[len(out.Steps)-1]
 	}
-	doc, err := upsertWorkflowDocument(ctx, projects, projectID, out.WorkflowID, step, plan.PersistKind, firstNonEmpty(plan.PersistTitle, project.DefaultDocumentTitle(plan.PersistKind)), finalText)
+	doc, err := upsertWorkflowDocument(ctx, projects, projectID, out.WorkflowID, step, plan.PersistKind, firstNonEmpty(plan.PersistTitle, policy.Title(plan.PersistKind)), finalText)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +117,7 @@ func persistSingleWorkflowDocument(ctx context.Context, projects projectConfigSt
 	}}, nil
 }
 
-func inferWorkflowPersistenceResult(plan fixedWorkflowPlan, finalText string, docs []workflowDocumentUpdate) workflowPersistenceResult {
+func inferWorkflowPersistenceResult(plan fixedWorkflowPlan, finalText string, docs []workflowDocumentUpdate, policy project.DocumentPolicy) workflowPersistenceResult {
 	result := workflowPersistenceResult{UpdatedDocuments: docs}
 	finalText = strings.TrimSpace(finalText)
 
@@ -122,7 +128,7 @@ func inferWorkflowPersistenceResult(plan fixedWorkflowPlan, finalText string, do
 		result.ResponseMode = workflowResponseModeClarification
 		result.NeedsInput = true
 	case plan.PersistMode == persistModeSingleDocument && finalText != "":
-		if looksLikeWorkflowDocument(plan, finalText) {
+		if looksLikeWorkflowDocument(plan, finalText, policy) {
 			result.ResponseMode = workflowResponseModeDocument
 		} else {
 			// Single-document workflows are conservative: if the output does not
@@ -135,7 +141,7 @@ func inferWorkflowPersistenceResult(plan fixedWorkflowPlan, finalText string, do
 	return result
 }
 
-func shouldPersistSingleWorkflowDocument(plan fixedWorkflowPlan, finalText string) bool {
+func shouldPersistSingleWorkflowDocument(plan fixedWorkflowPlan, finalText string, policy project.DocumentPolicy) bool {
 	finalText = strings.TrimSpace(finalText)
 	if finalText == "" {
 		return false
@@ -143,10 +149,10 @@ func shouldPersistSingleWorkflowDocument(plan fixedWorkflowPlan, finalText strin
 	if looksLikeWorkflowClarification(plan, finalText) {
 		return false
 	}
-	return looksLikeWorkflowDocument(plan, finalText)
+	return looksLikeWorkflowDocument(plan, finalText, policy)
 }
 
-func looksLikeWorkflowDocument(plan fixedWorkflowPlan, text string) bool {
+func looksLikeWorkflowDocument(plan fixedWorkflowPlan, text string, policy project.DocumentPolicy) bool {
 	heading := normalizeWorkflowHeading(firstMarkdownHeading(text))
 	if heading == "" {
 		return false
@@ -155,7 +161,7 @@ func looksLikeWorkflowDocument(plan fixedWorkflowPlan, text string) bool {
 	candidates := []string{
 		plan.PersistHeading,
 		plan.PersistTitle,
-		project.DefaultDocumentTitle(plan.PersistKind),
+		policy.Title(plan.PersistKind),
 		plan.PersistKind,
 	}
 	for _, candidate := range candidates {
@@ -221,12 +227,19 @@ func upsertWorkflowDocument(ctx context.Context, projects projectConfigStore, pr
 	})
 }
 
-func sortWorkflowDocumentUpdates(seen map[string]workflowDocumentUpdate) []workflowDocumentUpdate {
+func sortWorkflowDocumentUpdates(seen map[string]workflowDocumentUpdate, policy project.DocumentPolicy) []workflowDocumentUpdate {
 	keys := make([]string, 0, len(seen))
 	for kind := range seen {
 		keys = append(keys, kind)
 	}
-	sort.Strings(keys)
+	sort.SliceStable(keys, func(i, j int) bool {
+		left := policy.Priority(keys[i])
+		right := policy.Priority(keys[j])
+		if left != right {
+			return left < right
+		}
+		return keys[i] < keys[j]
+	})
 
 	outDocs := make([]workflowDocumentUpdate, 0, len(keys))
 	for _, kind := range keys {

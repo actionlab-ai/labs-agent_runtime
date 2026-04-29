@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -172,5 +173,43 @@ func registerSettingRoutes(router *gin.Engine, deps routeDeps) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": true})
+	})
+
+	router.GET("/v1/settings/project-document-policy", func(c *gin.Context) {
+		setting, err := deps.db.GetAppSetting(c.Request.Context(), project.DocumentPolicySettingKey)
+		if err != nil || setting.Value == "" {
+			c.JSON(http.StatusOK, gin.H{"key": project.DocumentPolicySettingKey, "value": project.DefaultDocumentPolicy()})
+			return
+		}
+		policy, err := project.ParseDocumentPolicy(setting.Value)
+		if err != nil {
+			writeHTTPError(c, http.StatusInternalServerError, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"key": project.DocumentPolicySettingKey, "value": policy})
+	})
+
+	router.PUT("/v1/settings/project-document-policy", func(c *gin.Context) {
+		var req projectDocumentPolicyUpdateRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			writeHTTPError(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, err := project.ParseDocumentPolicy(string(req.Value))
+		if err != nil {
+			writeHTTPError(c, http.StatusBadRequest, err)
+			return
+		}
+		body, err := json.Marshal(policy)
+		if err != nil {
+			writeHTTPError(c, http.StatusInternalServerError, err)
+			return
+		}
+		setting, err := deps.db.UpsertAppSetting(c.Request.Context(), project.DocumentPolicySettingKey, string(body))
+		if err != nil {
+			writeHTTPError(c, http.StatusInternalServerError, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"key": setting.Key, "value": policy})
 	})
 }

@@ -357,7 +357,7 @@ func readProjectDocumentToolSpec() model.ToolSpec {
 				"type": "object",
 				"properties": map[string]any{
 					"project_id": map[string]any{"type": "string", "description": "Optional. Must match the active project_id when provided."},
-					"kind":       map[string]any{"type": "string", "description": "Stable document kind, such as novel_core, world_rules, power_system, mainline, current_state."},
+					"kind":       map[string]any{"type": "string", "description": "Stable document kind configured by project_document_policy, such as novel_core."},
 				},
 				"required": []string{"kind"},
 			},
@@ -375,7 +375,7 @@ func writeProjectDocumentToolSpec() model.ToolSpec {
 				"type": "object",
 				"properties": map[string]any{
 					"project_id": map[string]any{"type": "string", "description": "Optional. Must match the active project_id when provided."},
-					"kind":       map[string]any{"type": "string", "description": "Stable document kind, such as novel_core, world_rules, power_system, mainline, current_state."},
+					"kind":       map[string]any{"type": "string", "description": "Stable document kind configured by project_document_policy, such as novel_core."},
 					"title":      map[string]any{"type": "string", "description": "Human-readable document title."},
 					"body":       map[string]any{"type": "string", "description": "Full markdown body to store as the project document."},
 					"metadata":   map[string]any{"type": "object", "description": "Optional structured metadata."},
@@ -867,7 +867,7 @@ func skillDocumentHint(cmd skill.Command, session *skillFileToolSession) string 
 	}
 	guidance := "When the task produces a durable novel artifact, prefer writing a markdown document under preferred_document_output_dir. If document_path is provided in the tool arguments, use that path. After writing, return a short summary with file path instead of repeating the whole document unless the user explicitly asked for chat-only output."
 	if strings.TrimSpace(session.ProjectID) != "" {
-		guidance += " Project mode is active and project state is provider-backed. Treat the injected Active Novel Project Context as current canon. If ListProjectDocuments, ReadProjectDocument, or WriteProjectDocument are available, use them for long-lived project state instead of raw file reads or writes. Those tools call the project document provider, which owns PostgreSQL, Redis, filesystem, S3, or any future backend sync. Use stable kinds such as novel_core, project_brief, world_rules, power_system, mainline, or current_state."
+		guidance += " Project mode is active and project state is provider-backed. Treat the injected Active Novel Project Context and Runtime-Loaded Project Documents as current canon. If ListProjectDocuments, ReadProjectDocument, or WriteProjectDocument are available, use them for long-lived project state instead of raw file reads or writes. Those tools call the project document provider, which owns PostgreSQL, Redis, filesystem, S3, or any future backend sync. Use stable document kinds from project_document_policy."
 	}
 	available := strings.Join(names, ", ")
 	if strings.Contains(available, skillBashToolName) || strings.Contains(available, skillPowerShellToolName) {

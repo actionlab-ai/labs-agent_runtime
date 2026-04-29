@@ -2,9 +2,15 @@
 
 这份文档说明 `skill-session` 模块在产品里的完整作用：它怎么接住模型的反问，怎么等待人类补充信息，怎么带着原上下文继续发给模型，以及最后怎么通过 provider 写入项目资产。
 
+当前约定已经收敛为：
+
+- 所有新的小说类内容默认基于 `skill-session` 执行。
+- `AskHuman` 视为 skill-session 的默认输入补全能力，不再把“文本式澄清后人工重提一次请求”当成主路径。
+- 固定 workflow 和早期 bootstrap 路线先冻结，不作为当前新能力的落点。
+
 ## 结论
 
-`skill-session` 是“单个 skill 的多轮交互控制器”。
+`skill-session` 是当前小说能力的主执行面，也是“单个 skill 的多轮交互控制器”。
 
 它解决的问题是：
 
@@ -26,7 +32,200 @@
 - runtime 负责模型调用、prompt 组装、tool 暴露和 tool 执行。
 - skill-session 负责暂停、保存会话状态、恢复会话。
 - provider 负责项目文档的 PG / filesystem / Redis 同步。
-- workflow 负责多个 skill 的产品级编排，不应该自己实现 AskHuman 状态机。
+- workflow 负责多个 skill 的产品级编排，但当前不再作为新内容的默认入口，也不应该自己实现 AskHuman 状态机。
+
+## 当前落地策略
+
+新 skill 的默认设计前提：
+
+1. 先由 `skill-session` 启动单个 skill。
+2. skill 缺信息时直接调用 `AskHuman`。
+3. 人类补完后在同一 session 内继续，而不是重新起一次新任务。
+4. 只有信息足够时才调用 `WriteProjectDocument` 落正式项目资产。
+
+当前不作为主路径推进的东西：
+
+- 固定 workflow 新增或扩展
+- “先 bootstrap 再切主流程”的自举路线
+- 依赖文本 `response_mode=clarification` 的一次性问答入口
+
+## 核心到第二任务的数据流
+
+当前最重要的业务链路是：
+
+```text
+第一步：用 skill-session 创建 novel_core
+第二步：再开一个 skill-session 跑 novel-world-engine
+第三步：runtime 根据 PG 里的 project_document_policy 自动把 novel_core 带进第二个 skill
+```
+
+这里的关键原则是：
+
+- `novel_core` 是正式项目文档，不是聊天临时上下文。
+- 保存位置以 `postgres.project_documents(project_id, kind)` 为准。
+- skill 之间不靠文件路径传递产物。
+- runtime 不硬编码“world-engine 必须读 novel_core”，而是读取 `postgres.app_settings.project_document_policy`。
+- provider 负责把 PG、filesystem projection、Redis cache 串起来，skill 不直接碰底层存储。
+
+### 1. 创建内核并保存
+
+```mermaid
+sequenceDiagram
+  participant UI as Web UI
+  participant HTTP as SkillSessionService
+  participant Runtime as Runtime
+  participant Model as Model
+  participant Tool as WriteProjectDocument
+  participant Provider as ProjectDocumentProvider
+  participant PG as PostgreSQL project_documents
+  participant FS as Filesystem Projection
+  participant Redis as Redis Cache
+
+  UI->>HTTP: POST /v1/skill-sessions<br/>skill_id=novel-emotional-core<br/>project=urban-rebirth
+  HTTP->>Runtime: ExecuteSkillSession(project_id, skill_id, input)
+  Runtime->>Model: compiled skill prompt + AskHuman + project tools
+  alt 信息不足
+    Model-->>Runtime: AskHuman(...)
+    Runtime-->>HTTP: status=needs_input
+    UI->>HTTP: POST /v1/skill-sessions/{id}/turns<br/>answers
+    HTTP->>Runtime: ContinueSkillInteractive(...)
+    Runtime->>Model: previous conversation + human tool result
+  end
+  Model-->>Runtime: WriteProjectDocument(kind="novel_core", body=...)
+  Runtime->>Tool: execute tool call
+  Tool->>Provider: UpsertProjectDocument(project_id, "novel_core")
+  Provider->>PG: INSERT/UPDATE project_documents
+  Provider->>FS: sync documents/novel_core.md
+  Provider->>Redis: async cache project
+  Provider-->>Runtime: body_bytes / synced
+  Runtime-->>HTTP: session completed
+  HTTP-->>UI: final_text + session snapshot
+```
+
+保存后的事实是：
+
+```text
+project_documents
+  project_id = "urban-rebirth"
+  kind       = "novel_core"
+  title      = "小说情感内核"
+  body       = "<正式内核正文>"
+```
+
+filesystem 只是 projection，用于人类查看和调试：
+
+```text
+projects/{storage_prefix}/documents/novel_core.md
+```
+
+后续 skill 不应该通过拼文件路径读取它，而应该走 provider。
+
+### 2. 第二个任务如何带上第一个产物
+
+第二次运行 `novel-world-engine` 时，请求本身只需要指定同一个 project：
+
+```http
+POST /v1/skill-sessions
+Content-Type: application/json
+```
+
+```json
+{
+  "project": "urban-rebirth",
+  "model": "deepseek-flash",
+  "skill_id": "novel-world-engine",
+  "input": "基于已经保存的情绪内核，设计这个世界如何持续制造冲突。",
+  "arguments": {
+    "document_kind": "world_engine"
+  },
+  "debug": true
+}
+```
+
+服务端会在模型调用前做两层注入：
+
+```mermaid
+flowchart TD
+  Req["POST /v1/skill-sessions<br/>project + skill_id=novel-world-engine"] --> Factory["runtimeFactory"]
+  Factory --> Policy["Load project_document_policy<br/>from app_settings"]
+  Factory --> Context["PostgresContextProvider.BuildContextWithPolicy"]
+  Policy --> Context
+  Context --> ListDocs["ListProjectDocuments(project_id)"]
+  ListDocs --> PGDocs["project_documents"]
+  Context --> ActiveCtx["Active Novel Project Context<br/>按 policy 排序"]
+  Factory --> Runtime["Runtime(ProjectID, ProjectDocs, ProjectPolicy, ProjectContext)"]
+  Policy --> Runtime
+  ActiveCtx --> Runtime
+  Runtime --> SkillDeps["ProjectPolicy.skill_documents[novel-world-engine]"]
+  SkillDeps --> NeedCore["required kinds: novel_core"]
+  NeedCore --> ReadCore["ProjectDocs.ReadProjectDocument(project_id, novel_core)"]
+  ReadCore --> PGCore["project_documents(kind=novel_core)"]
+  ReadCore --> Inject["Runtime-Loaded Project Documents<br/>## 小说情感内核 (novel_core)"]
+  Inject --> Prompt["compiled skill prompt"]
+  ActiveCtx --> Prompt
+  Prompt --> Model["Model sees novel_core before drafting world_engine"]
+```
+
+这意味着第二个 skill 不需要自己猜路径，也不需要把“先读 novel_core”写成固定代码流程。
+
+它只依赖一条配置：
+
+```json
+{
+  "documents": [
+    {"kind": "novel_core", "title": "小说情感内核", "priority": 0},
+    {"kind": "world_engine", "title": "小说世界压力引擎", "priority": 50},
+    {"kind": "world_rules", "title": "世界规则", "priority": 60},
+    {"kind": "power_system", "title": "能力体系", "priority": 70}
+  ],
+  "skill_documents": {
+    "novel-world-engine": ["novel_core"]
+  }
+}
+```
+
+这份配置的业务源是：
+
+```text
+postgres.app_settings
+  key   = "project_document_policy"
+  value = "<JSON policy>"
+```
+
+如果以后要让 `novel-world-engine` 同时带上 `reader_contract`，只改 PG 配置：
+
+```json
+{
+  "skill_documents": {
+    "novel-world-engine": ["novel_core", "reader_contract"]
+  }
+}
+```
+
+runtime 下一次启动 session 时会按新配置读取，不需要改 `SKILL.md`、SQL 排序、runtime 提示或 workflow 后处理。
+
+### 3. 缺少 novel_core 时怎么办
+
+如果 policy 要求 `novel-world-engine` 读取 `novel_core`，但 PG 里没有这份文档：
+
+```mermaid
+flowchart TD
+  Runtime["Runtime before model call"] --> ReadCore["ReadProjectDocument(project_id, novel_core)"]
+  ReadCore --> Missing["not found / empty"]
+  Missing --> PromptHint["Prompt includes missing configured document notice"]
+  PromptHint --> Model["Model runs novel-world-engine"]
+  Model --> Ask["Call AskHuman<br/>ask for missing emotional core"]
+  Ask --> Session["skill-session status=needs_input"]
+```
+
+此时不应该：
+
+- 从 filesystem 猜 `novel_core.md` 路径；
+- 用题材名瞎补一个内核；
+- 直接输出正式 `world_engine`；
+- 把缺信息的澄清文本当成最终文档写回。
+
+正确路径是 `AskHuman`，人类补完后继续同一个 session。
 
 ## 模块边界
 
@@ -57,7 +256,7 @@ flowchart TD
 | `Runtime` | 调模型、暴露工具、执行工具、暂停/恢复 primitive | 多 skill 产品编排 |
 | `AskHuman` | 请求人类补充信息 | 修改 PG/Redis/FS |
 | `WriteProjectDocument` | 通过 provider 写项目文档 | 管理 session 状态 |
-| `workflow` | 多 skill 顺序、产品流程、产物规则 | 自己实现多轮问答状态机 |
+| `workflow` | 多 skill 顺序、产品流程、产物规则 | 自己实现多轮问答状态机、承接当前新小说能力主路径 |
 
 ## 当前 API
 
@@ -340,42 +539,23 @@ Runtime
 
 ## 和 Workflow 的关系
 
-现在的关系：
+现在的口径已经简化：
 
 ```text
 skill-session:
-  单个 skill 的多轮交互
+  当前唯一主执行面
 
 workflow:
-  多个 skill 的产品级流程编排
+  历史入口 / 参考实现
 ```
 
-短期建议：
+当前建议很明确：
 
-- 明确知道要跑哪个 skill，并且可能需要模型反问：用 `/v1/skill-sessions`。
-- 固定单步 workflow，例如 `project-kernel`，可以逐步弱化为 skill-session 的预设入口。
-- 多步骤流程，例如“一键新书初始化”，仍然保留 workflow。
+- 明确知道要跑哪个 skill，并且允许模型缺信息就问人：统一走 `/v1/skill-sessions`。
+- 固定 workflow 先不继续扩，已有文档仅保留给历史实现和调试参考。
+- 多步骤“一键初始化”暂不作为当前推进重点，避免在 AskHuman 状态机还没统一前再次分叉。
 
-长期更合理的结构：
-
-```mermaid
-flowchart TD
-  WF["Workflow: new_book_bootstrap"] --> S1["SkillSession: project-kickoff"]
-  WF --> S2["SkillSession: emotional-core"]
-  WF --> S3["SkillSession: worldbuilding"]
-  WF --> S4["SkillSession: character-cast"]
-  WF --> S5["SkillSession: arc-planner"]
-```
-
-也就是：
-
-- workflow 决定先后顺序；
-- 每一步具体执行交给 skill-session；
-- 如果某一步缺信息，workflow 不自己问人，而是把当前 session 返回给前端；
-- 人类补充后继续该 session；
-- 当前 step completed 后，workflow 再进入下一 step。
-
-这部分目前还没有完全实现。当前 workflow 仍是固定一次性执行，或者通过 `response_mode=clarification` 返回文本式澄清。后续应该改成复用 `skillsession.Manager`。
+所以现阶段不再把“workflow 复用 session”当成近期强依赖，而是先把单 skill session 路径打稳。
 
 ## 前端应该怎么用
 
@@ -436,9 +616,9 @@ runs/{run_id}/skill-calls/{skill_id}/tools/AskHuman-{id}-request.json
    - 服务重启会丢失 session。
    - 多副本部署时，同一个 session 必须回到同一个进程，否则找不到状态。
 
-2. workflow 还没有完全复用 skill-session。
-   - 固定 workflow 仍然是一次性执行。
-   - 后续应该让 workflow step 可以创建或挂起 skill-session。
+2. workflow 没有完全复用 skill-session。
+   - 这在当前阶段是已知现状，但不是优先修复项。
+   - 固定 workflow 暂时冻结，先不继续扩写这条链路。
 
 3. session 没有独立过期策略。
    - 当前需要后续补 TTL、清理任务、取消接口。
@@ -490,20 +670,15 @@ novelrt:skill_session:{id}
 - Redis 更适合短期会话缓存；
 - 不要让 Redis 成为唯一业务状态源，除非明确接受重启丢失。
 
-### 第三阶段：workflow 复用 session
+### 第三阶段：workflow 复用 session（非当前范围）
 
-目标：
+这条线保留为远期参考，不纳入当前小说能力落地范围。
 
-```text
-workflow step
-  -> start skill session
-  -> if needs_input: workflow paused
-  -> human continues session
-  -> step completed
-  -> workflow advances to next step
-```
+当前优先级仍然是：
 
-这样 workflow 不再关心 AskHuman 细节，只关心 step 状态。
+- skill-session 稳定
+- AskHuman 补问稳定
+- WriteProjectDocument 落库稳定
 
 ## 验收标准
 

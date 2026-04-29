@@ -1,5 +1,11 @@
 # 固定 Workflow 到模型请求的真实组装
 
+状态说明：
+
+- 这份文档现在主要用于理解历史固定入口的实现。
+- 当前新的小说类内容默认不再从 fixed workflow 起步，而是统一走 `skill-session + AskHuman`。
+- 所以这里描述的链路仍然有效，但不应再作为新能力设计的默认模板。
+
 这份文档只讲两条固定链：
 
 1. `POST /v1/workflows/project-kickoff`
@@ -24,6 +30,8 @@ skill 执行和模型请求组装在：
 - [model.go](/C:/Users/admin/Desktop/novel-knowledge-assets-v0.1/backend/internal/model/model.go)
 
 ## 2. 真实流程
+
+注意：这是一条保留中的历史路径，不是当前首选入口。
 
 这里不是把 `skill_id` 直接传给模型。
 
@@ -108,6 +116,8 @@ HTTP 请求
 - 判定 `needs_input=true`
 - 不写入 `novel_core`
 
+这套机制在 fixed workflow 里仍然能工作，但当前主路径已经改成：skill 直接在 session 内调用 `AskHuman`，而不是依赖 workflow 返回文本澄清结果。
+
 ## 5. 工具也会一起发给模型
 
 如果当前 skill 允许本地工具，或者项目模式已启用，模型请求里还会带这些 tool schema：
@@ -190,3 +200,12 @@ curl -X POST https://api.deepseek.com/chat/completions \
 
 - 不是传 `skill_id`
 - 而是传“skill 编译后的 prompt + tools”
+
+## 8. 当前建议
+
+如果你现在要扩新的小说 skill 或新文档产出规则，优先按下面的顺序思考：
+
+1. 先设计 skill 在 `skill-session` 里的执行和补问方式。
+2. 缺信息时默认走 `AskHuman`。
+3. 信息足够后再调用 `WriteProjectDocument`。
+4. 不要先为它补一条新的 fixed workflow。

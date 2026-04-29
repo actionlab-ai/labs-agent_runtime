@@ -13,6 +13,7 @@ import (
 
 	"novel-agent-runtime/internal/config"
 	"novel-agent-runtime/internal/logging"
+	"novel-agent-runtime/internal/project"
 	"novel-agent-runtime/internal/runtime"
 	"novel-agent-runtime/internal/store"
 	"novel-agent-runtime/internal/workflow"
@@ -68,14 +69,14 @@ func openConfiguredStore(ctx context.Context, cfg config.Config) (*store.Store, 
 	return db, nil
 }
 
-func loadProjectContext(ctx context.Context, db workflow.ProjectStore, projectID string) (string, *store.Project, error) {
+func loadProjectContext(ctx context.Context, db workflow.ProjectStore, projectID string) (string, *store.Project, project.DocumentPolicy, error) {
 	provider := workflow.PostgresContextProvider{Store: db}
 	pack, err := provider.BuildContext(ctx, projectID, "")
 	if err != nil {
-		return "", nil, err
+		return "", nil, project.DefaultDocumentPolicy(), err
 	}
 	if strings.TrimSpace(pack.Project.ID) == "" {
-		return pack.Text, nil, nil
+		return pack.Text, nil, pack.Policy, nil
 	}
 	return pack.Text, &store.Project{
 		ID:              pack.Project.ID,
@@ -85,7 +86,7 @@ func loadProjectContext(ctx context.Context, db workflow.ProjectStore, projectID
 		StorageProvider: pack.Project.StorageProvider,
 		StorageBucket:   pack.Project.StorageBucket,
 		StoragePrefix:   pack.Project.StoragePrefix,
-	}, nil
+	}, pack.Policy, nil
 }
 
 func pagination(c *gin.Context) (int32, int32) {

@@ -3,6 +3,8 @@ package workflow
 import (
 	"context"
 	"time"
+
+	"novel-agent-runtime/internal/project"
 )
 
 type SkillSpec struct {
@@ -50,6 +52,7 @@ type ContextPack struct {
 	ProjectID string            `json:"project_id,omitempty"`
 	Request   string            `json:"request,omitempty"`
 	Documents []ContextDocument `json:"documents,omitempty"`
+	Policy    project.DocumentPolicy `json:"policy,omitempty"`
 	Text      string            `json:"text"`
 }
 

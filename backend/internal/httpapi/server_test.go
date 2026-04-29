@@ -22,6 +22,7 @@ type fakeStore struct {
 	projects       map[string]store.Project
 	docs           map[string][]store.ProjectDocument
 	models         map[string]store.ModelProfile
+	settings       map[string]store.AppSetting
 	defaultModelID string
 }
 
@@ -31,6 +32,7 @@ func newFakeStore() *fakeStore {
 		projects: map[string]store.Project{},
 		docs:     map[string][]store.ProjectDocument{},
 		models:   map[string]store.ModelProfile{},
+		settings: map[string]store.AppSetting{},
 	}
 }
 
@@ -192,6 +194,16 @@ func (f *fakeStore) SetDefaultModelID(_ context.Context, modelID string) error {
 func (f *fakeStore) ClearDefaultModelID(_ context.Context) error {
 	f.defaultModelID = ""
 	return nil
+}
+
+func (f *fakeStore) GetAppSetting(_ context.Context, key string) (store.AppSetting, error) {
+	return f.settings[key], nil
+}
+
+func (f *fakeStore) UpsertAppSetting(_ context.Context, key, value string) (store.AppSetting, error) {
+	item := store.AppSetting{Key: key, Value: value, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	f.settings[key] = item
+	return item, nil
 }
 
 // UpsertProjectDocument 模拟插入或更新项目文档操作。

@@ -12,6 +12,7 @@ import (
 	"novel-agent-runtime/internal/config"
 	"novel-agent-runtime/internal/logging"
 	"novel-agent-runtime/internal/model"
+	"novel-agent-runtime/internal/project"
 	"novel-agent-runtime/internal/runstore"
 	"novel-agent-runtime/internal/skill"
 
@@ -28,6 +29,7 @@ type Runtime struct {
 	ProjectID      string
 	ProjectContext string
 	ProjectDocs    ProjectDocumentProvider
+	ProjectPolicy  project.DocumentPolicy
 }
 
 type RunResult struct {
@@ -448,7 +450,7 @@ func (r *Runtime) executeSkillInteractive(ctx context.Context, skillID, original
 		ProjectID:         r.ProjectID,
 		ProjectDocs:       r.ProjectDocs,
 	}, r.Store, filepath.ToSlash(filepath.Join("skill-calls", safeID)))
-	compiled := ComposeSkillPromptWithOptions(cmd, originalUserInput, invocationArgs, r.skillContextHint(cmd, fileTools), opts)
+	compiled := ComposeSkillPromptWithOptions(cmd, originalUserInput, invocationArgs, r.skillContextHint(ctx, cmd, fileTools), opts)
 	_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/compiled-prompt.md", safeID), compiled)
 	_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/skill-metadata.json", safeID), cmd)
 	conversation := []model.Message{{Role: "user", Content: compiled}}
@@ -786,8 +788,16 @@ func parseClarificationOption(raw string) (string, string) {
 	return strings.Trim(raw, "* "), ""
 }
 
-func (r *Runtime) skillContextHint(cmd skill.Command, fileTools *skillFileToolSession) string {
+func (r *Runtime) skillContextHint(ctx context.Context, cmd skill.Command, fileTools *skillFileToolSession) string {
 	hint := skillDocumentHint(cmd, fileTools)
+	projectDocsHint := r.configuredProjectDocumentsHint(ctx, cmd)
+	if strings.TrimSpace(projectDocsHint) != "" {
+		if strings.TrimSpace(hint) != "" {
+			hint += "\n\n" + projectDocsHint
+		} else {
+			hint = projectDocsHint
+		}
+	}
 	if strings.TrimSpace(r.ProjectContext) != "" {
 		_ = r.Store.WriteText("project-context.md", r.ProjectContext)
 		if strings.TrimSpace(hint) == "" {
@@ -796,6 +806,102 @@ func (r *Runtime) skillContextHint(cmd skill.Command, fileTools *skillFileToolSe
 		return hint + "\n\n" + r.ProjectContext
 	}
 	return hint
+}
+
+func (r *Runtime) configuredProjectDocumentsHint(ctx context.Context, cmd skill.Command) string {
+	kinds := r.ProjectPolicy.RequiredDocumentsForSkill(cmd.ID)
+	if len(kinds) == 0 {
+		return ""
+	}
+	projectID := strings.TrimSpace(r.ProjectID)
+	if r.ProjectDocs == nil || projectID == "" {
+		return configuredProjectDocumentsUnavailableHint(kinds)
+	}
+
+	var b strings.Builder
+	var loaded []map[string]any
+	var missing []string
+	for _, kind := range uniqueProjectDocumentKinds(kinds) {
+		doc, err := r.ProjectDocs.ReadProjectDocument(ctx, projectID, kind)
+		if err != nil {
+			missing = append(missing, fmt.Sprintf("%s: %s", kind, err.Error()))
+			continue
+		}
+		loaded = append(loaded, map[string]any{
+			"kind":       doc.Kind,
+			"title":      doc.Title,
+			"body_bytes": len(doc.Body),
+		})
+		title := strings.TrimSpace(doc.Title)
+		if title == "" {
+			title = doc.Kind
+		}
+		b.WriteString(fmt.Sprintf("\n\n## %s (%s)\n\n%s", title, doc.Kind, truncatePromptText(strings.TrimSpace(doc.Body), 20000)))
+	}
+	_ = r.Store.WriteJSON("configured-project-documents.json", map[string]any{
+		"required": uniqueProjectDocumentKinds(kinds),
+		"loaded":   loaded,
+		"missing":  missing,
+	})
+
+	if strings.TrimSpace(b.String()) == "" && len(missing) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString("# Runtime-Loaded Project Documents\n\n")
+	out.WriteString("The runtime loaded these provider-backed project documents because `project_document_policy` maps them to the active skill. Treat loaded documents as current canon. Do not rediscover them by filesystem path.\n")
+	if len(missing) > 0 {
+		out.WriteString("\nMissing configured project documents:\n")
+		for _, item := range missing {
+			out.WriteString("- ")
+			out.WriteString(item)
+			out.WriteString("\n")
+		}
+		out.WriteString("\nIf a missing configured document is required for this skill, use AskHuman instead of inventing canon.\n")
+	}
+	out.WriteString(b.String())
+	return strings.TrimSpace(out.String())
+}
+
+func configuredProjectDocumentsUnavailableHint(kinds []string) string {
+	var b strings.Builder
+	b.WriteString("# Runtime-Loaded Project Documents\n\n")
+	b.WriteString("`project_document_policy` maps these project documents to the active skill, but the active runtime has no project document provider or active project_id. Required kinds:\n")
+	for _, kind := range uniqueProjectDocumentKinds(kinds) {
+		b.WriteString("- ")
+		b.WriteString(kind)
+		b.WriteString("\n")
+	}
+	b.WriteString("\nIf these documents are required, use AskHuman instead of reading raw filesystem paths or inventing canon.")
+	return strings.TrimSpace(b.String())
+}
+
+func uniqueProjectDocumentKinds(kinds []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, kind := range kinds {
+		kind = strings.ToLower(strings.TrimSpace(kind))
+		if kind == "" || seen[kind] {
+			continue
+		}
+		seen[kind] = true
+		out = append(out, kind)
+	}
+	return out
+}
+
+func truncatePromptText(text string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	if maxRunes <= 20 {
+		return string(runes[:maxRunes])
+	}
+	return string(runes[:maxRunes-16]) + "\n\n...[truncated]"
 }
 
 func ComposeSkillPrompt(cmd skill.Command, originalUserInput string, invocationArgs map[string]any, toolingHint string) string {

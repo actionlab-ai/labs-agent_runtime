@@ -21,6 +21,8 @@ type appStore interface {
 	GetDefaultModelID(context.Context) (string, error)
 	SetDefaultModelID(context.Context, string) error
 	ClearDefaultModelID(context.Context) error
+	GetAppSetting(context.Context, string) (store.AppSetting, error)
+	UpsertAppSetting(context.Context, string, string) (store.AppSetting, error)
 	UpsertProjectDocument(context.Context, store.UpsertProjectDocumentParams) (store.ProjectDocument, error)
 	ListProjectDocuments(context.Context, string) ([]store.ProjectDocument, error)
 	CreateRun(context.Context, string, string, json.RawMessage) (store.Run, error)
@@ -93,4 +95,8 @@ type modelProfileUpdateRequest struct {
 
 type defaultModelUpdateRequest struct {
 	Model string `json:"model" binding:"required"`
+}
+
+type projectDocumentPolicyUpdateRequest struct {
+	Value json.RawMessage `json:"value" binding:"required"`
 }

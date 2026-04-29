@@ -56,6 +56,10 @@ type ProjectStore interface {
 	ListProjectDocuments(context.Context, string) ([]store.ProjectDocument, error)
 }
 
+type projectPolicyStore interface {
+	GetAppSetting(context.Context, string) (store.AppSetting, error)
+}
+
 type PostgresContextProvider struct {
 	Store ProjectStore
 }
@@ -68,6 +72,7 @@ func (p PostgresContextProvider) BuildContext(ctx context.Context, projectID str
 	if p.Store == nil {
 		return ContextPack{}, fmt.Errorf("project store is required")
 	}
+	policy := loadProjectDocumentPolicy(ctx, p.Store)
 	activeProject, err := p.Store.GetProject(ctx, projectID)
 	if err != nil {
 		return ContextPack{}, err
@@ -82,12 +87,12 @@ func (p PostgresContextProvider) BuildContext(ctx context.Context, projectID str
 		contextDocs = append(contextDocs, project.Document{Kind: doc.Kind, Title: doc.Title, Body: doc.Body})
 		outDocs = append(outDocs, ContextDocument{Kind: doc.Kind, Title: doc.Title, Body: doc.Body})
 	}
-	text := project.BuildContext(project.Project{
+	text := project.BuildContextWithPolicy(project.Project{
 		ID:          activeProject.ID,
 		Name:        activeProject.Name,
 		Description: activeProject.Description,
 		Status:      activeProject.Status,
-	}, contextDocs)
+	}, contextDocs, policy)
 	return ContextPack{
 		Project: ContextProject{
 			ID:              activeProject.ID,
@@ -101,8 +106,26 @@ func (p PostgresContextProvider) BuildContext(ctx context.Context, projectID str
 		ProjectID: activeProject.ID,
 		Request:   strings.TrimSpace(request),
 		Documents: outDocs,
+		Policy:    policy,
 		Text:      text,
 	}, nil
+}
+
+func loadProjectDocumentPolicy(ctx context.Context, store ProjectStore) project.DocumentPolicy {
+	defaultPolicy := project.DefaultDocumentPolicy()
+	policyStore, ok := store.(projectPolicyStore)
+	if !ok {
+		return defaultPolicy
+	}
+	setting, err := policyStore.GetAppSetting(ctx, project.DocumentPolicySettingKey)
+	if err != nil {
+		return defaultPolicy
+	}
+	policy, err := project.ParseDocumentPolicy(setting.Value)
+	if err != nil {
+		return defaultPolicy
+	}
+	return policy
 }
 
 type RuntimeSkillRunner struct {

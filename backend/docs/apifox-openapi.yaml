@@ -4,7 +4,8 @@ info:
   version: 0.1.0
   description: |
     Apifox import spec for project management, model management, project documents,
-    skills listing, general runtime runs, and fixed bootstrap workflows.
+    skills listing, skill-session based novel production, project document policy,
+    general runtime runs, and legacy fixed bootstrap workflows.
 servers:
   - url: http://localhost:8080
     description: Local development server
@@ -379,6 +380,158 @@ paths:
               schema:
                 $ref: "#/components/schemas/DeleteResponse"
 
+  /v1/settings/project-document-policy:
+    get:
+      tags: [Settings]
+      summary: Get project document policy
+      description: |
+        Returns the central policy used by runtime/project context to decide:
+        - which project document kinds are durable canon
+        - how project documents are ordered in context
+        - which documents are auto-loaded before a specific skill-session
+
+        The key is stored in PostgreSQL app_settings as project_document_policy.
+      responses:
+        "200":
+          description: Current project document policy. Falls back to the default policy if no setting is stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDocumentPolicyResponse"
+              example:
+                key: project_document_policy
+                value:
+                  documents:
+                    - kind: novel_core
+                      title: 小说情感内核
+                      priority: 0
+                    - kind: world_engine
+                      title: 小说世界压力引擎
+                      priority: 50
+                    - kind: character_cast
+                      title: 角色台账
+                      priority: 55
+                    - kind: world_rules
+                      title: 世界规则
+                      priority: 60
+                  skill_documents:
+                    novel-world-engine:
+                      - novel_core
+                    novel-reader-contract:
+                      - novel_core
+                      - world_engine
+        "500":
+          $ref: "#/components/responses/Error"
+    put:
+      tags: [Settings]
+      summary: Update project document policy
+      description: |
+        Replaces the central project document policy. The next skill-session will use this policy
+        to sort context and auto-load skill dependencies. Use this instead of hardcoding document
+        order or skill dependencies in runtime, SQL, or SKILL.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectDocumentPolicyRequest"
+            example:
+              value:
+                documents:
+                  - kind: novel_core
+                    title: 小说情感内核
+                    priority: 0
+                  - kind: project_brief
+                    title: 项目简报
+                    priority: 10
+                  - kind: reader_contract
+                    title: 读者承诺
+                    priority: 20
+                  - kind: style_guide
+                    title: 风格指南
+                    priority: 30
+                  - kind: taboo
+                    title: 禁区与避坑
+                    priority: 40
+                  - kind: world_engine
+                    title: 小说世界压力引擎
+                    priority: 50
+                  - kind: character_cast
+                    title: 角色台账
+                    priority: 55
+                  - kind: world_rules
+                    title: 世界规则
+                    priority: 60
+                  - kind: power_system
+                    title: 能力体系
+                    priority: 70
+                  - kind: factions
+                    title: 势力关系
+                    priority: 80
+                  - kind: locations
+                    title: 地点设定
+                    priority: 90
+                  - kind: mainline
+                    title: 主线规划
+                    priority: 100
+                  - kind: current_state
+                    title: 当前状态
+                    priority: 110
+                skill_documents:
+                  novel-world-engine:
+                    - novel_core
+                  novel-reader-contract:
+                    - novel_core
+                    - world_engine
+                  novel-character-pressure-engine:
+                    - novel_core
+                    - world_engine
+                    - reader_contract
+                    - project_brief
+                    - taboo
+                  novel-rules-power-engine:
+                    - novel_core
+                    - world_engine
+                    - reader_contract
+                    - character_cast
+                  novel-mainline-engine:
+                    - novel_core
+                    - reader_contract
+                    - world_engine
+                    - character_cast
+                    - world_rules
+                    - power_system
+                    - taboo
+                  novel-opening-package:
+                    - novel_core
+                    - reader_contract
+                    - world_engine
+                    - character_cast
+                    - world_rules
+                    - power_system
+                    - mainline
+                    - taboo
+                    - style_guide
+                  novel-style-guide:
+                    - novel_core
+                    - reader_contract
+                    - project_brief
+                  novel-continuity-snapshot:
+                    - novel_core
+                    - mainline
+                    - current_state
+      responses:
+        "200":
+          description: Project document policy updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDocumentPolicyResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
   /v1/runs:
     post:
       tags: [Runs]
@@ -386,8 +539,8 @@ paths:
       description: |
         General routed runtime entrypoint. Uses project context from PostgreSQL and selects a model profile
         from the database. model is required unless a default model is stored in the database.
-        This path still goes through router skill discovery. For deterministic early novel project
-        initialization, use /v1/workflows/project-kickoff or /v1/workflows/project-kernel instead.
+        This path still goes through router skill discovery. For deterministic novel project
+        initialization, use /v1/skill-sessions with an explicit skill_id instead.
       requestBody:
         required: true
         content:
@@ -545,19 +698,95 @@ paths:
         Runs one explicit skill inside the selected project. If the skill needs missing information,
         it can call the built-in AskHuman tool. The response status becomes needs_input, and the web UI
         should collect answers then call /v1/skill-sessions/{id}/turns.
+
+        Runtime loads project_document_policy from PostgreSQL before the model call. That policy controls
+        which provider-backed project documents are auto-injected for the selected skill. For example,
+        novel-world-engine receives novel_core, and novel-reader-contract receives novel_core + world_engine.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateSkillSessionRequest"
-            example:
-              project: urban-rebirth
-              model: deepseek-flash
-              skill_id: novel-emotional-core
-              input: Build the emotional core first. Ask me if required facts are missing.
-              arguments:
-                document_kind: novel_core
+            examples:
+              "01_novel_core":
+                summary: 1. Create novel_core
+                value:
+                  project: urban-rebirth
+                  model: deepseek-flash
+                  skill_id: novel-emotional-core
+                  input: 先创建小说情感内核。信息不足就 AskHuman，不要瞎补。
+                  arguments:
+                    task: 创建小说情感内核
+                    document_kind: novel_core
+              "02_world_engine":
+                summary: 2. Create world_engine from novel_core
+                value:
+                  project: urban-rebirth
+                  model: deepseek-flash
+                  skill_id: novel-world-engine
+                  input: 基于已保存的 novel_core，设计世界压力引擎。缺信息就 AskHuman。
+                  arguments:
+                    task: 设计世界压力引擎
+                    document_kind: world_engine
+              "03_reader_contract":
+                summary: 3. Create reader_contract, project_brief, taboo
+                value:
+                  project: urban-rebirth
+                  model: deepseek-flash
+                  skill_id: novel-reader-contract
+                  input: 基于 novel_core 和 world_engine，生成读者承诺、项目简报和禁区。
+                  arguments:
+                    task: 生成读者契约与项目定调
+              "04_character_cast":
+                summary: 4. Create character_cast
+                value:
+                  project: urban-rebirth
+                  model: deepseek-flash
+                  skill_id: novel-character-pressure-engine
+                  input: 基于已有项目资产，建立主角、压迫者、配角、关系变化和信息差台账。
+                  arguments:
+                    task: 生成角色台账
+                    document_kind: character_cast
+              "05_rules_power":
+                summary: 5. Create world_rules and power_system
+                value:
+                  project: urban-rebirth
+                  model: deepseek-flash
+                  skill_id: novel-rules-power-engine
+                  input: 基于已有项目资产，设计世界规则和能力体系。
+                  arguments:
+                    task: 生成世界规则与能力体系
+              "06_mainline":
+                summary: 6. Create mainline
+                value:
+                  project: urban-rebirth
+                  model: deepseek-flash
+                  skill_id: novel-mainline-engine
+                  input: 基于已有项目资产，规划第一卷、前 15 章和中期方向。
+                  arguments:
+                    task: 生成主线规划
+                    document_kind: mainline
+              "07_opening_package":
+                summary: 7. Create current_state opening package
+                value:
+                  project: urban-rebirth
+                  model: deepseek-flash
+                  skill_id: novel-opening-package
+                  input: 基于已有项目资产，生成第一章开篇执行包和初始 current_state。
+                  arguments:
+                    task: 生成开篇执行包
+                    document_kind: current_state
+              "optional_style_guide":
+                summary: Optional. Create style_guide
+                value:
+                  project: urban-rebirth
+                  model: deepseek-flash
+                  skill_id: novel-style-guide
+                  input: 基于项目定位和读者承诺，生成正文文风指南。
+                  arguments:
+                    task: 生成风格指南
+                    document_kind: style_guide
       responses:
         "200":
           description: Skill session started
@@ -811,6 +1040,58 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/ModelProfile"
+    ProjectDocumentPolicyItem:
+      type: object
+      required: [kind, title, priority]
+      properties:
+        kind:
+          type: string
+          description: Stable project document kind.
+          example: novel_core
+        title:
+          type: string
+          description: Default display/writeback title.
+          example: 小说情感内核
+        priority:
+          type: integer
+          description: Context ordering priority. Lower values are loaded earlier.
+          example: 0
+    ProjectDocumentPolicy:
+      type: object
+      required: [documents]
+      properties:
+        documents:
+          type: array
+          description: Durable project document kinds and context ordering.
+          items:
+            $ref: "#/components/schemas/ProjectDocumentPolicyItem"
+        skill_documents:
+          type: object
+          description: Map from skill_id to project document kinds auto-loaded before that skill-session.
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            novel-world-engine:
+              - novel_core
+            novel-reader-contract:
+              - novel_core
+              - world_engine
+    UpdateProjectDocumentPolicyRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+          $ref: "#/components/schemas/ProjectDocumentPolicy"
+    ProjectDocumentPolicyResponse:
+      type: object
+      properties:
+        key:
+          type: string
+          example: project_document_policy
+        value:
+          $ref: "#/components/schemas/ProjectDocumentPolicy"
     ModelProfile:
       type: object
       properties:

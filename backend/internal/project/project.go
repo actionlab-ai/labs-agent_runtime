@@ -51,7 +51,12 @@ func Slug(name string) string {
 }
 
 func BuildContext(p Project, docs []Document) string {
-	docs = orderContextDocuments(docs)
+	return BuildContextWithPolicy(p, docs, DefaultDocumentPolicy())
+}
+
+func BuildContextWithPolicy(p Project, docs []Document, policy DocumentPolicy) string {
+	policy = policy.Normalize()
+	docs = orderContextDocumentsWithPolicy(docs, policy)
 	hasNovelCore := hasDocumentKind(docs, NovelCoreKind)
 
 	var b strings.Builder
@@ -67,7 +72,10 @@ func BuildContext(p Project, docs []Document) string {
 		b.WriteString(fmt.Sprintf("- status: %s\n", p.Status))
 	}
 	b.WriteString("\n## Project Asset Policy\n\n")
-	b.WriteString("- always_load: novel_core\n")
+	b.WriteString("- source: postgres.app_settings.project_document_policy\n")
+	b.WriteString("- document_order: ")
+	b.WriteString(strings.Join(policy.Kinds(), ", "))
+	b.WriteString("\n")
 	if hasNovelCore {
 		b.WriteString("- novel_core_status: present\n")
 		b.WriteString("- rule: Treat novel_core as mandatory canon for every downstream creative task. Do not contradict its emotional promise unless the user explicitly asks to revise novel_core.\n")
@@ -105,10 +113,15 @@ func BuildContext(p Project, docs []Document) string {
 }
 
 func orderContextDocuments(docs []Document) []Document {
+	return orderContextDocumentsWithPolicy(docs, DefaultDocumentPolicy())
+}
+
+func orderContextDocumentsWithPolicy(docs []Document, policy DocumentPolicy) []Document {
+	policy = policy.Normalize()
 	out := append([]Document(nil), docs...)
 	sort.SliceStable(out, func(i, j int) bool {
-		left := contextDocumentPriority(out[i].Kind)
-		right := contextDocumentPriority(out[j].Kind)
+		left := policy.Priority(out[i].Kind)
+		right := policy.Priority(out[j].Kind)
 		if left != right {
 			return left < right
 		}
@@ -128,32 +141,7 @@ func hasDocumentKind(docs []Document, kind string) bool {
 }
 
 func contextDocumentPriority(kind string) int {
-	switch normalizeDocumentKind(kind) {
-	case NovelCoreKind:
-		return 0
-	case "project_brief":
-		return 10
-	case "reader_contract":
-		return 20
-	case "style_guide":
-		return 30
-	case "taboo":
-		return 40
-	case "world_rules":
-		return 50
-	case "power_system":
-		return 60
-	case "factions":
-		return 70
-	case "locations":
-		return 80
-	case "mainline":
-		return 90
-	case "current_state":
-		return 100
-	default:
-		return 1000
-	}
+	return DefaultDocumentPolicy().Priority(kind)
 }
 
 func truncateRunes(text string, maxChars int) string {

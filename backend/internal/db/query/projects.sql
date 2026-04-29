@@ -53,19 +53,4 @@ RETURNING id, project_id, kind, title, body, metadata, created_at, updated_at, d
 SELECT id, project_id, kind, title, body, metadata, created_at, updated_at, deleted_at
 FROM project_documents
 WHERE project_id = $1 AND deleted_at IS NULL
-ORDER BY
-  CASE kind
-    WHEN 'novel_core' THEN 0
-    WHEN 'project_brief' THEN 1
-    WHEN 'reader_contract' THEN 2
-    WHEN 'style_guide' THEN 3
-    WHEN 'taboo' THEN 4
-    WHEN 'world_rules' THEN 5
-    WHEN 'power_system' THEN 6
-    WHEN 'factions' THEN 7
-    WHEN 'locations' THEN 8
-    WHEN 'mainline' THEN 9
-    WHEN 'current_state' THEN 10
-    ELSE 100
-  END,
-  updated_at DESC;
+ORDER BY updated_at DESC;

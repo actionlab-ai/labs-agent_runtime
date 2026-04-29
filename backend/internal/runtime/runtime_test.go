@@ -14,6 +14,7 @@ import (
 
 	"novel-agent-runtime/internal/config"
 	"novel-agent-runtime/internal/model"
+	"novel-agent-runtime/internal/project"
 	"novel-agent-runtime/internal/runstore"
 	"novel-agent-runtime/internal/skill"
 )
@@ -596,6 +597,38 @@ func TestProjectDocumentToolIsBuiltInWhenProjectWriterExists(t *testing.T) {
 	}
 }
 
+func TestSkillContextHintLoadsConfiguredProjectDocuments(t *testing.T) {
+	rt := newTestRuntime(t)
+	store, err := runstore.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("runstore.New failed: %v", err)
+	}
+	provider := &recordingProjectDocumentProvider{}
+	provider.requests = append(provider.requests, ProjectDocumentWriteRequest{
+		ProjectID: "case-file",
+		Kind:      "novel_core",
+		Title:     "小说情感内核",
+		Body:      "# 小说情感内核\n\n读者想要被看见。",
+	})
+	rt.ProjectID = "case-file"
+	rt.ProjectDocs = provider
+	rt.ProjectPolicy = project.DefaultDocumentPolicy()
+	session := newSkillFileToolSession(RuntimeConfigView{
+		WorkspaceRoot:     rt.Config.Runtime.WorkspaceRoot,
+		DocumentOutputDir: rt.Config.Runtime.DocumentOutputDir,
+		ProjectID:         rt.ProjectID,
+		ProjectDocs:       rt.ProjectDocs,
+	}, store, "skill-calls/test")
+
+	hint := rt.skillContextHint(context.Background(), skill.Command{ID: "novel-world-engine"}, session)
+	if !strings.Contains(hint, "Runtime-Loaded Project Documents") {
+		t.Fatalf("expected configured documents section, got %q", hint)
+	}
+	if !strings.Contains(hint, "novel_core") || !strings.Contains(hint, "读者想要被看见") {
+		t.Fatalf("expected runtime-loaded novel_core body, got %q", hint)
+	}
+}
+
 func TestExecuteSkillInteractivePausesAndResumesWithAskHuman(t *testing.T) {
 	rt := newTestRuntime(t)
 	t.Setenv("TEST_API_KEY", "dummy")
@@ -732,7 +765,7 @@ func TestSkillContextHintInjectsProjectContext(t *testing.T) {
 		ProjectID:         rt.ProjectID,
 	}, rt.Store, "skill-calls/test")
 
-	hint := rt.skillContextHint(cmd, session)
+	hint := rt.skillContextHint(context.Background(), cmd, session)
 	if !strings.Contains(hint, "Active Novel Project Context") {
 		t.Fatalf("expected injected project context, got %q", hint)
 	}

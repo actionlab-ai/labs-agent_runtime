@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"novel-agent-runtime/internal/config"
+	"novel-agent-runtime/internal/project"
 	"novel-agent-runtime/internal/runtime"
 	"novel-agent-runtime/internal/store"
 	"novel-agent-runtime/internal/workflow"
@@ -22,6 +23,7 @@ type runSession struct {
 	activeModel    *store.ModelProfile
 	activeProject  *store.Project
 	projectContext string
+	projectPolicy  project.DocumentPolicy
 	runtimeModel   runtime.ModelConfig
 	runtime        *runtime.Runtime
 }
@@ -30,6 +32,7 @@ type workflowSession struct {
 	activeModel   *store.ModelProfile
 	activeProject *store.Project
 	contextPack   workflow.ContextPack
+	projectPolicy project.DocumentPolicy
 	runtimeModel  runtime.ModelConfig
 	runtime       *runtime.Runtime
 }
@@ -44,11 +47,11 @@ func (f runtimeFactory) resolveRunSession(ctx context.Context, req runRequest) (
 		return runSession{}, withStatus(400, err)
 	}
 	projectID := strings.TrimSpace(req.Project)
-	projectContext, activeProject, err := loadProjectContext(ctx, f.projects, projectID)
+	projectContext, activeProject, projectPolicy, err := loadProjectContext(ctx, f.projects, projectID)
 	if err != nil {
 		return runSession{}, withStatus(400, err)
 	}
-	rt, err := f.buildRuntime(runtimeModel, activeProject, projectContext, req.Debug)
+	rt, err := f.buildRuntime(runtimeModel, activeProject, projectContext, projectPolicy, req.Debug)
 	if err != nil {
 		return runSession{}, err
 	}
@@ -56,6 +59,7 @@ func (f runtimeFactory) resolveRunSession(ctx context.Context, req runRequest) (
 		activeModel:    activeModel,
 		activeProject:  activeProject,
 		projectContext: projectContext,
+		projectPolicy:  projectPolicy,
 		runtimeModel:   runtimeModel,
 		runtime:        rt,
 	}, nil
@@ -77,7 +81,7 @@ func (f runtimeFactory) resolveWorkflowSession(ctx context.Context, req workflow
 	if activeProject == nil {
 		return workflowSession{}, withStatus(400, fmt.Errorf("project %q not found", req.Project))
 	}
-	rt, err := f.buildRuntime(runtimeModel, activeProject, contextPack.Text, req.Debug)
+	rt, err := f.buildRuntime(runtimeModel, activeProject, contextPack.Text, contextPack.Policy, req.Debug)
 	if err != nil {
 		return workflowSession{}, err
 	}
@@ -85,6 +89,7 @@ func (f runtimeFactory) resolveWorkflowSession(ctx context.Context, req workflow
 		activeModel:   activeModel,
 		activeProject: activeProject,
 		contextPack:   contextPack,
+		projectPolicy: contextPack.Policy,
 		runtimeModel:  runtimeModel,
 		runtime:       rt,
 	}, nil
@@ -102,7 +107,7 @@ func (f runtimeFactory) resolveSelectedModelID(ctx context.Context, explicitMode
 	return selectedModelID, nil
 }
 
-func (f runtimeFactory) buildRuntime(runtimeModel runtime.ModelConfig, activeProject *store.Project, projectContext string, reqDebug *bool) (*runtime.Runtime, error) {
+func (f runtimeFactory) buildRuntime(runtimeModel runtime.ModelConfig, activeProject *store.Project, projectContext string, projectPolicy project.DocumentPolicy, reqDebug *bool) (*runtime.Runtime, error) {
 	rt, err := runtime.New(f.cfg, runtimeModel)
 	if err != nil {
 		return nil, withStatus(500, err)
@@ -112,6 +117,7 @@ func (f runtimeFactory) buildRuntime(runtimeModel runtime.ModelConfig, activePro
 		rt.ProjectID = activeProject.ID
 	}
 	rt.ProjectContext = projectContext
+	rt.ProjectPolicy = projectPolicy.Normalize()
 	rt.Debug = f.debug
 	if reqDebug != nil {
 		rt.Debug = *reqDebug

@@ -2,59 +2,24 @@ package project
 
 import "strings"
 
-var persistableDocumentKinds = []string{
-	"novel_core",
-	"project_brief",
-	"reader_contract",
-	"style_guide",
-	"taboo",
-	"world_rules",
-	"power_system",
-	"factions",
-	"locations",
-	"mainline",
-	"current_state",
-}
-
-var defaultDocumentTitles = map[string]string{
-	"novel_core":      "小说情感内核",
-	"project_brief":   "项目简报",
-	"reader_contract": "读者承诺",
-	"style_guide":     "风格指南",
-	"taboo":           "禁区与避坑",
-	"world_rules":     "世界规则",
-	"power_system":    "能力体系",
-	"factions":        "势力关系",
-	"locations":       "地点设定",
-	"mainline":        "主线规划",
-	"current_state":   "当前状态",
-}
-
 func PersistableDocumentKinds() []string {
-	out := make([]string, 0, len(persistableDocumentKinds))
-	out = append(out, persistableDocumentKinds...)
-	return out
+	return DefaultDocumentPolicy().Kinds()
 }
 
 func IsPersistableDocumentKind(kind string) bool {
-	kind = normalizeDocumentKind(kind)
-	for _, candidate := range persistableDocumentKinds {
-		if candidate == kind {
-			return true
-		}
-	}
-	return false
+	return DefaultDocumentPolicy().IsPersistable(kind)
 }
 
 func DefaultDocumentTitle(kind string) string {
-	kind = normalizeDocumentKind(kind)
-	if title := strings.TrimSpace(defaultDocumentTitles[kind]); title != "" {
-		return title
-	}
-	return kind
+	return DefaultDocumentPolicy().Title(kind)
 }
 
 func ExtractDocumentDrafts(text string) []Document {
+	return ExtractDocumentDraftsWithPolicy(text, DefaultDocumentPolicy())
+}
+
+func ExtractDocumentDraftsWithPolicy(text string, policy DocumentPolicy) []Document {
+	policy = policy.Normalize()
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	lines := strings.Split(text, "\n")
 
@@ -69,7 +34,7 @@ func ExtractDocumentDrafts(text string) []Document {
 		if body != "" {
 			out = append(out, Document{
 				Kind:  currentKind,
-				Title: DefaultDocumentTitle(currentKind),
+				Title: policy.Title(currentKind),
 				Body:  body,
 			})
 		}
@@ -78,7 +43,7 @@ func ExtractDocumentDrafts(text string) []Document {
 	}
 
 	for _, line := range lines {
-		if kind, ok := parseDocumentHeading(line); ok {
+		if kind, ok := parseDocumentHeadingWithPolicy(line, policy); ok {
 			flush()
 			currentKind = kind
 			currentLines = nil
@@ -93,6 +58,10 @@ func ExtractDocumentDrafts(text string) []Document {
 }
 
 func parseDocumentHeading(line string) (string, bool) {
+	return parseDocumentHeadingWithPolicy(line, DefaultDocumentPolicy())
+}
+
+func parseDocumentHeadingWithPolicy(line string, policy DocumentPolicy) (string, bool) {
 	trimmed := strings.TrimSpace(line)
 	if !strings.HasPrefix(trimmed, "## ") && !strings.HasPrefix(trimmed, "# ") {
 		return "", false
@@ -100,7 +69,7 @@ func parseDocumentHeading(line string) (string, bool) {
 	heading := strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
 	heading = strings.Trim(heading, "`")
 	kind := normalizeDocumentKind(heading)
-	if !IsPersistableDocumentKind(kind) {
+	if !policy.IsPersistable(kind) {
 		return "", false
 	}
 	return kind, true

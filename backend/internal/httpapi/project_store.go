@@ -190,6 +190,26 @@ func (s projectConfigStore) ListProjectDocuments(ctx context.Context, projectID 
 	return docs, nil
 }
 
+func (s projectConfigStore) GetAppSetting(ctx context.Context, key string) (store.AppSetting, error) {
+	return s.DB.GetAppSetting(ctx, key)
+}
+
+func (s projectConfigStore) UpsertAppSetting(ctx context.Context, key, value string) (store.AppSetting, error) {
+	return s.DB.UpsertAppSetting(ctx, key, value)
+}
+
+func (s projectConfigStore) ProjectDocumentPolicy(ctx context.Context) project.DocumentPolicy {
+	setting, err := s.GetAppSetting(ctx, project.DocumentPolicySettingKey)
+	if err != nil {
+		return project.DefaultDocumentPolicy()
+	}
+	policy, err := project.ParseDocumentPolicy(setting.Value)
+	if err != nil {
+		return project.DefaultDocumentPolicy()
+	}
+	return policy
+}
+
 func (s projectConfigStore) CacheProject(ctx context.Context, p store.Project) {
 	if s.Cache == nil {
 		return

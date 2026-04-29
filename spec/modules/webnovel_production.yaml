@@ -2,21 +2,37 @@ module:
   id: webnovel_production
   name: 网文生产流水线
   purpose: >
-    把“情绪内核”之后的创作过程固化成可执行、可验证、可沉淀的项目资产链。
-    目标不是让模型一次性写完一本书，而是让每一步都产出可复用的 project_document，
-    后续 skill、workflow、session 都能基于这些资产继续创作正文。
+    把小说创作过程固化成可执行、可验证、可沉淀的项目资产链。
+    当前主路径明确收敛到 skill-session：单个 skill 在项目上下文里运行，
+    缺信息时通过 AskHuman 暂停补问，信息足够后再写入 project_document。
+    固定 workflow 和早期 bootstrap 路线当前只保留为历史参考，不作为新内容落地方向。
 
 ownership:
   source_of_truth:
     project_assets: postgres.project_documents
     project_identity: postgres.projects
+    document_policy: postgres.app_settings.project_document_policy
   projection:
     filesystem: "{workspace_root}/projects/{storage_prefix}/documents/{kind}.md"
   runtime_context_owner: backend/internal/project.BuildContext
   execution_surfaces:
     - skill_session
+
+current_execution_policy:
+  active_surface: skill_session
+  ask_human:
+    tool_name: AskHuman
+    rule: 缺少关键输入时，skill 必须暂停并向人类提问，而不是把未知事实硬补成 canon。
+    continue_mode: 人类答案必须回到同一条 session conversation，再继续当前 skill。
+  inactive_surfaces:
     - fixed_workflow
     - future_chapter_workflow
+  inactive_skill_tracks:
+    - novel-project-kickoff
+    - novel-idea-bootstrap
+  note: >
+    当前新的小说能力、文档产出和交互规范都应优先围绕 skill-session 设计。
+    其他 workflow 和 bootstrap skill 先不推进，也不作为当前默认执行入口。
 
 author_lenses:
   note: >
@@ -58,6 +74,7 @@ author_lenses:
         - 代价与限制
         - 社会结构、阶层结构、组织结构如何反复压迫主角
       primary_asset:
+        - world_engine
         - world_rules
         - power_system
 
@@ -74,18 +91,61 @@ author_lenses:
         - current_state
 
 project_asset_policy:
-  always_load:
-    - novel_core
-  load_priority:
-    - novel_core
-    - project_brief
-    - reader_contract
-    - taboo
-    - style_guide
-    - world_rules
-    - power_system
-    - mainline
-    - current_state
+  source_of_truth: postgres.app_settings.project_document_policy
+  note: >
+    文档 kind、上下文排序、skill 依赖文档和可持久化项目文档，都不应该散落在 runtime、
+    skill 或 SQL 里硬编码。运行时必须从 project_document_policy 读取；
+    下面的 default_seed 只用于初始化和说明，不是多处维护的第二份配置。
+  default_seed:
+    documents:
+      - novel_core
+      - project_brief
+      - reader_contract
+      - style_guide
+      - taboo
+      - world_engine
+      - character_cast
+      - world_rules
+      - power_system
+      - factions
+      - locations
+      - mainline
+      - current_state
+    skill_documents:
+      novel-world-engine:
+        - novel_core
+      novel-reader-contract:
+        - novel_core
+        - world_engine
+      novel-character-pressure-engine:
+        - novel_core
+        - world_engine
+        - reader_contract
+        - project_brief
+        - taboo
+      novel-rules-power-engine:
+        - novel_core
+        - world_engine
+        - reader_contract
+        - character_cast
+      novel-mainline-engine:
+        - novel_core
+        - reader_contract
+        - world_engine
+        - character_cast
+        - world_rules
+        - power_system
+        - taboo
+      novel-opening-package:
+        - novel_core
+        - reader_contract
+        - world_engine
+        - character_cast
+        - world_rules
+        - power_system
+        - mainline
+        - taboo
+        - style_guide
   rules:
     - novel_core 是所有后续创作任务的最高优先级情绪 canon。
     - 如果 novel_core 不存在，不应该直接进入世界观、主线或正文创作，除非用户明确要求跳过。
@@ -94,12 +154,17 @@ project_asset_policy:
     - 上下文太长时，优先保留 novel_core，其次保留当前任务直接依赖的资产。
 
 document_kinds:
+  source_of_truth: postgres.app_settings.project_document_policy
+  note: >
+    本节是产品语义说明。真正参与 runtime 排序、提取和 skill-session 注入的 kind 列表，
+    必须以 PG 里的 project_document_policy 为准。
   current_supported:
     novel_core:
       title: 小说情感内核
       role: 全书情绪发动机，定义读者为什么被打动。
       singleton: true
       must_exist_before:
+        - world_engine
         - world_rules
         - power_system
         - mainline
@@ -126,6 +191,11 @@ document_kinds:
       role: 控制叙述距离、句法、对白、节奏、章末钩子和去 AI 味。
       singleton: true
 
+    world_engine:
+      title: 小说世界压力引擎
+      role: 承接 novel_core，把情感内核转化为长期压迫、资源争夺、阶层秩序、冲突循环和破局口。
+      singleton: true
+
     world_rules:
       title: 世界规则
       role: 社会结构、力量规则、组织规则、现实压力系统。
@@ -134,6 +204,11 @@ document_kinds:
     power_system:
       title: 金手指与能力体系
       role: 主角能力来源、边界、代价、升级方式和爽点兑现方式。
+      singleton: true
+
+    character_cast:
+      title: 角色台账
+      role: 主角、核心压迫者、关键配角、关系变化和信息差。
       singleton: true
 
     factions:
@@ -156,17 +231,11 @@ document_kinds:
       role: 连载进行时的最新 canon，包含已发生事实、人物状态、信息差和下一章约束。
       singleton: true
 
-  planned:
-    character_cast:
-      title: 角色台账
-      reason: >
-        当前没有独立角色文档 kind。短期可把角色核心写入 project_brief、factions 或 current_state，
-        但长期应该增加 character_cast，避免人物资料散落。
-    migration_required: true
-
 production_stages:
   - id: stage_01_emotional_core
     name: 情绪内核
+    execution_mode: skill_session
+    status: active
     core_question: 这本书最想打中的人类情绪是什么？
     required_inputs:
       - 题材方向
@@ -185,11 +254,31 @@ production_stages:
       - 主角非行动不可的原因明确
     recommended_skill: novel-emotional-core
 
+  - id: stage_02_world_engine
+    name: 世界压力引擎
+    execution_mode: skill_session
+    status: active
+    core_question: 这个世界如何在遵守 novel_core 的前提下持续制造冲突？
+    depends_on:
+      - novel_core
+    output_documents:
+      - world_engine
+    gate_to_next:
+      - 已通过 provider 读取 novel_core
+      - 世界长期压迫轴明确
+      - 稀缺资源系统明确
+      - 主角破局口明确
+      - 冲突循环能反复运行
+    recommended_skill: novel-world-engine
+
   - id: stage_02_reader_contract
     name: 读者承诺与商业切口
+    execution_mode: skill_session
+    status: next
     core_question: 读者点进来、追下去、付费下去分别为了什么？
     depends_on:
       - novel_core
+      - world_engine
     output_documents:
       - reader_contract
       - taboo
@@ -199,31 +288,37 @@ production_stages:
       - 前十章回报节奏明确
       - 不能写的方向明确
       - 一句话卖点明确
-    recommended_skill: novel-project-kickoff
+    recommended_skill: novel-reader-contract
 
   - id: stage_03_pressure_and_role_engine
     name: 压迫系统与人物发动机
+    execution_mode: skill_session
+    status: planned
     core_question: 哪些人、组织、规则会持续压主角，逼他变化？
     depends_on:
       - novel_core
+      - world_engine
       - reader_contract
-    output_documents:
       - project_brief
-      - factions
-      - current_state
+    output_documents:
+      - character_cast
     gate_to_next:
       - 主角人格底色明确
       - 主要压迫者明确
       - 配角和反派不是摆设
       - 第一阶段冲突能持续十章以上
-    recommended_future_skill: novel-character-pressure-engine
+    recommended_skill: novel-character-pressure-engine
 
   - id: stage_04_world_and_power_rules
     name: 世界观与金手指规则
+    execution_mode: skill_session
+    status: planned
     core_question: 世界和能力如何服务情绪内核，而不是抢走情绪核心？
     depends_on:
       - novel_core
-      - project_brief
+      - world_engine
+      - reader_contract
+      - character_cast
     output_documents:
       - world_rules
       - power_system
@@ -233,14 +328,18 @@ production_stages:
       - 能力代价或限制明确
       - 社会结构能制造长期冲突
       - 规则能自然导出爽点而不是随写随改
-    recommended_skill: novel-idea-bootstrap
+    recommended_skill: novel-rules-power-engine
 
   - id: stage_05_mainline_and_volume_plan
     name: 主线与分卷规划
+    execution_mode: skill_session
+    status: planned
     core_question: 这本书如何从第一卷一路升级到长期连载？
     depends_on:
       - novel_core
       - reader_contract
+      - world_engine
+      - character_cast
       - world_rules
       - power_system
     output_documents:
@@ -250,16 +349,21 @@ production_stages:
       - 近期十五章目标明确
       - 中期三十到五十章方向明确
       - 主要伏笔和兑现窗口明确
-    recommended_skill: webnovel-arc-planner
+    recommended_skill: novel-mainline-engine
 
   - id: stage_06_opening_package
     name: 开篇包
+    execution_mode: skill_session
+    status: planned
     core_question: 第一章如何立刻让读者感到压迫、期待和回报？
     depends_on:
       - novel_core
       - reader_contract
+      - world_engine
+      - character_cast
+      - world_rules
+      - power_system
       - mainline
-      - current_state
     output_documents:
       - current_state
     transient_outputs:
@@ -270,10 +374,12 @@ production_stages:
       - 第一个羞辱或压力事件明确
       - 第一次反击或钩子明确
       - 章末钩子明确
-    recommended_skill: webnovel-opening-sniper
+    recommended_skill: novel-opening-package
 
   - id: stage_07_chapter_draft
     name: 正文起草
+    execution_mode: skill_session
+    status: planned
     core_question: 这一章推进了什么状态，兑现了什么情绪？
     depends_on:
       - novel_core
@@ -292,6 +398,8 @@ production_stages:
 
   - id: stage_08_snapshot_and_continuity
     name: 章后快照与连续性
+    execution_mode: skill_session
+    status: planned
     core_question: 写完这一章后，项目真实状态发生了什么变化？
     depends_on:
       - chapter_draft
@@ -309,26 +417,31 @@ production_stages:
 runtime_context_rules:
   before_model_call:
     - resolve_project
-    - load_project_documents_from_postgres
-    - sort_documents_by_load_priority
-    - always_include_novel_core_if_present
-    - inject_project_asset_policy
+    - load_project_document_policy_from_pg
+    - build_context_with_policy_order
+    - load_skill_required_documents_from_policy
+    - inject_runtime_loaded_project_documents
     - expose_provider_tools
+  interaction_tools:
+    - AskHuman
   provider_tools:
     - ListProjectDocuments
     - ReadProjectDocument
     - WriteProjectDocument
   model_instruction_rules:
     - 如果任务是创作正文，必须先遵守 novel_core。
+    - 如果当前输入不足以稳定产出正式项目资产，优先调用 AskHuman，而不是把文本式澄清当成最终交付。
     - 如果任务需要世界观但 world_rules 缺失，应先询问或创建 world_rules。
     - 如果任务需要章节续写但 current_state 缺失，应先创建当前状态或要求用户提供上一章状态。
     - 如果用户要求修改核心情绪，必须把这视为 novel_core 变更，而不是普通正文润色。
 
-recommended_workflows:
+reference_workflows:
+  status: frozen_reference_only
   create_book_from_zero:
     order:
       - create_project
       - stage_01_emotional_core
+      - stage_02_world_engine
       - stage_02_reader_contract
       - stage_03_pressure_and_role_engine
       - stage_04_world_and_power_rules
@@ -370,19 +483,39 @@ quality_gates:
   ready_for_worldbuilding:
     must_have:
       - novel_core
+      - world_engine
       - project_brief
       - reader_contract
 
   ready_for_mainline:
     must_have:
       - novel_core
+      - reader_contract
+      - world_engine
+      - character_cast
       - world_rules
       - power_system
-      - pressure_system_or_factions
+      - taboo
+
+  formal_launch_ready:
+    must_have:
+      - novel_core
+      - world_engine
+      - reader_contract
+      - project_brief
+      - taboo
+      - character_cast
+      - world_rules
+      - power_system
+      - mainline
+      - current_state
 
   ready_for_chapter_draft:
     must_have:
       - novel_core
+      - reader_contract
+      - world_engine
+      - character_cast
       - mainline
       - current_state
       - chapter_brief_or_user_requested_scene
@@ -412,4 +545,3 @@ verification:
     - backend/internal/project/project_test.go
     - backend/internal/runtime/runtime_test.go
     - backend/internal/httpapi/workflows_test.go
-
