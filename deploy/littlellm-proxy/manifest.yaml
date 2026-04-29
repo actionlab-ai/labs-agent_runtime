@@ -1,0 +1,176 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm-system
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-secrets
+  namespace: llm-system
+type: Opaque
+stringData:
+  # LiteLLM 网关管理密钥，必须以 sk- 开头
+  LITELLM_MASTER_KEY: "sk-litellm-master-change-me"
+
+  # 使用 DB 时必须设置；加密/解密 DB 中的模型密钥，设置后不要随意改
+  LITELLM_SALT_KEY: "sk-litellm-salt-change-me"
+
+  # 你的真实模型供应商 API Key
+  OPENAI_API_KEY: "sk-openai-change-me"
+
+  # LiteLLM 连接 PostgreSQL
+  DATABASE_URL: "postgresql://postgres:Postgres@123456@postgres.codefly:5432/litellm"
+
+  # PostgreSQL 密码，需要和 DATABASE_URL 里的密码一致
+  POSTGRES_PASSWORD: "Postgres@123456"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: llm-system
+data:
+  config.yaml: |
+    model_list:
+      - model_name: deepseek-v4-flash
+        litellm_params:
+          model: deepseek-v4-flash
+          api_key: sk-852f24a6484d4c38a6de5d528e547925
+          api_base: https://api.deepseek.com
+
+      # 你也可以继续加模型，例如本地 vLLM / Ollama / Azure OpenAI
+      - model_name: local-qwen35
+        litellm_params:
+          model: qwen_qwen3.5-397b-a17b
+          api_base: http://localhost:31027/v1
+          api_key: "EMPTY"
+
+    general_settings:
+      master_key: os.environ/LITELLM_MASTER_KEY
+      database_url: os.environ/DATABASE_URL
+      database_connection_pool_limit: 5
+
+      # 内网环境下可打开：DB 短暂异常时仍允许请求通过
+      # allow_requests_on_db_unavailable: true
+
+    litellm_settings:
+      request_timeout: 600
+      set_verbose: false
+      json_logs: true
+
+      # 后面接 Langfuse 时再打开
+      # callbacks: ["langfuse_otel"]
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: llm-system
+  labels:
+    app: litellm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      terminationGracePeriodSeconds: 90
+      containers:
+        - name: litellm
+          image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/ghcr.io/berriai/litellm:main-stable
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--port"
+            - "4000"
+            - "--config"
+            - "/app/config.yaml"
+          ports:
+            - name: http
+              containerPort: 4000
+            - name: health
+              containerPort: 8001
+          envFrom:
+            - secretRef:
+                name: litellm-secrets
+          env:
+            - name: LITELLM_MODE
+              value: "PRODUCTION"
+            - name: LITELLM_LOG
+              value: "INFO"
+
+            # 使用 prisma migrate deploy 处理 DB migration
+            - name: USE_PRISMA_MIGRATE
+              value: "True"
+
+            # 独立 health app，避免主服务高负载时健康检查误杀
+            - name: SEPARATE_HEALTH_APP
+              value: "1"
+            - name: SEPARATE_HEALTH_PORT
+              value: "8001"
+            - name: SUPERVISORD_STOPWAITSECS
+              value: "3600"
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          startupProbe:
+            httpGet:
+              path: /health/liveliness
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+      volumes:
+        - name: config
+          configMap:
+            name: litellm-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: llm-system
+spec:
+  type: NodePort
+  selector:
+    app: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+      nodePort: 30040

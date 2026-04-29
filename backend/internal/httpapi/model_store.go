@@ -47,14 +47,18 @@ func (s modelConfigStore) GetDefaultModelID(ctx context.Context) (string, error)
 }
 
 func (s modelConfigStore) SetDefaultModelID(ctx context.Context, modelID string) error {
-	if err := s.DB.SetDefaultModelID(ctx, modelID); err != nil {
+	profile, err := s.DB.GetModelProfile(ctx, modelID)
+	if err != nil {
 		return err
 	}
-	logging.FromContext(ctx).Info("default_model.pg.set", zap.String("model_id", project.Slug(modelID)))
+	if err := s.DB.SetDefaultModelID(ctx, profile.ID); err != nil {
+		return err
+	}
+	logging.FromContext(ctx).Info("default_model.pg.set", zap.String("model_id", profile.ID))
 	if s.Cache != nil {
 		syncCacheAsync(ctx, "default_model.cache.set", func(ctx context.Context) error {
-			return s.Cache.SetDefaultModelID(ctx, project.Slug(modelID))
-		}, zap.String("model_id", project.Slug(modelID)))
+			return s.Cache.SetDefaultModelID(ctx, profile.ID)
+		}, zap.String("model_id", profile.ID))
 	}
 	return nil
 }

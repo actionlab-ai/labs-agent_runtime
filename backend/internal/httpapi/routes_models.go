@@ -104,9 +104,16 @@ func registerModelRoutes(router *gin.Engine, deps routeDeps) {
 			writeHTTPError(c, http.StatusInternalServerError, err)
 			return
 		}
-		if defaultModelID != "" && defaultModelID == project.Slug(c.Param("id")) {
-			writeHTTPError(c, http.StatusBadRequest, fmt.Errorf("model %q is the default model; change default first", c.Param("id")))
-			return
+		if defaultModelID != "" {
+			modelProfile, err := deps.models.GetModelProfile(c.Request.Context(), c.Param("id"))
+			if err != nil {
+				writeHTTPError(c, http.StatusBadRequest, err)
+				return
+			}
+			if defaultModelID == modelProfile.ID {
+				writeHTTPError(c, http.StatusBadRequest, fmt.Errorf("model %q is the default model; change default first", c.Param("id")))
+				return
+			}
 		}
 		if err := deps.db.DeleteModelProfile(c.Request.Context(), c.Param("id")); err != nil {
 			writeHTTPError(c, http.StatusBadRequest, err)

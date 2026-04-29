@@ -7,11 +7,15 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"novel-agent-runtime/internal/config"
+	"novel-agent-runtime/internal/logging"
 	"novel-agent-runtime/internal/model"
 	"novel-agent-runtime/internal/runstore"
 	"novel-agent-runtime/internal/skill"
+
+	"go.uber.org/zap"
 )
 
 type Runtime struct {
@@ -79,6 +83,7 @@ type SkillExecutionState struct {
 	NextRound         int                      `json:"next_round"`
 	PendingToolCallID string                   `json:"pending_tool_call_id,omitempty"`
 	ReadState         map[string]FileReadState `json:"read_state,omitempty"`
+	SessionMode       bool                     `json:"session_mode,omitempty"`
 }
 
 type SkillRunResult struct {
@@ -182,6 +187,10 @@ type toolCallOutcome struct {
 	RetainedSkills    []activatedSkillRef
 }
 
+type skillPromptOptions struct {
+	SessionMode bool
+}
+
 func New(cfg config.Config, modelCfg ModelConfig) (*Runtime, error) {
 	modelCfg.Provider = firstNonEmpty(modelCfg.Provider, "openai_compatible")
 	if modelCfg.ContextWindow <= 0 {
@@ -228,6 +237,7 @@ func (r *Runtime) DryRun(input string) error {
 }
 
 func (r *Runtime) Run(ctx context.Context, userInput string) (RunResult, error) {
+	logger := logging.FromContext(ctx)
 	state := runState{}
 	conversation := []model.Message{{Role: "user", Content: userInput}}
 	_ = r.Store.WriteJSON("router/initial-conversation.json", conversation)
@@ -242,11 +252,15 @@ func (r *Runtime) Run(ctx context.Context, userInput string) (RunResult, error) 
 		chatReq := assembly.ChatRequest
 		r.writeChatDebug(fmt.Sprintf("router/round-%02d-chat-request.json", round), chatReq)
 
+		start := time.Now()
+		r.logModelRequest(logger, "router", round, "", chatReq)
 		resp, err := r.Model.Chat(ctx, chatReq)
 		if err != nil {
 			r.writeChatError(fmt.Sprintf("router/round-%02d-chat-error.txt", round), err)
+			r.logModelError(logger, "router", round, "", chatReq, time.Since(start), err)
 			return RunResult{}, err
 		}
+		r.logModelResponse(logger, "router", round, "", chatReq, resp, time.Since(start))
 		_ = r.Store.WriteJSON(fmt.Sprintf("router/round-%02d-response.json", round), json.RawMessage(resp.Raw))
 		_ = r.Store.WriteJSON(fmt.Sprintf("router/round-%02d-response-analysis.json", round), analyzeChatResponse(resp))
 		if len(resp.Choices) == 0 {
@@ -266,9 +280,13 @@ func (r *Runtime) Run(ctx context.Context, userInput string) (RunResult, error) 
 			return RunResult{FinalText: msg.Content, RunDir: r.Store.Root, RunID: r.Store.RunID}, nil
 		}
 		for _, tc := range msg.ToolCalls {
+			r.logToolCallStart(logger, "router", round, tc)
 			outcome, err := r.handleToolCall(ctx, userInput, tc, state)
 			if err != nil {
 				outcome.Content = `{"error":` + jsonQuote(err.Error()) + `}`
+				r.logToolCallError(logger, "router", round, tc, err)
+			} else {
+				r.logToolCallDone(logger, "router", round, tc, len(outcome.Content))
 			}
 			if outcome.SearchPerformed {
 				state.SearchPerformed = true
@@ -411,6 +429,14 @@ func (r *Runtime) ExecuteSkill(ctx context.Context, skillID, originalUserInput s
 }
 
 func (r *Runtime) ExecuteSkillInteractive(ctx context.Context, skillID, originalUserInput string, invocationArgs map[string]any) (SkillRunResult, error) {
+	return r.executeSkillInteractive(ctx, skillID, originalUserInput, invocationArgs, skillPromptOptions{})
+}
+
+func (r *Runtime) ExecuteSkillSession(ctx context.Context, skillID, originalUserInput string, invocationArgs map[string]any) (SkillRunResult, error) {
+	return r.executeSkillInteractive(ctx, skillID, originalUserInput, invocationArgs, skillPromptOptions{SessionMode: true})
+}
+
+func (r *Runtime) executeSkillInteractive(ctx context.Context, skillID, originalUserInput string, invocationArgs map[string]any, opts skillPromptOptions) (SkillRunResult, error) {
 	cmd, err := r.Registry.LoadInvocationCommand(skillID)
 	if err != nil {
 		return SkillRunResult{}, err
@@ -422,7 +448,7 @@ func (r *Runtime) ExecuteSkillInteractive(ctx context.Context, skillID, original
 		ProjectID:         r.ProjectID,
 		ProjectDocs:       r.ProjectDocs,
 	}, r.Store, filepath.ToSlash(filepath.Join("skill-calls", safeID)))
-	compiled := ComposeSkillPrompt(cmd, originalUserInput, invocationArgs, r.skillContextHint(cmd, fileTools))
+	compiled := ComposeSkillPromptWithOptions(cmd, originalUserInput, invocationArgs, r.skillContextHint(cmd, fileTools), opts)
 	_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/compiled-prompt.md", safeID), compiled)
 	_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/skill-metadata.json", safeID), cmd)
 	conversation := []model.Message{{Role: "user", Content: compiled}}
@@ -437,6 +463,7 @@ func (r *Runtime) ExecuteSkillInteractive(ctx context.Context, skillID, original
 		CompiledPrompt:    compiled,
 		Conversation:      conversation,
 		NextRound:         1,
+		SessionMode:       opts.SessionMode,
 	}
 	return r.runSkillInteractiveLoop(ctx, cmd, fileTools, toolSpecs, state)
 }
@@ -466,14 +493,20 @@ func (r *Runtime) ContinueSkillInteractive(ctx context.Context, state SkillExecu
 			fileTools.ReadState[k] = v
 		}
 	}
-	if strings.TrimSpace(state.PendingToolCallID) == "" {
+	if strings.TrimSpace(state.PendingToolCallID) != "" {
+		state.Conversation = append(state.Conversation, model.Message{
+			Role:       "tool",
+			ToolCallID: state.PendingToolCallID,
+			Content:    formatAskHumanToolResult(answer),
+		})
+	} else if state.SessionMode {
+		state.Conversation = append(state.Conversation, model.Message{
+			Role:    "user",
+			Content: formatAskHumanUserResume(answer),
+		})
+	} else {
 		return SkillRunResult{}, fmt.Errorf("skill session has no pending AskHuman tool call")
 	}
-	state.Conversation = append(state.Conversation, model.Message{
-		Role:       "tool",
-		ToolCallID: state.PendingToolCallID,
-		Content:    formatAskHumanToolResult(answer),
-	})
 	state.PendingToolCallID = ""
 	if state.NextRound <= 0 {
 		state.NextRound = 1
@@ -483,6 +516,7 @@ func (r *Runtime) ContinueSkillInteractive(ctx context.Context, state SkillExecu
 }
 
 func (r *Runtime) runSkillInteractiveLoop(ctx context.Context, cmd skill.Command, fileTools *skillFileToolSession, toolSpecs []model.ToolSpec, state SkillExecutionState) (SkillRunResult, error) {
+	logger := logging.FromContext(ctx)
 	var lastText string
 	safeID := strings.TrimSpace(state.SafeID)
 	if safeID == "" {
@@ -499,11 +533,15 @@ func (r *Runtime) runSkillInteractiveLoop(ctx context.Context, cmd skill.Command
 		_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/round-%02d-assembly.md", safeID, round), renderSkillAssemblyMarkdown(assembly))
 		chatReq := assembly.ChatRequest
 		r.writeChatDebug(fmt.Sprintf("skill-calls/%s/round-%02d-chat-request.json", safeID, round), chatReq)
+		start := time.Now()
+		r.logModelRequest(logger, "skill", round, state.SkillID, chatReq)
 		resp, err := r.Model.Chat(ctx, chatReq)
 		if err != nil {
 			r.writeChatError(fmt.Sprintf("skill-calls/%s/round-%02d-chat-error.txt", safeID, round), err)
+			r.logModelError(logger, "skill", round, state.SkillID, chatReq, time.Since(start), err)
 			return SkillRunResult{}, err
 		}
+		r.logModelResponse(logger, "skill", round, state.SkillID, chatReq, resp, time.Since(start))
 		_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/round-%02d-response.json", safeID, round), json.RawMessage(resp.Raw))
 		_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/round-%02d-response-analysis.json", safeID, round), analyzeChatResponse(resp))
 		_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/model-raw.json", safeID), json.RawMessage(resp.Raw))
@@ -514,13 +552,29 @@ func (r *Runtime) runSkillInteractiveLoop(ctx context.Context, cmd skill.Command
 		state.Conversation = append(state.Conversation, msg)
 		lastText = msg.Content
 		if len(msg.ToolCalls) == 0 {
+			if state.SessionMode && looksLikeClarificationRequest(lastText) {
+				request := clarificationTextToAskHuman(lastText)
+				state.NextRound = round + 1
+				state.PendingToolCallID = ""
+				state.ReadState = copyReadState(fileTools.ReadState)
+				return SkillRunResult{
+					Status:   SkillRunStatusNeedsInput,
+					Text:     lastText,
+					AskHuman: &request,
+					State:    &state,
+					RunDir:   r.Store.Root,
+					RunID:    r.Store.RunID,
+				}, nil
+			}
 			_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/output.md", safeID), lastText)
 			return SkillRunResult{Status: SkillRunStatusCompleted, Text: lastText, RunDir: r.Store.Root, RunID: r.Store.RunID}, nil
 		}
 		for _, tc := range msg.ToolCalls {
+			r.logToolCallStart(logger, "skill", round, tc)
 			content, err := fileTools.handleToolCallWithContext(ctx, tc)
 			var pause *AskHumanPause
 			if err != nil && asAskHumanPause(err, &pause) {
+				r.logToolCallPause(logger, "skill", round, tc, pause)
 				state.NextRound = round + 1
 				state.PendingToolCallID = pause.ToolCallID
 				state.ReadState = copyReadState(fileTools.ReadState)
@@ -535,6 +589,9 @@ func (r *Runtime) runSkillInteractiveLoop(ctx context.Context, cmd skill.Command
 			}
 			if err != nil {
 				content = `{"error":` + jsonQuote(err.Error()) + `}`
+				r.logToolCallError(logger, "skill", round, tc, err)
+			} else {
+				r.logToolCallDone(logger, "skill", round, tc, len(content))
 			}
 			state.Conversation = append(state.Conversation, model.Message{Role: "tool", ToolCallID: tc.ID, Content: content})
 		}
@@ -578,6 +635,26 @@ func formatAskHumanToolResult(answer AskHumanAnswer) string {
 	return model.MustJSON(payload)
 }
 
+func formatAskHumanUserResume(answer AskHumanAnswer) string {
+	var b strings.Builder
+	b.WriteString("Human has answered the clarification request. Continue the same skill execution with these answers.\n\n")
+	if len(answer.Answers) > 0 {
+		b.WriteString("# Structured Answers\n\n")
+		b.WriteString(prettyJSON(answer.Answers))
+		b.WriteString("\n\n")
+	}
+	if strings.TrimSpace(answer.Notes) != "" {
+		b.WriteString("# Notes\n\n")
+		b.WriteString(strings.TrimSpace(answer.Notes))
+		b.WriteString("\n")
+	}
+	out := strings.TrimSpace(b.String())
+	if out == "" {
+		return "Human has answered the clarification request. Continue the same skill execution."
+	}
+	return out
+}
+
 func renderAskHumanAsMarkdown(request AskHumanRequest) string {
 	var b strings.Builder
 	b.WriteString("## 需要补充信息\n\n")
@@ -599,6 +676,116 @@ func renderAskHumanAsMarkdown(request AskHumanRequest) string {
 	return strings.TrimSpace(b.String())
 }
 
+func looksLikeClarificationRequest(text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return false
+	}
+	markers := []string{
+		"# 需要补充的信息",
+		"## 需要补充的信息",
+		"需要补充的信息",
+		"请先回答以下问题",
+		"缺失字段",
+		"还不能定稿",
+	}
+	hitCount := 0
+	for _, marker := range markers {
+		if strings.Contains(text, marker) {
+			hitCount++
+		}
+	}
+	return hitCount >= 2 || strings.HasPrefix(text, "# 需要补充的信息") || strings.HasPrefix(text, "## 需要补充信息")
+}
+
+func clarificationTextToAskHuman(text string) AskHumanRequest {
+	request := AskHumanRequest{
+		Reason: "模型判断当前信息不足，需要人类补充后再继续执行 skill。",
+	}
+	questions := extractMarkdownClarificationQuestions(text)
+	if len(questions) == 0 {
+		questions = []AskHumanQuestion{{
+			Field:    "clarification",
+			Header:   "补充信息",
+			Question: "请根据模型列出的澄清问题补充关键信息。",
+		}}
+	}
+	if len(questions) > 4 {
+		questions = questions[:4]
+	}
+	request.Questions = questions
+	return request
+}
+
+func extractMarkdownClarificationQuestions(text string) []AskHumanQuestion {
+	lines := strings.Split(normalizeTextForFileTools(text), "\n")
+	var out []AskHumanQuestion
+	var current *AskHumanQuestion
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "### ") {
+			if current != nil {
+				out = append(out, *current)
+			}
+			current = parseClarificationHeading(strings.TrimSpace(strings.TrimPrefix(trimmed, "### ")))
+			continue
+		}
+		if current == nil {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "- ") {
+			label, desc := parseClarificationOption(strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+			if label != "" {
+				current.Options = append(current.Options, AskHumanOption{Label: label, Description: desc})
+			}
+		}
+	}
+	if current != nil {
+		out = append(out, *current)
+	}
+	for i := range out {
+		if len(out[i].Options) > 4 {
+			out[i].Options = out[i].Options[:4]
+		}
+	}
+	return out
+}
+
+func parseClarificationHeading(raw string) *AskHumanQuestion {
+	field := ""
+	question := strings.TrimSpace(raw)
+	if left, right, ok := strings.Cut(raw, "|"); ok {
+		field = strings.TrimSpace(left)
+		question = strings.TrimSpace(right)
+	}
+	if question == "" {
+		question = raw
+	}
+	header := field
+	if header == "" {
+		header = "问题"
+	}
+	return &AskHumanQuestion{
+		Field:    field,
+		Header:   header,
+		Question: question,
+	}
+}
+
+func parseClarificationOption(raw string) (string, string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", ""
+	}
+	if left, right, ok := strings.Cut(raw, "—"); ok {
+		return strings.Trim(strings.TrimSpace(left), "* "), strings.TrimSpace(right)
+	}
+	if left, right, ok := strings.Cut(raw, "-"); ok && len(strings.TrimSpace(left)) <= 20 {
+		return strings.Trim(strings.TrimSpace(left), "* "), strings.TrimSpace(right)
+	}
+	return strings.Trim(raw, "* "), ""
+}
+
 func (r *Runtime) skillContextHint(cmd skill.Command, fileTools *skillFileToolSession) string {
 	hint := skillDocumentHint(cmd, fileTools)
 	if strings.TrimSpace(r.ProjectContext) != "" {
@@ -612,6 +799,10 @@ func (r *Runtime) skillContextHint(cmd skill.Command, fileTools *skillFileToolSe
 }
 
 func ComposeSkillPrompt(cmd skill.Command, originalUserInput string, invocationArgs map[string]any, toolingHint string) string {
+	return ComposeSkillPromptWithOptions(cmd, originalUserInput, invocationArgs, toolingHint, skillPromptOptions{})
+}
+
+func ComposeSkillPromptWithOptions(cmd skill.Command, originalUserInput string, invocationArgs map[string]any, toolingHint string, opts skillPromptOptions) string {
 	task := deriveSkillTask(invocationArgs, originalUserInput)
 	var b strings.Builder
 	b.WriteString("# Skill Metadata\n\n")
@@ -638,6 +829,10 @@ func ComposeSkillPrompt(cmd skill.Command, originalUserInput string, invocationA
 		b.WriteString(toolingHint)
 		b.WriteString("\n")
 	}
+	if opts.SessionMode {
+		b.WriteString("\n# Interactive Session Rule\n\n")
+		b.WriteString("This skill is running inside an interactive skill-session. If required information is missing, you must call the AskHuman tool instead of outputting clarification questions as final markdown. Do not return '# 需要补充的信息' or any clarification questionnaire as the final answer. Only return final text when the skill can complete, or after the human answers have been provided. If producing a durable project document, use WriteProjectDocument when available.\n")
+	}
 	b.WriteString("\n# Base Directory\n\n")
 	b.WriteString("Base directory for this skill: " + cmd.SkillRoot + "\n\n")
 	b.WriteString("# Activated Tool Arguments\n\n")
@@ -655,6 +850,9 @@ func ComposeSkillPrompt(cmd skill.Command, originalUserInput string, invocationA
 	b.WriteString(task)
 	b.WriteString("\n\n# Output Rule\n\n")
 	b.WriteString("Follow this skill strictly. Respect the skill's own missing-context policy first. If the skill does not define one and the user context is incomplete, produce the best usable version from the provided facts and end with the 3 most valuable missing inputs for the next round.\n")
+	if opts.SessionMode {
+		b.WriteString("Because this is an interactive skill-session, any missing-input next round must be requested by calling AskHuman, not by printing a markdown clarification section.\n")
+	}
 	return b.String()
 }
 
@@ -713,6 +911,143 @@ func (r *Runtime) writeChatError(rel string, err error) {
 		return
 	}
 	_ = r.Store.WriteText(rel, err.Error()+"\n")
+}
+
+func (r *Runtime) logModelRequest(logger *zap.Logger, stage string, round int, skillID string, req model.ChatRequest) {
+	if logger == nil {
+		return
+	}
+	logger.Info("runtime.model.request",
+		zap.String("stage", stage),
+		zap.Int("round", round),
+		zap.String("skill_id", skillID),
+		zap.String("model", req.Model),
+		zap.String("base_url", r.Model.BaseURL),
+		zap.String("url", strings.TrimRight(r.Model.BaseURL, "/")+"/chat/completions"),
+		zap.Int("http_timeout_seconds", r.ModelConfig.TimeoutSeconds),
+		zap.Int("message_count", len(req.Messages)),
+		zap.Int("tool_count", len(req.Tools)),
+		zap.Strings("tool_names", chatToolNames(req.Tools)),
+		zap.Int("max_tokens", req.MaxTokens),
+		zap.Float64("temperature", req.Temperature),
+		zap.Bool("debug_artifacts", r.Debug),
+		zap.String("run_id", r.Store.RunID),
+		zap.String("run_dir", r.Store.Root),
+	)
+}
+
+func (r *Runtime) logModelResponse(logger *zap.Logger, stage string, round int, skillID string, req model.ChatRequest, resp model.ChatResponse, latency time.Duration) {
+	if logger == nil {
+		return
+	}
+	analysis := analyzeChatResponse(resp)
+	logger.Info("runtime.model.response",
+		zap.String("stage", stage),
+		zap.Int("round", round),
+		zap.String("skill_id", skillID),
+		zap.String("model", req.Model),
+		zap.Duration("latency", latency),
+		zap.Int("choice_count", len(resp.Choices)),
+		zap.String("finish_reason", analysis.FinishReason),
+		zap.Bool("has_tool_calls", analysis.HasToolCalls),
+		zap.Strings("tool_call_names", analysis.ToolCallNames),
+		zap.Int("content_bytes", len(analysis.Content)),
+		zap.String("run_id", r.Store.RunID),
+	)
+}
+
+func (r *Runtime) logModelError(logger *zap.Logger, stage string, round int, skillID string, req model.ChatRequest, latency time.Duration, err error) {
+	if logger == nil {
+		return
+	}
+	logger.Warn("runtime.model.error",
+		zap.String("stage", stage),
+		zap.Int("round", round),
+		zap.String("skill_id", skillID),
+		zap.String("model", req.Model),
+		zap.String("base_url", r.Model.BaseURL),
+		zap.String("url", strings.TrimRight(r.Model.BaseURL, "/")+"/chat/completions"),
+		zap.Duration("latency", latency),
+		zap.Int("message_count", len(req.Messages)),
+		zap.Int("tool_count", len(req.Tools)),
+		zap.Strings("tool_names", chatToolNames(req.Tools)),
+		zap.Int("max_tokens", req.MaxTokens),
+		zap.Float64("temperature", req.Temperature),
+		zap.String("run_id", r.Store.RunID),
+		zap.String("run_dir", r.Store.Root),
+		zap.Error(err),
+	)
+}
+
+func (r *Runtime) logToolCallStart(logger *zap.Logger, stage string, round int, tc model.ToolCall) {
+	if logger == nil {
+		return
+	}
+	logger.Info("runtime.tool.call.start",
+		zap.String("stage", stage),
+		zap.Int("round", round),
+		zap.String("tool_call_id", tc.ID),
+		zap.String("tool_name", tc.Function.Name),
+		zap.Int("argument_bytes", len(tc.Function.Arguments)),
+		zap.String("run_id", r.Store.RunID),
+	)
+}
+
+func (r *Runtime) logToolCallDone(logger *zap.Logger, stage string, round int, tc model.ToolCall, outputBytes int) {
+	if logger == nil {
+		return
+	}
+	logger.Info("runtime.tool.call.done",
+		zap.String("stage", stage),
+		zap.Int("round", round),
+		zap.String("tool_call_id", tc.ID),
+		zap.String("tool_name", tc.Function.Name),
+		zap.Int("output_bytes", outputBytes),
+		zap.String("run_id", r.Store.RunID),
+	)
+}
+
+func (r *Runtime) logToolCallError(logger *zap.Logger, stage string, round int, tc model.ToolCall, err error) {
+	if logger == nil {
+		return
+	}
+	logger.Warn("runtime.tool.call.error",
+		zap.String("stage", stage),
+		zap.Int("round", round),
+		zap.String("tool_call_id", tc.ID),
+		zap.String("tool_name", tc.Function.Name),
+		zap.Int("argument_bytes", len(tc.Function.Arguments)),
+		zap.String("run_id", r.Store.RunID),
+		zap.Error(err),
+	)
+}
+
+func (r *Runtime) logToolCallPause(logger *zap.Logger, stage string, round int, tc model.ToolCall, pause *AskHumanPause) {
+	if logger == nil {
+		return
+	}
+	questionCount := 0
+	if pause != nil {
+		questionCount = len(pause.Request.Questions)
+	}
+	logger.Info("runtime.tool.call.pause",
+		zap.String("stage", stage),
+		zap.Int("round", round),
+		zap.String("tool_call_id", tc.ID),
+		zap.String("tool_name", tc.Function.Name),
+		zap.Int("question_count", questionCount),
+		zap.String("run_id", r.Store.RunID),
+	)
+}
+
+func chatToolNames(tools []model.ToolSpec) []string {
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		if strings.TrimSpace(tool.Function.Name) != "" {
+			names = append(names, tool.Function.Name)
+		}
+	}
+	return names
 }
 
 func maskAuthorization(apiKey string) string {

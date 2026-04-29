@@ -318,7 +318,14 @@ func (s *Store) CreateModelProfile(ctx context.Context, arg CreateModelProfilePa
 }
 
 func (s *Store) GetModelProfile(ctx context.Context, id string) (ModelProfile, error) {
-	item, err := s.queries.GetModelProfile(ctx, project.Slug(id))
+	id = strings.TrimSpace(id)
+	item, err := s.queries.GetModelProfile(ctx, id)
+	if err != nil && errors.Is(err, pgx.ErrNoRows) {
+		slugID := project.Slug(id)
+		if slugID != id {
+			item, err = s.queries.GetModelProfile(ctx, slugID)
+		}
+	}
 	if err != nil {
 		return ModelProfile{}, err
 	}
@@ -344,6 +351,7 @@ func (s *Store) ListModelProfiles(ctx context.Context, limit, offset int32) ([]M
 }
 
 func (s *Store) UpdateModelProfile(ctx context.Context, arg UpdateModelProfileParams) (ModelProfile, error) {
+	rawID := strings.TrimSpace(arg.ID)
 	normalized, err := normalizeUpdateModelProfile(arg)
 	if err != nil {
 		return ModelProfile{}, err
@@ -363,6 +371,23 @@ func (s *Store) UpdateModelProfile(ctx context.Context, arg UpdateModelProfilePa
 		Status:          normalized.Status,
 		Metadata:        jsonOrEmpty(normalized.Metadata),
 	})
+	if err != nil && errors.Is(err, pgx.ErrNoRows) && rawID != "" && rawID != normalized.ID {
+		item, err = s.queries.UpdateModelProfile(ctx, dbsqlc.UpdateModelProfileParams{
+			ID:              rawID,
+			Name:            normalized.Name,
+			Provider:        normalized.Provider,
+			ModelID:         normalized.ModelID,
+			BaseUrl:         normalized.BaseURL,
+			ApiKey:          normalized.APIKey,
+			ApiKeyEnv:       normalized.APIKeyEnv,
+			ContextWindow:   int32(normalized.ContextWindow),
+			MaxOutputTokens: int32(normalized.MaxOutputTokens),
+			Temperature:     normalized.Temperature,
+			TimeoutSeconds:  int32(normalized.TimeoutSeconds),
+			Status:          normalized.Status,
+			Metadata:        jsonOrEmpty(normalized.Metadata),
+		})
+	}
 	if err != nil {
 		return ModelProfile{}, err
 	}
@@ -370,7 +395,18 @@ func (s *Store) UpdateModelProfile(ctx context.Context, arg UpdateModelProfilePa
 }
 
 func (s *Store) DeleteModelProfile(ctx context.Context, id string) error {
-	return s.queries.DeleteModelProfile(ctx, project.Slug(id))
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	if err := s.queries.DeleteModelProfile(ctx, id); err != nil {
+		return err
+	}
+	slugID := project.Slug(id)
+	if slugID != id {
+		return s.queries.DeleteModelProfile(ctx, slugID)
+	}
+	return nil
 }
 
 func (s *Store) GetAppSetting(ctx context.Context, key string) (AppSetting, error) {
@@ -408,7 +444,11 @@ func (s *Store) GetDefaultModelID(ctx context.Context) (string, error) {
 }
 
 func (s *Store) SetDefaultModelID(ctx context.Context, modelID string) error {
-	_, err := s.UpsertAppSetting(ctx, defaultModelSettingKey, project.Slug(modelID))
+	profile, err := s.GetModelProfile(ctx, modelID)
+	if err != nil {
+		return err
+	}
+	_, err = s.UpsertAppSetting(ctx, defaultModelSettingKey, profile.ID)
 	return err
 }
 

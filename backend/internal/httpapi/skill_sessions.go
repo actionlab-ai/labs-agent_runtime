@@ -82,7 +82,14 @@ func (s SkillSessionService) Start(ctx context.Context, req skillSessionStartReq
 		zap.String("skill_id", req.SkillID),
 		zap.String("project_id", session.activeProject.ID),
 		zap.String("profile_id", session.activeModel.ID),
+		zap.String("provider", session.activeModel.Provider),
+		zap.String("model_id", session.activeModel.ModelID),
+		zap.String("base_url", session.activeModel.BaseURL),
+		zap.Int("timeout_seconds", session.runtimeModel.TimeoutSeconds),
+		zap.Int("max_output_tokens", session.runtimeModel.MaxOutput),
 		zap.Int("input_bytes", len(req.Input)),
+		zap.Bool("explicit_model", strings.TrimSpace(req.Model) != ""),
+		zap.Bool("debug_artifacts", session.runtime.Debug),
 	)
 
 	timeout := time.Duration(session.runtimeModel.TimeoutSeconds+30) * time.Second

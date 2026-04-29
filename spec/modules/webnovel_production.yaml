@@ -1,0 +1,415 @@
+module:
+  id: webnovel_production
+  name: 网文生产流水线
+  purpose: >
+    把“情绪内核”之后的创作过程固化成可执行、可验证、可沉淀的项目资产链。
+    目标不是让模型一次性写完一本书，而是让每一步都产出可复用的 project_document，
+    后续 skill、workflow、session 都能基于这些资产继续创作正文。
+
+ownership:
+  source_of_truth:
+    project_assets: postgres.project_documents
+    project_identity: postgres.projects
+  projection:
+    filesystem: "{workspace_root}/projects/{storage_prefix}/documents/{kind}.md"
+  runtime_context_owner: backend/internal/project.BuildContext
+  execution_surfaces:
+    - skill_session
+    - fixed_workflow
+    - future_chapter_workflow
+
+author_lenses:
+  note: >
+    这里的“五个顶级作家视角”不是五个人名，而是把成熟作者在创作时同时具备的五种判断能力拆开，
+    让 AI 每一步都能自检，而不是只按提示词堆设定。
+  lenses:
+    - id: emotional_writer
+      name: 情绪作家视角
+      question: 读者为什么会被这本书打动？
+      focus:
+        - 主角最深的羞耻、渴望、愤怒、亏欠或执念
+        - 读者代入后最想获得的情绪回报
+        - 每个爽点是否服务于情绪内核，而不是孤立炫技
+      primary_asset: novel_core
+
+    - id: commercial_webnovel_writer
+      name: 商业网文作者视角
+      question: 读者为什么愿意一章接一章追下去？
+      focus:
+        - 开篇三章能不能立刻建立压迫、钩子和期待
+        - 主线爽点是否稳定兑现
+        - 情节是否有连续升级，而不是单点打脸
+      primary_asset: reader_contract
+
+    - id: character_engine_writer
+      name: 人物引擎视角
+      question: 主角为什么非行动不可？
+      focus:
+        - 主角人格底色
+        - 伤口、欲望、弱点和成长方向
+        - 反派、配角、女性角色是否都是压力系统的一部分
+      primary_asset: project_brief
+
+    - id: world_rule_writer
+      name: 世界规则视角
+      question: 金手指和世界规则如何持续制造剧情，而不是只提供外挂？
+      focus:
+        - 能力边界
+        - 代价与限制
+        - 社会结构、阶层结构、组织结构如何反复压迫主角
+      primary_asset:
+        - world_rules
+        - power_system
+
+    - id: serial_showrunner
+      name: 连载总控视角
+      question: 这本书如何稳定写到几十万字甚至更长？
+      focus:
+        - 分卷推进
+        - 近期章节目的
+        - 章节结束后的状态更新
+        - 伏笔、信息差、人物关系和主线状态是否可追踪
+      primary_asset:
+        - mainline
+        - current_state
+
+project_asset_policy:
+  always_load:
+    - novel_core
+  load_priority:
+    - novel_core
+    - project_brief
+    - reader_contract
+    - taboo
+    - style_guide
+    - world_rules
+    - power_system
+    - mainline
+    - current_state
+  rules:
+    - novel_core 是所有后续创作任务的最高优先级情绪 canon。
+    - 如果 novel_core 不存在，不应该直接进入世界观、主线或正文创作，除非用户明确要求跳过。
+    - 后续 skill 可以读取其他文档，但不能和 novel_core 的情绪承诺冲突。
+    - 如果用户要改变全书情绪承诺，必须先更新 novel_core，再重算受影响资产。
+    - 上下文太长时，优先保留 novel_core，其次保留当前任务直接依赖的资产。
+
+document_kinds:
+  current_supported:
+    novel_core:
+      title: 小说情感内核
+      role: 全书情绪发动机，定义读者为什么被打动。
+      singleton: true
+      must_exist_before:
+        - world_rules
+        - power_system
+        - mainline
+        - current_state
+        - chapter_draft
+
+    project_brief:
+      title: 项目简报
+      role: 一句话定位、题材、主角、核心卖点、商业切口。
+      singleton: true
+
+    reader_contract:
+      title: 读者承诺
+      role: 明确读者会获得什么爽感、痛感、代偿、期待和长期回报。
+      singleton: true
+
+    taboo:
+      title: 禁区与避坑
+      role: 明确不能写什么，避免价值观、节奏、人物塑造和商业方向跑偏。
+      singleton: true
+
+    style_guide:
+      title: 风格指南
+      role: 控制叙述距离、句法、对白、节奏、章末钩子和去 AI 味。
+      singleton: true
+
+    world_rules:
+      title: 世界规则
+      role: 社会结构、力量规则、组织规则、现实压力系统。
+      singleton: true
+
+    power_system:
+      title: 金手指与能力体系
+      role: 主角能力来源、边界、代价、升级方式和爽点兑现方式。
+      singleton: true
+
+    factions:
+      title: 势力关系
+      role: 家庭、校园、职场、资本、反派组织、社交圈层等压力结构。
+      singleton: true
+
+    locations:
+      title: 地点设定
+      role: 学校、城市、公司、关键场景等可复用空间资产。
+      singleton: true
+
+    mainline:
+      title: 主线规划
+      role: 全书阶段目标、分卷目标、核心冲突升级、伏笔兑现。
+      singleton: true
+
+    current_state:
+      title: 当前状态
+      role: 连载进行时的最新 canon，包含已发生事实、人物状态、信息差和下一章约束。
+      singleton: true
+
+  planned:
+    character_cast:
+      title: 角色台账
+      reason: >
+        当前没有独立角色文档 kind。短期可把角色核心写入 project_brief、factions 或 current_state，
+        但长期应该增加 character_cast，避免人物资料散落。
+    migration_required: true
+
+production_stages:
+  - id: stage_01_emotional_core
+    name: 情绪内核
+    core_question: 这本书最想打中的人类情绪是什么？
+    required_inputs:
+      - 题材方向
+      - 目标读者
+      - 主角处境
+      - 主角最深渴望
+      - 外部压迫来源
+      - 爽感回报
+      - 禁区边界
+    output_documents:
+      - novel_core
+    gate_to_next:
+      - novel_core_status_is_present
+      - 核心痛点明确
+      - 核心爽点明确
+      - 主角非行动不可的原因明确
+    recommended_skill: novel-emotional-core
+
+  - id: stage_02_reader_contract
+    name: 读者承诺与商业切口
+    core_question: 读者点进来、追下去、付费下去分别为了什么？
+    depends_on:
+      - novel_core
+    output_documents:
+      - reader_contract
+      - taboo
+      - project_brief
+    gate_to_next:
+      - 首章钩子方向明确
+      - 前十章回报节奏明确
+      - 不能写的方向明确
+      - 一句话卖点明确
+    recommended_skill: novel-project-kickoff
+
+  - id: stage_03_pressure_and_role_engine
+    name: 压迫系统与人物发动机
+    core_question: 哪些人、组织、规则会持续压主角，逼他变化？
+    depends_on:
+      - novel_core
+      - reader_contract
+    output_documents:
+      - project_brief
+      - factions
+      - current_state
+    gate_to_next:
+      - 主角人格底色明确
+      - 主要压迫者明确
+      - 配角和反派不是摆设
+      - 第一阶段冲突能持续十章以上
+    recommended_future_skill: novel-character-pressure-engine
+
+  - id: stage_04_world_and_power_rules
+    name: 世界观与金手指规则
+    core_question: 世界和能力如何服务情绪内核，而不是抢走情绪核心？
+    depends_on:
+      - novel_core
+      - project_brief
+    output_documents:
+      - world_rules
+      - power_system
+      - locations
+    gate_to_next:
+      - 金手指能力边界明确
+      - 能力代价或限制明确
+      - 社会结构能制造长期冲突
+      - 规则能自然导出爽点而不是随写随改
+    recommended_skill: novel-idea-bootstrap
+
+  - id: stage_05_mainline_and_volume_plan
+    name: 主线与分卷规划
+    core_question: 这本书如何从第一卷一路升级到长期连载？
+    depends_on:
+      - novel_core
+      - reader_contract
+      - world_rules
+      - power_system
+    output_documents:
+      - mainline
+    gate_to_next:
+      - 第一卷目标明确
+      - 近期十五章目标明确
+      - 中期三十到五十章方向明确
+      - 主要伏笔和兑现窗口明确
+    recommended_skill: webnovel-arc-planner
+
+  - id: stage_06_opening_package
+    name: 开篇包
+    core_question: 第一章如何立刻让读者感到压迫、期待和回报？
+    depends_on:
+      - novel_core
+      - reader_contract
+      - mainline
+      - current_state
+    output_documents:
+      - current_state
+    transient_outputs:
+      - chapter_brief
+      - opening_scene_plan
+    gate_to_next:
+      - 第一章场景明确
+      - 第一个羞辱或压力事件明确
+      - 第一次反击或钩子明确
+      - 章末钩子明确
+    recommended_skill: webnovel-opening-sniper
+
+  - id: stage_07_chapter_draft
+    name: 正文起草
+    core_question: 这一章推进了什么状态，兑现了什么情绪？
+    depends_on:
+      - novel_core
+      - current_state
+      - chapter_brief
+    output_documents:
+      - current_state
+    transient_outputs:
+      - chapter_draft
+    gate_to_next:
+      - 正文不违背 novel_core
+      - 至少推进一个人物或情节状态
+      - 章末有明确钩子或余波
+      - 没有把未来推测写成已发生 canon
+    recommended_skill: webnovel-chapter-draft
+
+  - id: stage_08_snapshot_and_continuity
+    name: 章后快照与连续性
+    core_question: 写完这一章后，项目真实状态发生了什么变化？
+    depends_on:
+      - chapter_draft
+      - current_state
+    output_documents:
+      - current_state
+    gate_to_next:
+      - 已发生事实更新
+      - 人物状态更新
+      - 信息差更新
+      - 下一章约束更新
+      - 与 novel_core、mainline 没有冲突
+    recommended_skill: webnovel-chapter-snapshot
+
+runtime_context_rules:
+  before_model_call:
+    - resolve_project
+    - load_project_documents_from_postgres
+    - sort_documents_by_load_priority
+    - always_include_novel_core_if_present
+    - inject_project_asset_policy
+    - expose_provider_tools
+  provider_tools:
+    - ListProjectDocuments
+    - ReadProjectDocument
+    - WriteProjectDocument
+  model_instruction_rules:
+    - 如果任务是创作正文，必须先遵守 novel_core。
+    - 如果任务需要世界观但 world_rules 缺失，应先询问或创建 world_rules。
+    - 如果任务需要章节续写但 current_state 缺失，应先创建当前状态或要求用户提供上一章状态。
+    - 如果用户要求修改核心情绪，必须把这视为 novel_core 变更，而不是普通正文润色。
+
+recommended_workflows:
+  create_book_from_zero:
+    order:
+      - create_project
+      - stage_01_emotional_core
+      - stage_02_reader_contract
+      - stage_03_pressure_and_role_engine
+      - stage_04_world_and_power_rules
+      - stage_05_mainline_and_volume_plan
+      - stage_06_opening_package
+      - stage_07_chapter_draft
+      - stage_08_snapshot_and_continuity
+
+  continue_existing_book:
+    order:
+      - load_project
+      - verify_novel_core_present
+      - verify_current_state_present
+      - build_context_pack
+      - draft_next_chapter
+      - audit_continuity
+      - update_current_state
+
+  revise_core_direction:
+    order:
+      - read_novel_core
+      - ask_human_for_new_emotional_promise
+      - update_novel_core
+      - mark_impacted_documents
+      - regenerate_or_patch_reader_contract
+      - regenerate_or_patch_mainline
+      - do_not_rewrite_chapter_drafts_until_user_confirms
+
+quality_gates:
+  novel_core_complete:
+    must_have:
+      - target_reader
+      - protagonist_deep_need
+      - pressure_source
+      - emotional_payoff
+      - long_term_promise
+      - taboo
+
+  ready_for_worldbuilding:
+    must_have:
+      - novel_core
+      - project_brief
+      - reader_contract
+
+  ready_for_mainline:
+    must_have:
+      - novel_core
+      - world_rules
+      - power_system
+      - pressure_system_or_factions
+
+  ready_for_chapter_draft:
+    must_have:
+      - novel_core
+      - mainline
+      - current_state
+      - chapter_brief_or_user_requested_scene
+
+failure_policy:
+  missing_novel_core:
+    action: ask_human_or_run_emotional_core_skill
+    must_not: silently_worldbuild_or_draft_chapter
+  missing_current_state_for_continuation:
+    action: ask_for_latest_chapter_state_or_build_initial_current_state
+    must_not: invent_prior_canon
+  conflict_with_novel_core:
+    action: explain_conflict_and_ask_whether_to_revise_novel_core
+    must_not: overwrite_core_by_accident
+  context_too_long:
+    action: keep_novel_core_then_task_relevant_assets_then_summaries
+    must_not: drop_novel_core
+
+verification:
+  required_when_implemented:
+    - BuildContext_always_includes_novel_core_when_present
+    - chapter_workflow_rejects_missing_novel_core
+    - WriteProjectDocument_persists_stage_outputs_to_pg_and_provider
+    - next_skill_session_receives_novel_core_in_project_context
+    - current_state_updates_after_chapter_draft
+  current_related_tests:
+    - backend/internal/project/project_test.go
+    - backend/internal/runtime/runtime_test.go
+    - backend/internal/httpapi/workflows_test.go
+

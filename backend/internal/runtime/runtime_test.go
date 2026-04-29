@@ -659,6 +659,64 @@ func TestExecuteSkillInteractivePausesAndResumesWithAskHuman(t *testing.T) {
 	}
 }
 
+func TestExecuteSkillSessionTreatsMarkdownClarificationAsNeedsInput(t *testing.T) {
+	rt := newTestRuntime(t)
+	t.Setenv("TEST_API_KEY", "dummy")
+
+	var requestCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		current := requestCount.Add(1)
+		var req model.ChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request failed: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch current {
+		case 1:
+			if !strings.Contains(req.Messages[1].Content, "Interactive Session Rule") {
+				t.Fatalf("expected session prompt rule, got %s", req.Messages[1].Content)
+			}
+			_, _ = fmt.Fprint(w, `{"id":"resp-1","choices":[{"index":0,"message":{"role":"assistant","content":"# 需要补充的信息\n\n## 缺失字段\n- payoff\n\n## 还不能定稿的原因\n- 缺少核心爽点。\n\n## 请先回答以下问题\n\n### payoff | 主角最终给读者什么情绪回报？\n- A. 尊严\n- B. 复仇"},"finish_reason":"stop"}]}`)
+		case 2:
+			last := req.Messages[len(req.Messages)-1]
+			if last.Role != "user" || !strings.Contains(last.Content, "尊严") {
+				t.Fatalf("expected fallback resume as user clarification, got %#v", last)
+			}
+			_, _ = fmt.Fprint(w, `{"id":"resp-2","choices":[{"index":0,"message":{"role":"assistant","content":"# Done\n\n已按尊严回报定稿。"},"finish_reason":"stop"}]}`)
+		default:
+			t.Fatalf("unexpected request #%d", current)
+		}
+	}))
+	defer server.Close()
+
+	rt.ModelConfig.BaseURL = server.URL
+	rt.Model = model.NewOpenAICompatible(server.URL, "TEST_API_KEY", "test-model", 5)
+
+	first, err := rt.ExecuteSkillSession(context.Background(), "webnovel-opening-sniper", "draft with missing payoff", map[string]any{"task": "draft"})
+	if err != nil {
+		t.Fatalf("ExecuteSkillSession failed: %v", err)
+	}
+	if first.Status != SkillRunStatusNeedsInput || first.AskHuman == nil || first.State == nil {
+		t.Fatalf("expected markdown clarification to become needs_input, got %#v", first)
+	}
+	if first.State.PendingToolCallID != "" {
+		t.Fatalf("expected synthetic markdown clarification to have no pending tool id, got %q", first.State.PendingToolCallID)
+	}
+	if got := first.AskHuman.Questions[0].Field; got != "payoff" {
+		t.Fatalf("expected parsed payoff question, got %#v", first.AskHuman)
+	}
+
+	second, err := rt.ContinueSkillInteractive(context.Background(), *first.State, AskHumanAnswer{
+		Answers: map[string]string{"payoff": "尊严"},
+	})
+	if err != nil {
+		t.Fatalf("ContinueSkillInteractive failed: %v", err)
+	}
+	if second.Status != SkillRunStatusCompleted || !strings.Contains(second.Text, "尊严") {
+		t.Fatalf("expected completed session output, got %#v", second)
+	}
+}
+
 func TestSkillContextHintInjectsProjectContext(t *testing.T) {
 	rt := newTestRuntime(t)
 	cmd, err := rt.Registry.LoadInvocationCommand("webnovel-opening-sniper")

@@ -37,6 +37,41 @@ func TestBuildContextIncludesProjectAndDocuments(t *testing.T) {
 	}
 }
 
+func TestBuildContextAlwaysPrioritizesNovelCore(t *testing.T) {
+	text := BuildContext(Project{
+		ID:     "case-file",
+		Name:   "Case File",
+		Status: "active",
+	}, []Document{
+		{Kind: "world_rules", Title: "World Rules", Body: strings.Repeat("world ", 6000)},
+		{Kind: "novel_core", Title: "Novel Core", Body: "Core promise: regain dignity."},
+	})
+
+	if !strings.Contains(text, "novel_core_status: present") {
+		t.Fatalf("expected novel_core to be marked present, got %q", text)
+	}
+	corePos := strings.Index(text, "Novel Core (novel_core)")
+	worldPos := strings.Index(text, "World Rules (world_rules)")
+	if corePos == -1 {
+		t.Fatalf("expected novel_core body in context, got %q", text)
+	}
+	if worldPos != -1 && worldPos < corePos {
+		t.Fatalf("expected novel_core before world_rules, got %q", text)
+	}
+	if !strings.Contains(text, "Core promise: regain dignity.") {
+		t.Fatalf("expected novel_core content to survive truncation, got %q", text)
+	}
+}
+
+func TestBuildContextMarksMissingNovelCore(t *testing.T) {
+	text := BuildContext(Project{ID: "case-file"}, []Document{
+		{Kind: "world_rules", Title: "World Rules", Body: "rules"},
+	})
+	if !strings.Contains(text, "novel_core_status: missing") {
+		t.Fatalf("expected missing novel_core status, got %q", text)
+	}
+}
+
 func TestExtractDocumentDraftsParsesStructuredWorkflowOutput(t *testing.T) {
 	drafts := ExtractDocumentDrafts(`## project_brief
 

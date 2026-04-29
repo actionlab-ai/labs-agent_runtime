@@ -55,6 +55,7 @@ FROM project_documents
 WHERE project_id = $1 AND deleted_at IS NULL
 ORDER BY
   CASE kind
+    WHEN 'novel_core' THEN 0
     WHEN 'project_brief' THEN 1
     WHEN 'reader_contract' THEN 2
     WHEN 'style_guide' THEN 3

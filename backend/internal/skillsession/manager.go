@@ -84,7 +84,7 @@ func (m *Manager) Start(ctx context.Context, rt *runtime.Runtime, input StartInp
 	if input.Request == "" {
 		return Snapshot{}, fmt.Errorf("request is required")
 	}
-	result, err := rt.ExecuteSkillInteractive(ctx, input.SkillID, input.Request, cloneMap(input.Arguments))
+	result, err := rt.ExecuteSkillSession(ctx, input.SkillID, input.Request, cloneMap(input.Arguments))
 	if err != nil {
 		return Snapshot{}, err
 	}
