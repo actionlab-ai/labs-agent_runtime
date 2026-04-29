@@ -16,6 +16,7 @@ tags:
   - name: Models
   - name: Settings
   - name: Workflows
+  - name: Skill Sessions
   - name: Runs
 paths:
   /healthz:
@@ -536,6 +537,86 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /v1/skill-sessions:
+    post:
+      tags: [Skill Sessions]
+      summary: Start an interactive skill session
+      description: |
+        Runs one explicit skill inside the selected project. If the skill needs missing information,
+        it can call the built-in AskHuman tool. The response status becomes needs_input, and the web UI
+        should collect answers then call /v1/skill-sessions/{id}/turns.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSkillSessionRequest"
+            example:
+              project: urban-rebirth
+              model: deepseek-flash
+              skill_id: novel-emotional-core
+              input: Build the emotional core first. Ask me if required facts are missing.
+              arguments:
+                document_kind: novel_core
+      responses:
+        "200":
+          description: Skill session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillSessionResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /v1/skill-sessions/{id}:
+    get:
+      tags: [Skill Sessions]
+      summary: Get skill session state
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Skill session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillSessionResponse"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /v1/skill-sessions/{id}/turns:
+    post:
+      tags: [Skill Sessions]
+      summary: Continue a skill session with human answers
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContinueSkillSessionRequest"
+            example:
+              input: Choose dignity and recognition as the core payoff.
+              answers:
+                payoff: dignity and recognition
+              notes: Avoid simple sudden wealth.
+      responses:
+        "200":
+          description: Skill session continued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillSessionResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
 components:
   parameters:
     ID:
@@ -782,6 +863,136 @@ components:
           default: false
         debug:
           type: boolean
+    CreateSkillSessionRequest:
+      type: object
+      required: [project, skill_id, input]
+      properties:
+        project:
+          type: string
+          description: Active project ID. Required because skill sessions run against project context and provider-backed documents.
+        model:
+          type: string
+          description: Required unless a default model is stored in the database.
+        skill_id:
+          type: string
+          description: Explicit skill ID to execute.
+          example: novel-emotional-core
+        input:
+          type: string
+          description: User request for this skill session.
+        debug:
+          type: boolean
+        arguments:
+          $ref: "#/components/schemas/JSONValue"
+    ContinueSkillSessionRequest:
+      type: object
+      properties:
+        input:
+          type: string
+          description: Optional human free-text answer or UI summary.
+        answers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Structured AskHuman answers keyed by question field or question text.
+        notes:
+          type: string
+          description: Optional extra human notes.
+    AskHumanOption:
+      type: object
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+    AskHumanQuestion:
+      type: object
+      properties:
+        field:
+          type: string
+        header:
+          type: string
+        question:
+          type: string
+        multi_select:
+          type: boolean
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/AskHumanOption"
+    AskHumanRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AskHumanQuestion"
+    SkillSessionTurn:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        answers:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+    SkillSession:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [needs_input, completed]
+        project_id:
+          type: string
+        skill_id:
+          type: string
+        request:
+          type: string
+        arguments:
+          $ref: "#/components/schemas/JSONValue"
+        ask_human:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AskHumanRequest"
+        final_text:
+          type: string
+        run_id:
+          type: string
+        run_dir:
+          type: string
+        turns:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkillSessionTurn"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SkillSessionResponse:
+      type: object
+      properties:
+        session:
+          $ref: "#/components/schemas/SkillSession"
+        project:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Project"
+        model:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ModelProfile"
     ProjectBootstrapWorkflowRequest:
       type: object
       required: [project, input]

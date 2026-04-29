@@ -22,16 +22,19 @@ const (
 	skillWriteToolName                = "Write"
 	skillEditToolName                 = "Edit"
 	skillGlobToolName                 = "Glob"
+	skillAskHumanToolName             = "AskHuman"
 	skillListProjectDocumentsToolName = "ListProjectDocuments"
 	skillReadProjectDocumentToolName  = "ReadProjectDocument"
 	skillWriteProjectDocumentToolName = "WriteProjectDocument"
 )
 
-type skillFileReadState struct {
+type FileReadState struct {
 	Content   string
 	Timestamp int64
 	Full      bool
 }
+
+type skillFileReadState = FileReadState
 
 type skillFileToolSession struct {
 	WorkspaceRoot     string
@@ -65,6 +68,7 @@ type RuntimeConfigView struct {
 func (s *skillFileToolSession) toolSpecs(allowed []string) []model.ToolSpec {
 	enabled := canonicalSkillLocalTools(allowed)
 	var specs []model.ToolSpec
+	specs = append(specs, askHumanToolSpec())
 	for _, name := range enabled {
 		switch name {
 		case skillReadToolName:
@@ -222,6 +226,14 @@ func (s *skillFileToolSession) handleToolCallWithContext(ctx context.Context, tc
 		payload, err = s.handleReadProjectDocument(ctx, tc.Function.Arguments)
 	case skillWriteProjectDocumentToolName:
 		payload, err = s.handleWriteProjectDocument(ctx, tc.Function.Arguments)
+	case skillAskHumanToolName:
+		pause, askErr := s.handleAskHuman(tc.ID, tc.Function.Arguments)
+		if askErr != nil {
+			payload, err = nil, askErr
+			break
+		}
+		_ = s.Store.WriteJSON(filepath.ToSlash(filepath.Join(s.StorePrefix, "tools", fmt.Sprintf("%s-%s-request.json", tc.Function.Name, tc.ID))), pause)
+		return "", pause
 	case skillBashToolName:
 		payload, err = s.handleBash(tc.Function.Arguments)
 	case skillPowerShellToolName:
@@ -240,6 +252,83 @@ func (s *skillFileToolSession) handleToolCallWithContext(ctx context.Context, tc
 		return model.MustJSON(payload), err
 	}
 	return model.MustJSON(payload), nil
+}
+
+func askHumanToolSpec() model.ToolSpec {
+	return model.ToolSpec{
+		Type: "function",
+		Function: model.ToolFunction{
+			Name:        skillAskHumanToolName,
+			Description: "Ask the human for missing information, preferences, or decisions before continuing this skill. Use this instead of guessing when required skill inputs are missing.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"reason": map[string]any{"type": "string", "description": "Why this information is needed before continuing."},
+					"questions": map[string]any{
+						"type":        "array",
+						"description": "One to four concise questions for the human.",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"field":        map[string]any{"type": "string", "description": "Optional structured field this question fills, such as target_reader or payoff."},
+								"header":       map[string]any{"type": "string", "description": "Short UI label, 12 characters or fewer when possible."},
+								"question":     map[string]any{"type": "string", "description": "The complete human-facing question."},
+								"multi_select": map[string]any{"type": "boolean", "description": "Whether multiple options may be selected."},
+								"options": map[string]any{
+									"type":        "array",
+									"description": "Optional choices. Do not include an Other option; the UI can provide free text.",
+									"items": map[string]any{
+										"type": "object",
+										"properties": map[string]any{
+											"label":       map[string]any{"type": "string"},
+											"description": map[string]any{"type": "string"},
+										},
+										"required": []string{"label"},
+									},
+								},
+							},
+							"required": []string{"question"},
+						},
+					},
+				},
+				"required": []string{"questions"},
+			},
+		},
+	}
+}
+
+func (s *skillFileToolSession) handleAskHuman(toolCallID, raw string) (*AskHumanPause, error) {
+	var request AskHumanRequest
+	if err := json.Unmarshal([]byte(raw), &request); err != nil {
+		return nil, err
+	}
+	request.Reason = strings.TrimSpace(request.Reason)
+	if len(request.Questions) == 0 {
+		return nil, fmt.Errorf("AskHuman requires at least one question")
+	}
+	if len(request.Questions) > 4 {
+		return nil, fmt.Errorf("AskHuman supports at most four questions")
+	}
+	for i := range request.Questions {
+		q := &request.Questions[i]
+		q.Field = strings.TrimSpace(q.Field)
+		q.Header = strings.TrimSpace(q.Header)
+		q.Question = strings.TrimSpace(q.Question)
+		if q.Question == "" {
+			return nil, fmt.Errorf("AskHuman question text is required")
+		}
+		if len(q.Options) > 4 {
+			return nil, fmt.Errorf("AskHuman question %q supports at most four options", q.Question)
+		}
+		for j := range q.Options {
+			q.Options[j].Label = strings.TrimSpace(q.Options[j].Label)
+			q.Options[j].Description = strings.TrimSpace(q.Options[j].Description)
+			if q.Options[j].Label == "" {
+				return nil, fmt.Errorf("AskHuman option label is required for question %q", q.Question)
+			}
+		}
+	}
+	return &AskHumanPause{ToolCallID: toolCallID, Request: request}, nil
 }
 
 func listProjectDocumentsToolSpec() model.ToolSpec {

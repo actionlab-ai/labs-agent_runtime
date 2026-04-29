@@ -13,6 +13,7 @@ import (
 	"novel-agent-runtime/internal/config"
 	"novel-agent-runtime/internal/logging"
 	"novel-agent-runtime/internal/projectfs"
+	"novel-agent-runtime/internal/skillsession"
 )
 
 type routeDeps struct {
@@ -21,6 +22,7 @@ type routeDeps struct {
 	db       appStore
 	models   modelConfigStore
 	projects projectConfigStore
+	skills   *skillsession.Manager
 }
 
 func Serve(cfg config.Config, addr string, debug bool) error {
@@ -88,6 +90,7 @@ func buildHTTPRouter(cfg config.Config, debug bool, db appStore, configCache *ca
 	}))
 
 	projectFiles := projectfs.New(filepath.Join(cfg.Runtime.WorkspaceRoot, "projects"))
+	skillSessions := skillsession.NewManager()
 	deps := routeDeps{
 		cfg:   cfg,
 		debug: debug,
@@ -101,6 +104,7 @@ func buildHTTPRouter(cfg config.Config, debug bool, db appStore, configCache *ca
 			Cache: configCache,
 			Files: projectFiles,
 		},
+		skills: skillSessions,
 	}
 
 	registerUtilityRoutes(router, deps)
@@ -110,6 +114,7 @@ func buildHTTPRouter(cfg config.Config, debug bool, db appStore, configCache *ca
 	registerSettingRoutes(router, deps)
 	registerProjectDocumentRoutes(router, deps)
 	registerRunRoutes(router, deps)
+	registerSkillSessionRoutes(router, deps)
 
 	return router
 }

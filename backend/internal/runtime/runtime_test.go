@@ -596,6 +596,69 @@ func TestProjectDocumentToolIsBuiltInWhenProjectWriterExists(t *testing.T) {
 	}
 }
 
+func TestExecuteSkillInteractivePausesAndResumesWithAskHuman(t *testing.T) {
+	rt := newTestRuntime(t)
+	t.Setenv("TEST_API_KEY", "dummy")
+
+	var requestCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		current := requestCount.Add(1)
+		var req model.ChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request failed: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch current {
+		case 1:
+			found := false
+			for _, tool := range req.Tools {
+				if tool.Function.Name == skillAskHumanToolName {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("expected AskHuman tool to be exposed, got %#v", req.Tools)
+			}
+			_, _ = fmt.Fprint(w, `{"id":"resp-1","choices":[{"index":0,"message":{"role":"assistant","content":"Need target reader","tool_calls":[{"id":"ask_1","type":"function","function":{"name":"AskHuman","arguments":"{\"reason\":\"missing target reader\",\"questions\":[{\"field\":\"target_reader\",\"header\":\"Reader\",\"question\":\"Who is the target reader?\",\"options\":[{\"label\":\"Middle-aged men\",\"description\":\"Readers under life pressure\"},{\"label\":\"Young adults\",\"description\":\"Younger readers\"}]}]}"}}]},"finish_reason":"tool_calls"}]}`)
+		case 2:
+			if len(req.Messages) == 0 || req.Messages[len(req.Messages)-1].Role != "tool" || !strings.Contains(req.Messages[len(req.Messages)-1].Content, "Middle-aged men") {
+				t.Fatalf("expected human answer as last tool message, got %#v", req.Messages)
+			}
+			_, _ = fmt.Fprint(w, `{"id":"resp-2","choices":[{"index":0,"message":{"role":"assistant","content":"# Done\n\nTarget reader captured."},"finish_reason":"stop"}]}`)
+		default:
+			t.Fatalf("unexpected request #%d", current)
+		}
+	}))
+	defer server.Close()
+
+	rt.ModelConfig.BaseURL = server.URL
+	rt.Model = model.NewOpenAICompatible(server.URL, "TEST_API_KEY", "test-model", 5)
+
+	first, err := rt.ExecuteSkillInteractive(context.Background(), "webnovel-opening-sniper", "draft with missing reader", map[string]any{"task": "draft"})
+	if err != nil {
+		t.Fatalf("ExecuteSkillInteractive failed: %v", err)
+	}
+	if first.Status != SkillRunStatusNeedsInput || first.AskHuman == nil || first.State == nil {
+		t.Fatalf("expected needs_input with state, got %#v", first)
+	}
+	if first.AskHuman.Questions[0].Field != "target_reader" {
+		t.Fatalf("unexpected AskHuman payload: %#v", first.AskHuman)
+	}
+
+	second, err := rt.ContinueSkillInteractive(context.Background(), *first.State, AskHumanAnswer{
+		Answers: map[string]string{"Who is the target reader?": "Middle-aged men under life pressure"},
+	})
+	if err != nil {
+		t.Fatalf("ContinueSkillInteractive failed: %v", err)
+	}
+	if second.Status != SkillRunStatusCompleted || !strings.Contains(second.Text, "Target reader captured") {
+		t.Fatalf("expected completed skill output, got %#v", second)
+	}
+	if got := requestCount.Load(); got != 2 {
+		t.Fatalf("expected two model calls, got %d", got)
+	}
+}
+
 func TestSkillContextHintInjectsProjectContext(t *testing.T) {
 	rt := newTestRuntime(t)
 	cmd, err := rt.Registry.LoadInvocationCommand("webnovel-opening-sniper")

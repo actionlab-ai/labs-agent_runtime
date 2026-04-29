@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,64 @@ type RunResult struct {
 	FinalText string
 	RunDir    string
 	RunID     string
+}
+
+const (
+	SkillRunStatusCompleted  = "completed"
+	SkillRunStatusNeedsInput = "needs_input"
+)
+
+type AskHumanOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+type AskHumanQuestion struct {
+	Field       string           `json:"field,omitempty"`
+	Header      string           `json:"header,omitempty"`
+	Question    string           `json:"question"`
+	Options     []AskHumanOption `json:"options,omitempty"`
+	MultiSelect bool             `json:"multi_select,omitempty"`
+}
+
+type AskHumanRequest struct {
+	Reason    string             `json:"reason,omitempty"`
+	Questions []AskHumanQuestion `json:"questions"`
+}
+
+type AskHumanAnswer struct {
+	Answers map[string]string `json:"answers,omitempty"`
+	Notes   string            `json:"notes,omitempty"`
+}
+
+type AskHumanPause struct {
+	ToolCallID string          `json:"tool_call_id"`
+	Request    AskHumanRequest `json:"request"`
+}
+
+func (p *AskHumanPause) Error() string {
+	return "skill requested human input"
+}
+
+type SkillExecutionState struct {
+	SkillID           string                   `json:"skill_id"`
+	SafeID            string                   `json:"safe_id"`
+	OriginalUserInput string                   `json:"original_user_input"`
+	InvocationArgs    map[string]any           `json:"invocation_args,omitempty"`
+	CompiledPrompt    string                   `json:"compiled_prompt"`
+	Conversation      []model.Message          `json:"conversation"`
+	NextRound         int                      `json:"next_round"`
+	PendingToolCallID string                   `json:"pending_tool_call_id,omitempty"`
+	ReadState         map[string]FileReadState `json:"read_state,omitempty"`
+}
+
+type SkillRunResult struct {
+	Status   string               `json:"status"`
+	Text     string               `json:"text,omitempty"`
+	AskHuman *AskHumanRequest     `json:"ask_human,omitempty"`
+	State    *SkillExecutionState `json:"state,omitempty"`
+	RunDir   string               `json:"run_dir"`
+	RunID    string               `json:"run_id"`
 }
 
 type ProjectDocumentWriteRequest struct {
@@ -341,9 +400,20 @@ func (r *Runtime) handleToolCall(ctx context.Context, originalUserInput string, 
 }
 
 func (r *Runtime) ExecuteSkill(ctx context.Context, skillID, originalUserInput string, invocationArgs map[string]any) (string, error) {
-	cmd, err := r.Registry.LoadInvocationCommand(skillID)
+	result, err := r.ExecuteSkillInteractive(ctx, skillID, originalUserInput, invocationArgs)
 	if err != nil {
 		return "", err
+	}
+	if result.Status == SkillRunStatusNeedsInput && result.AskHuman != nil {
+		return renderAskHumanAsMarkdown(*result.AskHuman), nil
+	}
+	return result.Text, nil
+}
+
+func (r *Runtime) ExecuteSkillInteractive(ctx context.Context, skillID, originalUserInput string, invocationArgs map[string]any) (SkillRunResult, error) {
+	cmd, err := r.Registry.LoadInvocationCommand(skillID)
+	if err != nil {
+		return SkillRunResult{}, err
 	}
 	safeID := strings.ReplaceAll(skillID, "/", "_")
 	fileTools := newSkillFileToolSession(RuntimeConfigView{
@@ -359,9 +429,72 @@ func (r *Runtime) ExecuteSkill(ctx context.Context, skillID, originalUserInput s
 	toolSpecs := fileTools.toolSpecs(cmd.AllowedTools)
 	_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/allowed-tools.json", safeID), toolSpecs)
 
+	state := SkillExecutionState{
+		SkillID:           skillID,
+		SafeID:            safeID,
+		OriginalUserInput: originalUserInput,
+		InvocationArgs:    cloneInvocationArgs(invocationArgs),
+		CompiledPrompt:    compiled,
+		Conversation:      conversation,
+		NextRound:         1,
+	}
+	return r.runSkillInteractiveLoop(ctx, cmd, fileTools, toolSpecs, state)
+}
+
+func (r *Runtime) ContinueSkillInteractive(ctx context.Context, state SkillExecutionState, answer AskHumanAnswer) (SkillRunResult, error) {
+	if strings.TrimSpace(state.SkillID) == "" {
+		return SkillRunResult{}, fmt.Errorf("skill session state is missing skill_id")
+	}
+	cmd, err := r.Registry.LoadInvocationCommand(state.SkillID)
+	if err != nil {
+		return SkillRunResult{}, err
+	}
+	safeID := state.SafeID
+	if strings.TrimSpace(safeID) == "" {
+		safeID = strings.ReplaceAll(state.SkillID, "/", "_")
+		state.SafeID = safeID
+	}
+	fileTools := newSkillFileToolSession(RuntimeConfigView{
+		WorkspaceRoot:     r.Config.Runtime.WorkspaceRoot,
+		DocumentOutputDir: r.Config.Runtime.DocumentOutputDir,
+		ProjectID:         r.ProjectID,
+		ProjectDocs:       r.ProjectDocs,
+	}, r.Store, filepath.ToSlash(filepath.Join("skill-calls", safeID)))
+	if state.ReadState != nil {
+		fileTools.ReadState = make(map[string]skillFileReadState, len(state.ReadState))
+		for k, v := range state.ReadState {
+			fileTools.ReadState[k] = v
+		}
+	}
+	if strings.TrimSpace(state.PendingToolCallID) == "" {
+		return SkillRunResult{}, fmt.Errorf("skill session has no pending AskHuman tool call")
+	}
+	state.Conversation = append(state.Conversation, model.Message{
+		Role:       "tool",
+		ToolCallID: state.PendingToolCallID,
+		Content:    formatAskHumanToolResult(answer),
+	})
+	state.PendingToolCallID = ""
+	if state.NextRound <= 0 {
+		state.NextRound = 1
+	}
+	toolSpecs := fileTools.toolSpecs(cmd.AllowedTools)
+	return r.runSkillInteractiveLoop(ctx, cmd, fileTools, toolSpecs, state)
+}
+
+func (r *Runtime) runSkillInteractiveLoop(ctx context.Context, cmd skill.Command, fileTools *skillFileToolSession, toolSpecs []model.ToolSpec, state SkillExecutionState) (SkillRunResult, error) {
 	var lastText string
-	for round := 1; round <= maxInt(r.Config.Runtime.MaxSkillToolRounds, 1); round++ {
-		assembly := r.buildSkillAssembly(cmd, compiled, round, conversation, toolSpecs)
+	safeID := strings.TrimSpace(state.SafeID)
+	if safeID == "" {
+		safeID = strings.ReplaceAll(state.SkillID, "/", "_")
+		state.SafeID = safeID
+	}
+	maxRounds := maxInt(r.Config.Runtime.MaxSkillToolRounds, 1)
+	if state.NextRound <= 0 {
+		state.NextRound = 1
+	}
+	for round := state.NextRound; round <= maxRounds; round++ {
+		assembly := r.buildSkillAssembly(cmd, state.CompiledPrompt, round, state.Conversation, toolSpecs)
 		_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/round-%02d-assembly.json", safeID, round), assembly)
 		_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/round-%02d-assembly.md", safeID, round), renderSkillAssemblyMarkdown(assembly))
 		chatReq := assembly.ChatRequest
@@ -369,31 +502,101 @@ func (r *Runtime) ExecuteSkill(ctx context.Context, skillID, originalUserInput s
 		resp, err := r.Model.Chat(ctx, chatReq)
 		if err != nil {
 			r.writeChatError(fmt.Sprintf("skill-calls/%s/round-%02d-chat-error.txt", safeID, round), err)
-			return "", err
+			return SkillRunResult{}, err
 		}
 		_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/round-%02d-response.json", safeID, round), json.RawMessage(resp.Raw))
 		_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/round-%02d-response-analysis.json", safeID, round), analyzeChatResponse(resp))
 		_ = r.Store.WriteJSON(fmt.Sprintf("skill-calls/%s/model-raw.json", safeID), json.RawMessage(resp.Raw))
 		if len(resp.Choices) == 0 {
-			return "", fmt.Errorf("skill model returned no choices")
+			return SkillRunResult{}, fmt.Errorf("skill model returned no choices")
 		}
 		msg := resp.Choices[0].Message
-		conversation = append(conversation, msg)
+		state.Conversation = append(state.Conversation, msg)
 		lastText = msg.Content
 		if len(msg.ToolCalls) == 0 {
 			_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/output.md", safeID), lastText)
-			return lastText, nil
+			return SkillRunResult{Status: SkillRunStatusCompleted, Text: lastText, RunDir: r.Store.Root, RunID: r.Store.RunID}, nil
 		}
 		for _, tc := range msg.ToolCalls {
 			content, err := fileTools.handleToolCallWithContext(ctx, tc)
+			var pause *AskHumanPause
+			if err != nil && asAskHumanPause(err, &pause) {
+				state.NextRound = round + 1
+				state.PendingToolCallID = pause.ToolCallID
+				state.ReadState = copyReadState(fileTools.ReadState)
+				return SkillRunResult{
+					Status:   SkillRunStatusNeedsInput,
+					Text:     msg.Content,
+					AskHuman: &pause.Request,
+					State:    &state,
+					RunDir:   r.Store.Root,
+					RunID:    r.Store.RunID,
+				}, nil
+			}
 			if err != nil {
 				content = `{"error":` + jsonQuote(err.Error()) + `}`
 			}
-			conversation = append(conversation, model.Message{Role: "tool", ToolCallID: tc.ID, Content: content})
+			state.Conversation = append(state.Conversation, model.Message{Role: "tool", ToolCallID: tc.ID, Content: content})
 		}
 	}
 	_ = r.Store.WriteText(fmt.Sprintf("skill-calls/%s/output.md", safeID), lastText)
-	return lastText, nil
+	return SkillRunResult{Status: SkillRunStatusCompleted, Text: lastText, RunDir: r.Store.Root, RunID: r.Store.RunID}, nil
+}
+
+func asAskHumanPause(err error, target **AskHumanPause) bool {
+	var pause *AskHumanPause
+	if errors.As(err, &pause) {
+		*target = pause
+		return true
+	}
+	return false
+}
+
+func copyReadState(in map[string]skillFileReadState) map[string]FileReadState {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]FileReadState, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func formatAskHumanToolResult(answer AskHumanAnswer) string {
+	answers := answer.Answers
+	if answers == nil {
+		answers = map[string]string{}
+	}
+	payload := map[string]any{
+		"type":    "human_answers",
+		"answers": answers,
+	}
+	if strings.TrimSpace(answer.Notes) != "" {
+		payload["notes"] = strings.TrimSpace(answer.Notes)
+	}
+	return model.MustJSON(payload)
+}
+
+func renderAskHumanAsMarkdown(request AskHumanRequest) string {
+	var b strings.Builder
+	b.WriteString("## 需要补充信息\n\n")
+	if strings.TrimSpace(request.Reason) != "" {
+		b.WriteString(request.Reason)
+		b.WriteString("\n\n")
+	}
+	for i, q := range request.Questions {
+		b.WriteString(fmt.Sprintf("%d. %s\n", i+1, q.Question))
+		for _, opt := range q.Options {
+			if strings.TrimSpace(opt.Description) != "" {
+				b.WriteString(fmt.Sprintf("- %s: %s\n", opt.Label, opt.Description))
+			} else {
+				b.WriteString(fmt.Sprintf("- %s\n", opt.Label))
+			}
+		}
+		b.WriteString("\n")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func (r *Runtime) skillContextHint(cmd skill.Command, fileTools *skillFileToolSession) string {
