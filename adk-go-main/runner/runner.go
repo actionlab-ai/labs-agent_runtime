@@ -22,8 +22,6 @@ import (
 	"log"
 	"time"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/artifact"
 	"google.golang.org/adk/internal/agent/parentmap"
@@ -130,7 +128,7 @@ type Runner struct {
 // For each user message it finds the proper agent within an agent tree to
 // continue the conversation within the session.
 // 中文业务注释：Run 是一次用户请求的总入口。它返回事件迭代器，所以调用方可以边读边推给前端，而不是等待整轮完成。
-func (r *Runner) Run(ctx context.Context, userID, sessionID string, msg *genai.Content, cfg agent.RunConfig, opts ...RunOption) iter.Seq2[*session.Event, error] {
+func (r *Runner) Run(ctx context.Context, userID, sessionID string, msg *model.Content, cfg agent.RunConfig, opts ...RunOption) iter.Seq2[*session.Event, error] {
 	// TODO(hakim): we need to validate whether cfg is compatible with the Agent.
 	//   see adk-python/src/google/adk/runners.py Runner._new_invocation_context.
 	// TODO: setup tracer.
@@ -275,7 +273,7 @@ func (r *Runner) Run(ctx context.Context, userID, sessionID string, msg *genai.C
 }
 
 // 中文业务注释：把用户输入转换成 session.Event。这里也处理输入附件：如果配置了保存 InlineData，会先写入 Artifact，再用文本占位符替换原始二进制。
-func (r *Runner) appendMessageToSession(ctx agent.InvocationContext, storedSession session.Session, msg *genai.Content, saveInputBlobsAsArtifacts bool, pluginManager *plugininternal.PluginManager, stateDelta map[string]any) (agent.InvocationContext, error) {
+func (r *Runner) appendMessageToSession(ctx agent.InvocationContext, storedSession session.Session, msg *model.Content, saveInputBlobsAsArtifacts bool, pluginManager *plugininternal.PluginManager, stateDelta map[string]any) (agent.InvocationContext, error) {
 	if msg == nil {
 		return ctx, nil
 	}
@@ -310,7 +308,7 @@ func (r *Runner) appendMessageToSession(ctx agent.InvocationContext, storedSessi
 				return ctx, fmt.Errorf("failed to save artifact %s: %w", fileName, err)
 			}
 			// Replace the part with a text placeholder
-			msg.Parts[i] = &genai.Part{
+			msg.Parts[i] = &model.Part{
 				Text: fmt.Sprintf("Uploaded file: %s. It has been saved to the artifacts", fileName),
 			}
 		}
@@ -335,7 +333,7 @@ func (r *Runner) appendMessageToSession(ctx agent.InvocationContext, storedSessi
 // findAgentToRun returns the agent that should handle the next request based on
 // session history.
 // 中文业务注释：Agent 选择策略。优先处理“用户返回的函数响应/确认”对应的原始 Agent；否则回看最近事件，找可继续接手的子 Agent；最后退回根 Agent。
-func (r *Runner) findAgentToRun(session session.Session, msg *genai.Content) (agent.Agent, error) {
+func (r *Runner) findAgentToRun(session session.Session, msg *model.Content) (agent.Agent, error) {
 	if event := handleUserFunctionCallResponse(session.Events(), msg); event != nil {
 		subAgent := r.rootAgent.FindAgent(event.Author)
 		if subAgent != nil {
@@ -370,7 +368,7 @@ func (r *Runner) findAgentToRun(session session.Session, msg *genai.Content) (ag
 
 // handleUserFunctionCallResponse finds the function call event that matches the function response id
 // delivered by the user in the latest event.
-func handleUserFunctionCallResponse(events session.Events, msg *genai.Content) *session.Event {
+func handleUserFunctionCallResponse(events session.Events, msg *model.Content) *session.Event {
 	if events.Len() == 0 {
 		return nil
 	}

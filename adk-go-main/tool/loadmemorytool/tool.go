@@ -33,8 +33,6 @@ package loadmemorytool
 import (
 	"fmt"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/internal/toolinternal"
 	"google.golang.org/adk/internal/toolinternal/toolutils"
 	"google.golang.org/adk/internal/utils"
@@ -75,13 +73,13 @@ func (t *loadMemoryTool) IsLongRunning() bool {
 }
 
 // Declaration returns the GenAI FunctionDeclaration for the load_memory tool.
-func (t *loadMemoryTool) Declaration() *genai.FunctionDeclaration {
-	return &genai.FunctionDeclaration{
+func (t *loadMemoryTool) Declaration() *model.FunctionDeclaration {
+	return &model.FunctionDeclaration{
 		Name:        t.name,
 		Description: t.description,
-		Parameters: &genai.Schema{
+		Parameters: &model.Schema{
 			Type: "OBJECT",
-			Properties: map[string]*genai.Schema{
+			Properties: map[string]*model.Schema{
 				"query": {
 					Type:        "STRING",
 					Description: "The query to search memory for.",

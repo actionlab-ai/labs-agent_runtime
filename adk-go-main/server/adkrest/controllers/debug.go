@@ -16,12 +16,12 @@ package controllers
 
 import (
 	"fmt"
+	"google.golang.org/adk/model"
 	"net/http"
 	"slices"
 
 	"github.com/gorilla/mux"
 	semconv "go.opentelemetry.io/otel/semconv/v1.36.0"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/server/adkrest/internal/models"
@@ -168,11 +168,11 @@ func (c *DebugAPIController) EventGraphHandler(rw http.ResponseWriter, req *http
 	EncodeJSONResponse(map[string]string{"dotSrc": graph}, http.StatusOK, rw)
 }
 
-func functionalCalls(event *session.Event) []*genai.FunctionCall {
+func functionalCalls(event *session.Event) []*model.FunctionCall {
 	if event.LLMResponse.Content == nil || event.LLMResponse.Content.Parts == nil {
 		return nil
 	}
-	fc := []*genai.FunctionCall{}
+	fc := []*model.FunctionCall{}
 	for _, part := range event.LLMResponse.Content.Parts {
 		if part.FunctionCall != nil {
 			fc = append(fc, part.FunctionCall)
@@ -181,11 +181,11 @@ func functionalCalls(event *session.Event) []*genai.FunctionCall {
 	return fc
 }
 
-func functionalResponses(event *session.Event) []*genai.FunctionResponse {
+func functionalResponses(event *session.Event) []*model.FunctionResponse {
 	if event.LLMResponse.Content == nil || event.LLMResponse.Content.Parts == nil {
 		return nil
 	}
-	fr := []*genai.FunctionResponse{}
+	fr := []*model.FunctionResponse{}
 	for _, part := range event.LLMResponse.Content.Parts {
 		if part.FunctionResponse != nil {
 			fr = append(fr, part.FunctionResponse)

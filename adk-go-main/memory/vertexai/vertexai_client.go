@@ -30,10 +30,10 @@ package vertexai
 import (
 	"context"
 	"fmt"
+	"google.golang.org/adk/model"
 	"time"
 
 	"google.golang.org/api/option"
-	"google.golang.org/genai"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"google.golang.org/adk/memory"
@@ -139,7 +139,7 @@ func (v *vertexAIClient) searchMemory(ctx context.Context, req *memory.SearchReq
 
 	for _, m := range r.RetrievedMemories {
 		res.Memories = append(res.Memories, memory.Entry{
-			Content: genai.NewContentFromText(m.Memory.Fact, genai.RoleUser),
+			Content: model.NewContentFromText(m.Memory.Fact, model.RoleUser),
 		})
 	}
 

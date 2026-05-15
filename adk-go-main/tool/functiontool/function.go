@@ -22,7 +22,6 @@ import (
 	"runtime/debug"
 
 	"github.com/google/jsonschema-go/jsonschema"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/internal/toolinternal/toolutils"
 	"google.golang.org/adk/internal/typeutil"
@@ -158,8 +157,8 @@ func (f *functionTool[TArgs, TResults]) ProcessRequest(ctx tool.Context, req *mo
 
 // FunctionDeclaration implements interfaces.FunctionTool.
 // 中文业务注释：Declaration 决定模型看到的工具说明。工具名、描述、参数 Schema 写得越清楚，模型越不容易幻觉调用。
-func (f *functionTool[TArgs, TResults]) Declaration() *genai.FunctionDeclaration {
-	decl := &genai.FunctionDeclaration{
+func (f *functionTool[TArgs, TResults]) Declaration() *model.FunctionDeclaration {
+	decl := &model.FunctionDeclaration{
 		Name:        f.Name(),
 		Description: f.Description(),
 	}
@@ -255,7 +254,7 @@ func (f *functionTool[TArgs, TResults]) Run(ctx tool.Context, args any) (result 
 //  * MCP ServerTool provides direct access to mcp.CallToolResult message
 //    but we expect Function in our case is a simple wrapper around a Go
 //    function, and does not need to worry about how the result is translated
-//    in genai.Content.
+//    in model.Content.
 //  * Function returns only TResults, not (TResults, error). If the user
 //    function can return an error, that needs to be included in the output
 //    json schema. And for function that never returns an error, I think it

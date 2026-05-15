@@ -16,8 +16,7 @@ package models
 
 import (
 	"fmt"
-
-	"google.golang.org/genai"
+	"google.golang.org/adk/model"
 )
 
 type RunAgentRequest struct {
@@ -27,7 +26,7 @@ type RunAgentRequest struct {
 
 	SessionId string `json:"sessionId"`
 
-	NewMessage genai.Content `json:"newMessage"`
+	NewMessage model.Content `json:"newMessage"`
 
 	Streaming bool `json:"streaming,omitempty"`
 

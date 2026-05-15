@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/google/safehtml/template"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/agent/parentmap"
@@ -114,13 +113,13 @@ func (t *TransferToAgentTool) IsLongRunning() bool {
 	return false
 }
 
-func (t *TransferToAgentTool) Declaration() *genai.FunctionDeclaration {
-	return &genai.FunctionDeclaration{
+func (t *TransferToAgentTool) Declaration() *model.FunctionDeclaration {
+	return &model.FunctionDeclaration{
 		Name:        t.Name(),
 		Description: t.Description(),
-		Parameters: &genai.Schema{
+		Parameters: &model.Schema{
 			Type: "object",
-			Properties: map[string]*genai.Schema{
+			Properties: map[string]*model.Schema{
 				"agent_name": {
 					Type:        "string",
 					Description: "the agent name to transfer to",
@@ -208,7 +207,7 @@ func appendTools(r *model.LLMRequest, tools ...tool.Tool) error {
 		r.Tools = make(map[string]any)
 	}
 
-	var declarations []*genai.FunctionDeclaration
+	var declarations []*model.FunctionDeclaration
 
 	for i, tool := range tools {
 		if tool == nil || tool.Name() == "" {
@@ -231,10 +230,10 @@ func appendTools(r *model.LLMRequest, tools ...tool.Tool) error {
 		return nil
 	}
 	if r.Config == nil {
-		r.Config = &genai.GenerateContentConfig{}
+		r.Config = &model.GenerateContentConfig{}
 	}
-	// Find an existing genai.Tool with FunctionDeclarations
-	var funcTool *genai.Tool
+	// Find an existing model.Tool with FunctionDeclarations
+	var funcTool *model.Tool
 	for _, gt := range r.Config.Tools {
 		if gt.FunctionDeclarations != nil {
 			funcTool = gt
@@ -244,7 +243,7 @@ func appendTools(r *model.LLMRequest, tools ...tool.Tool) error {
 	if funcTool != nil {
 		funcTool.FunctionDeclarations = append(funcTool.FunctionDeclarations, declarations...)
 	} else {
-		r.Config.Tools = append(r.Config.Tools, &genai.Tool{
+		r.Config.Tools = append(r.Config.Tools, &model.Tool{
 			FunctionDeclarations: declarations,
 		})
 	}

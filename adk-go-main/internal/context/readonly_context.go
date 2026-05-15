@@ -16,8 +16,7 @@ package context
 
 import (
 	"context"
-
-	"google.golang.org/genai"
+	"google.golang.org/adk/model"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/session"
@@ -67,6 +66,6 @@ func (c *ReadonlyContext) InvocationID() string {
 	return c.InvocationContext.InvocationID()
 }
 
-func (c *ReadonlyContext) UserContent() *genai.Content {
+func (c *ReadonlyContext) UserContent() *model.Content {
 	return c.InvocationContext.UserContent()
 }

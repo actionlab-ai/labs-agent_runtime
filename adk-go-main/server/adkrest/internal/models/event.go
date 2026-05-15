@@ -17,8 +17,6 @@ package models
 import (
 	"encoding/json"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
 )
@@ -40,15 +38,15 @@ type Event struct {
 	Author             string                                      `json:"author"`
 	Partial            bool                                        `json:"partial,omitempty"`
 	LongRunningToolIDs []string                                    `json:"longRunningToolIds,omitempty"`
-	Content            *genai.Content                              `json:"content"`
-	GroundingMetadata  *genai.GroundingMetadata                    `json:"groundingMetadata"`
-	UsageMetadata      *genai.GenerateContentResponseUsageMetadata `json:"usageMetadata"`
+	Content            *model.Content                              `json:"content"`
+	GroundingMetadata  *model.GroundingMetadata                    `json:"groundingMetadata"`
+	UsageMetadata      *model.GenerateContentResponseUsageMetadata `json:"usageMetadata"`
 	TurnComplete       bool                                        `json:"turnComplete,omitempty"`
 	Interrupted        bool                                        `json:"interrupted,omitempty"`
 	ErrorCode          string                                      `json:"errorCode,omitempty"`
 	ErrorMessage       string                                      `json:"errorMessage,omitempty"`
 	AvgLogprobs        float64                                     `json:"avgLogprobs,omitempty"`
-	FinishReason       genai.FinishReason                          `json:"finishReason,omitempty"`
+	FinishReason       model.FinishReason                          `json:"finishReason,omitempty"`
 	ModelVersion       string                                      `json:"modelVersion,omitempty"`
 	Actions            EventActions                                `json:"actions"`
 }
@@ -119,19 +117,19 @@ func (e Event) MarshalJSON() ([]byte, error) {
 
 	// ProxyFunctionCall overrides 'Args' to remove 'omitempty'.
 	type ProxyFunctionCall struct {
-		*genai.FunctionCall
+		*model.FunctionCall
 		Args map[string]any `json:"args"` // Tag changed: omitempty removed
 	}
 
 	// ProxyPart overrides 'FunctionCall' to use ProxyFunctionCall.
 	type ProxyPart struct {
-		*genai.Part
+		*model.Part
 		FunctionCall *ProxyFunctionCall `json:"functionCall,omitempty"`
 	}
 
 	// ProxyContent overrides 'Parts' to use ProxyPart.
 	type ProxyContent struct {
-		*genai.Content
+		*model.Content
 		Parts []*ProxyPart `json:"parts,omitempty"`
 	}
 

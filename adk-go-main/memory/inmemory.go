@@ -16,12 +16,11 @@ package memory
 
 import (
 	"context"
+	"google.golang.org/adk/model"
 	"maps"
 	"strings"
 	"sync"
 	"time"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/session"
 )
@@ -41,7 +40,7 @@ type sessionID string
 
 type value struct {
 	id             string
-	content        *genai.Content
+	content        *model.Content
 	author         string
 	timestamp      time.Time
 	customMetadata map[string]any

@@ -55,7 +55,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/genai"
 	"gopkg.in/yaml.v3"
 
 	"google.golang.org/adk/agent"
@@ -101,7 +100,7 @@ type replayPlugin struct {
 }
 
 // beforeRun initializes the replay state for the current invocation if replay mode is enabled.
-func (p *replayPlugin) beforeRun(ctx agent.InvocationContext) (*genai.Content, error) {
+func (p *replayPlugin) beforeRun(ctx agent.InvocationContext) (*model.Content, error) {
 	if ctx.Session() == nil {
 		return nil, nil
 	}
@@ -432,14 +431,14 @@ func (p *replayPlugin) verifyAndGetNextLLMRecordingForAgent(state *invocationRep
 func verifyLLMRequestMatch(expectedLLMRequest, actualLLMRequest *model.LLMRequest, agentName string, agentIndex int) error {
 	// Define options to ignore specific fields.
 	opts := []cmp.Option{
-		cmpopts.IgnoreFields(genai.FunctionDeclaration{}, "ParametersJsonSchema", "ResponseJsonSchema", "Parameters", "Response"),
+		cmpopts.IgnoreFields(model.FunctionDeclaration{}, "ParametersJsonSchema", "ResponseJsonSchema", "Parameters", "Response"),
 		cmpopts.IgnoreFields(model.LLMRequest{}, "Tools"),
-		cmpopts.IgnoreFields(genai.GenerateContentConfig{}, "Labels"),
+		cmpopts.IgnoreFields(model.GenerateContentConfig{}, "Labels"),
 		cmpopts.EquateEmpty(),
 	}
 
 	if transferToolAny, ok := expectedLLMRequest.Tools["transfer_to_agent"]; ok {
-		transferTool := transferToolAny.(*genai.FunctionDeclaration)
+		transferTool := transferToolAny.(*model.FunctionDeclaration)
 		transferTool.Description = `Transfer the question to another agent.
 This tool hands off control to another agent when it's more suitable to answer the user's question according to the agent's description.`
 	}
@@ -580,7 +579,7 @@ func (p *replayPlugin) verifyAndGetNextToolRecordingForAgent(state *invocationRe
 }
 
 // verifyToolCallMatch compares the expected tool call from recording with the actual tool call.
-func verifyToolCallMatch(expectedToolCall *genai.FunctionCall, toolName string, toolArgs map[string]any, agentName string, agentIndex int) error {
+func verifyToolCallMatch(expectedToolCall *model.FunctionCall, toolName string, toolArgs map[string]any, agentName string, agentIndex int) error {
 	if expectedToolCall.Name != toolName {
 		return fmt.Errorf("tool name mismatch for agent '%s' (index %d): expected '%s', got '%s'",
 			agentName, agentIndex, expectedToolCall.Name, toolName)

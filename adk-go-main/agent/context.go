@@ -16,8 +16,7 @@ package agent
 
 import (
 	"context"
-
-	"google.golang.org/genai"
+	"google.golang.org/adk/model"
 
 	"google.golang.org/adk/session"
 )
@@ -85,7 +84,7 @@ type InvocationContext interface {
 	Branch() string
 
 	// UserContent that started this invocation.
-	UserContent() *genai.Content
+	UserContent() *model.Content
 
 	// RunConfig stores the runtime configuration used during this invocation.
 	RunConfig() *RunConfig
@@ -107,7 +106,7 @@ type ReadonlyContext interface {
 	context.Context
 
 	// UserContent that started this invocation.
-	UserContent() *genai.Content
+	UserContent() *model.Content
 	InvocationID() string
 	AgentName() string
 	ReadonlyState() session.ReadonlyState

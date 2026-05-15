@@ -22,9 +22,8 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"google.golang.org/adk/model"
 	"strings"
-
-	"google.golang.org/genai"
 )
 
 // Service is the artifact storage service.
@@ -56,7 +55,7 @@ type requiredField struct {
 type SaveRequest struct {
 	AppName, UserID, SessionID, FileName string
 	// Part is the artifact to store.
-	Part *genai.Part
+	Part *model.Part
 
 	// Below are optional fields.
 
@@ -160,7 +159,7 @@ func (req *LoadRequest) Validate() error {
 // LoadResponse is the return type of [ArtifactService.Load].
 type LoadResponse struct {
 	// Part is the artifact stored.
-	Part *genai.Part
+	Part *model.Part
 }
 
 // DeleteRequest is the parameter for [ArtifactService.Delete].

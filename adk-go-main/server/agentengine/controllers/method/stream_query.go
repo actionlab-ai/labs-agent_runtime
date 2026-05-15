@@ -31,11 +31,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/adk/model"
 	"iter"
 	"log"
 	"net/http"
 
-	"google.golang.org/genai"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"google.golang.org/adk/agent"
@@ -91,7 +91,7 @@ func (s *streamQueryHandler) streamJSONL(ctx context.Context, rw http.ResponseWr
 			Input: models.StreamQueryInput{
 				UserID:    reqText.Input.UserID,
 				SessionID: reqText.Input.SessionID,
-				Message:   *genai.NewContentFromText(reqText.Input.Message, genai.RoleUser),
+				Message:   *model.NewContentFromText(reqText.Input.Message, model.RoleUser),
 			},
 		}
 	}
@@ -183,7 +183,7 @@ func (s *streamQueryHandler) Metadata() (*structpb.Struct, error) {
 		},
 		"description": `Streams responses asynchronously from the ADK application.
 Args:
-    message (genai.Content):
+    message (model.Content):
         Required. The message to stream responses for.
     user_id (str):
         Required. The ID of the user.
@@ -201,7 +201,7 @@ Yields:
 	return classAsyncMethod, nil
 }
 
-func (s *streamQueryHandler) run(ctx context.Context, req *models.StreamQueryRequest, message *genai.Content, config *launcher.Config) (iter.Seq2[*session.Event, error], error) {
+func (s *streamQueryHandler) run(ctx context.Context, req *models.StreamQueryRequest, message *model.Content, config *launcher.Config) (iter.Seq2[*session.Event, error], error) {
 	rootAgent := config.AgentLoader.RootAgent()
 
 	r, err := runner.New(runner.Config{

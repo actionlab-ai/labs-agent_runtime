@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/adk/model"
 	"maps"
 
 	"github.com/a2aproject/a2a-go/a2a"
@@ -30,7 +31,6 @@ import (
 	a2av2 "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2acompat/a2av0"
 	a2asrvv2 "github.com/a2aproject/a2a-go/v2/a2asrv"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/plugin"
@@ -51,12 +51,12 @@ type AfterExecuteCallback func(ctx ExecutorContext, finalEvent *a2a.TaskStatusUp
 // A2APartConverter is a custom converter for converting A2A parts to GenAI parts.
 // Implementations should generally remember to leverage adka2a.ToGenAiPart for default conversions
 // nil returns are considered intentionally dropped parts.
-type A2APartConverter func(ctx context.Context, a2aEvent a2a.Event, part a2a.Part) (*genai.Part, error)
+type A2APartConverter func(ctx context.Context, a2aEvent a2a.Event, part a2a.Part) (*model.Part, error)
 
 // GenAIPartConverter is a custom converter for converting GenAI parts to A2A parts.
 // Implementations should generally remember to leverage adka2a.ToA2APart for default conversions
 // nil returns are considered intentionally dropped parts.
-type GenAIPartConverter func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (a2a.Part, error)
+type GenAIPartConverter func(ctx context.Context, adkEvent *session.Event, part *model.Part) (a2a.Part, error)
 
 // A2AExecutionCleanupCallback is a callback which will be called after an execution or cancellation has completed or failed.
 type A2AExecutionCleanupCallback func(ctx context.Context, reqCtx *a2asrv.RequestContext, subAgentCards []*a2a.AgentCard, result a2a.SendMessageResult, cause error)
@@ -202,7 +202,7 @@ func NewExecutor(config ExecutorConfig) *Executor {
 	}
 
 	if config.A2APartConverter != nil {
-		v1Config.A2APartConverter = func(ctx context.Context, a2aEvent a2av2.Event, part *a2av2.Part) (*genai.Part, error) {
+		v1Config.A2APartConverter = func(ctx context.Context, a2aEvent a2av2.Event, part *a2av2.Part) (*model.Part, error) {
 			legacyEvent, err := a2av0.FromV1Event(a2aEvent)
 			if err != nil {
 				return nil, fmt.Errorf("a2a event conversion failed: %w", err)
@@ -212,7 +212,7 @@ func NewExecutor(config ExecutorConfig) *Executor {
 	}
 
 	if config.GenAIPartConverter != nil {
-		v1Config.GenAIPartConverter = func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (*a2av2.Part, error) {
+		v1Config.GenAIPartConverter = func(ctx context.Context, adkEvent *session.Event, part *model.Part) (*a2av2.Part, error) {
 			legacyPart, err := config.GenAIPartConverter(ctx, adkEvent, part)
 			if err != nil {
 				return nil, err
@@ -308,7 +308,7 @@ type ExecutorContext interface {
 	// Events provides a readonly view of the current session events.
 	Events() session.Events
 	// UserContent is a converted A2A message which is passed to runner.Run.
-	UserContent() *genai.Content
+	UserContent() *model.Content
 	// RequestContext contains information about the original A2A Request, the current task and related tasks.
 	RequestContext() *a2asrv.RequestContext
 }

@@ -18,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/model"
@@ -33,7 +32,7 @@ const afFunctionCallIDPrefix = "adk-"
 // Since the ID field is optional, some models don't fill the field, but
 // the LLMAgent depends on the IDs to map FunctionCall and FunctionResponse events
 // in the event stream.
-func PopulateClientFunctionCallID(c *genai.Content) {
+func PopulateClientFunctionCallID(c *model.Content) {
 	for _, fn := range FunctionCalls(c) {
 		if fn.ID == "" {
 			fn.ID = GenerateFunctionCallID()
@@ -49,7 +48,7 @@ func GenerateFunctionCallID() string {
 // RemoveClientFunctionCallID removes the function call ID field that was set
 // by populateClientFunctionCallID. This is necessary when FunctionCall or
 // FunctionResponse are sent back to the model.
-func RemoveClientFunctionCallID(c *genai.Content) {
+func RemoveClientFunctionCallID(c *model.Content) {
 	for _, fn := range FunctionCalls(c) {
 		if strings.HasPrefix(fn.ID, afFunctionCallIDPrefix) {
 			fn.ID = ""
@@ -62,20 +61,20 @@ func RemoveClientFunctionCallID(c *genai.Content) {
 	}
 }
 
-// Content is a convenience function that returns the genai.Content
+// Content is a convenience function that returns the model.Content
 // in the event.
-func Content(ev *session.Event) *genai.Content {
+func Content(ev *session.Event) *model.Content {
 	if ev == nil {
 		return nil
 	}
 	return ev.LLMResponse.Content
 }
 
-// Belows are useful utilities that help working with genai.Content
+// Belows are useful utilities that help working with model.Content
 // included in types.Event.
 // TODO: Use generics.
 // FunctionCalls extracts all FunctionCall parts from the content.
-func FunctionCalls(c *genai.Content) (ret []*genai.FunctionCall) {
+func FunctionCalls(c *model.Content) (ret []*model.FunctionCall) {
 	if c == nil {
 		return nil
 	}
@@ -88,7 +87,7 @@ func FunctionCalls(c *genai.Content) (ret []*genai.FunctionCall) {
 }
 
 // FunctionResponses extracts all FunctionResponse parts from the content.
-func FunctionResponses(c *genai.Content) (ret []*genai.FunctionResponse) {
+func FunctionResponses(c *model.Content) (ret []*model.FunctionResponse) {
 	if c == nil {
 		return nil
 	}
@@ -101,7 +100,7 @@ func FunctionResponses(c *genai.Content) (ret []*genai.FunctionResponse) {
 }
 
 // TextParts extracts all Text parts from the content.
-func TextParts(c *genai.Content) (ret []string) {
+func TextParts(c *model.Content) (ret []string) {
 	if c == nil {
 		return nil
 	}
@@ -114,7 +113,7 @@ func TextParts(c *genai.Content) (ret []string) {
 }
 
 // FunctionDecls extracts all Function declarations from the GenerateContentConfig.
-func FunctionDecls(c *genai.GenerateContentConfig) (ret []*genai.FunctionDeclaration) {
+func FunctionDecls(c *model.GenerateContentConfig) (ret []*model.FunctionDeclaration) {
 	if c == nil {
 		return nil
 	}
@@ -131,7 +130,7 @@ func Must[T agent.Agent](a T, err error) T {
 	return a
 }
 
-// AppendInstructions appends instructions to the [genai.GenerateContentConfig.SystemInstruction] system instruction.
+// AppendInstructions appends instructions to the [model.GenerateContentConfig.SystemInstruction] system instruction.
 func AppendInstructions(r *model.LLMRequest, instructions ...string) {
 	if len(instructions) == 0 {
 		return
@@ -140,16 +139,16 @@ func AppendInstructions(r *model.LLMRequest, instructions ...string) {
 	inst := strings.Join(instructions, "\n\n")
 
 	if r.Config == nil {
-		r.Config = &genai.GenerateContentConfig{}
+		r.Config = &model.GenerateContentConfig{}
 	}
 
 	if r.Config.SystemInstruction == nil {
-		r.Config.SystemInstruction = genai.NewContentFromText(inst, genai.RoleUser)
+		r.Config.SystemInstruction = model.NewContentFromText(inst, model.RoleUser)
 		return
 	}
 	if len(r.Config.SystemInstruction.Parts) > 0 && r.Config.SystemInstruction.Parts[len(r.Config.SystemInstruction.Parts)-1].Text != "" {
 		r.Config.SystemInstruction.Parts[len(r.Config.SystemInstruction.Parts)-1].Text += "\n\n" + inst
 		return
 	}
-	r.Config.SystemInstruction.Parts = append(r.Config.SystemInstruction.Parts, genai.NewPartFromText(inst))
+	r.Config.SystemInstruction.Parts = append(r.Config.SystemInstruction.Parts, model.NewPartFromText(inst))
 }

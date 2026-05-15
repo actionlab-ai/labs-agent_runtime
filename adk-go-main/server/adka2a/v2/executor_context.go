@@ -16,10 +16,10 @@ package adka2a
 
 import (
 	"context"
+	"google.golang.org/adk/model"
 	"iter"
 
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/session"
 )
@@ -41,7 +41,7 @@ type ExecutorContext interface {
 	// Events provides a readonly view of the current session events.
 	Events() session.Events
 	// UserContent is a converted A2A message which is passed to runner.Run.
-	UserContent() *genai.Content
+	UserContent() *model.Content
 	// RequestContext contains information about the original A2A Request, the current task and related tasks.
 	RequestContext() *a2asrv.ExecutorContext
 }
@@ -50,10 +50,10 @@ type executorContext struct {
 	context.Context
 	meta        invocationMeta
 	plugin      *executorPlugin
-	userContent *genai.Content
+	userContent *model.Content
 }
 
-func newExecutorContext(ctx context.Context, meta invocationMeta, plugin *executorPlugin, userContent *genai.Content) ExecutorContext {
+func newExecutorContext(ctx context.Context, meta invocationMeta, plugin *executorPlugin, userContent *model.Content) ExecutorContext {
 	return &executorContext{
 		Context:     ctx,
 		meta:        meta,
@@ -94,7 +94,7 @@ func (ec *executorContext) RequestContext() *a2asrv.ExecutorContext {
 	return ec.meta.reqCtx
 }
 
-func (ec *executorContext) UserContent() *genai.Content {
+func (ec *executorContext) UserContent() *model.Content {
 	return ec.userContent
 }
 

@@ -17,10 +17,10 @@ package adka2a
 import (
 	"context"
 	"fmt"
+	"google.golang.org/adk/model"
 	"maps"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/session"
@@ -39,7 +39,7 @@ func EventToMessage(event *session.Event) (*a2a.Message, error) {
 	if event == nil {
 		return nil, nil
 	}
-	var eventParts []*genai.Part
+	var eventParts []*model.Part
 	if event.Content != nil {
 		eventParts = event.Content.Parts
 	}
@@ -79,7 +79,7 @@ func ToSessionEvent(ctx agent.InvocationContext, event a2a.Event) (*session.Even
 // ToSessionEventWithParts converts the provided a2a event to session event with custom part converter.
 func ToSessionEventWithParts(ctx agent.InvocationContext, event a2a.Event, partConverter A2APartConverter) (*session.Event, error) {
 	if partConverter == nil {
-		partConverter = func(ctx context.Context, a2aEvent a2a.Event, part *a2a.Part) (*genai.Part, error) {
+		partConverter = func(ctx context.Context, a2aEvent a2a.Event, part *a2a.Part) (*model.Part, error) {
 			return ToGenAIPart(part)
 		}
 	}
@@ -192,7 +192,7 @@ func messageToEvent(ctx agent.InvocationContext, msg *a2a.Message, partConverter
 		return nil, nil
 	}
 
-	var parts []*genai.Part
+	var parts []*model.Part
 	for _, part := range msg.Parts {
 		genaiPart, err := partConverter(ctx, msg, part)
 		if err != nil {
@@ -205,7 +205,7 @@ func messageToEvent(ctx agent.InvocationContext, msg *a2a.Message, partConverter
 
 	event := NewRemoteAgentEvent(ctx)
 	if len(parts) > 0 {
-		event.Content = genai.NewContentFromParts(parts, toGenAIRole(msg.Role))
+		event.Content = model.NewContentFromParts(parts, toGenAIRole(msg.Role))
 	}
 	if err := processA2AMeta(msg, event); err != nil {
 		return nil, fmt.Errorf("metadata processing failed: %w", err)
@@ -228,7 +228,7 @@ func artifactUpdateEventToEvent(ctx agent.InvocationContext, update *a2a.TaskArt
 	}
 
 	event := NewRemoteAgentEvent(ctx)
-	event.Content = genai.NewContentFromParts(filterNilParts(allParts), genai.RoleModel)
+	event.Content = model.NewContentFromParts(filterNilParts(allParts), model.RoleModel)
 	event.LongRunningToolIDs = getLongRunningToolIDs(update.Artifact.Parts, allParts)
 	return event, nil
 }
@@ -238,7 +238,7 @@ func taskToEvent(ctx agent.InvocationContext, task *a2a.Task, partConverter A2AP
 		return nil, fmt.Errorf("InvocationContext not provided")
 	}
 
-	var parts []*genai.Part
+	var parts []*model.Part
 	var longRunningToolIDs []string
 	for _, artifact := range task.Artifacts {
 		allParts, err := convertParts(ctx, task, artifact.Parts, partConverter)
@@ -275,7 +275,7 @@ func taskToEvent(ctx agent.InvocationContext, task *a2a.Task, partConverter A2AP
 		return nil, nil
 	}
 	if len(parts) > 0 {
-		event.Content = genai.NewContentFromParts(parts, genai.RoleModel)
+		event.Content = model.NewContentFromParts(parts, model.RoleModel)
 	}
 	if task.Status.State == a2a.TaskStateInputRequired {
 		event.LongRunningToolIDs = longRunningToolIDs
@@ -294,7 +294,7 @@ func finalTaskStatusUpdateToEvent(ctx agent.InvocationContext, update *a2a.TaskS
 
 	event := NewRemoteAgentEvent(ctx)
 
-	var allParts []*genai.Part
+	var allParts []*model.Part
 	var err error
 	if update.Status.Message != nil {
 		allParts, err = convertParts(ctx, update, update.Status.Message.Parts, partConverter)
@@ -306,7 +306,7 @@ func finalTaskStatusUpdateToEvent(ctx agent.InvocationContext, update *a2a.TaskS
 	if update.Status.State == a2a.TaskStateFailed && len(parts) == 1 && parts[0].Text != "" {
 		event.ErrorMessage = parts[0].Text
 	} else if len(parts) > 0 {
-		event.Content = genai.NewContentFromParts(parts, genai.RoleModel)
+		event.Content = model.NewContentFromParts(parts, model.RoleModel)
 	}
 	if err := processA2AMeta(update, event); err != nil {
 		return nil, fmt.Errorf("metadata processing failed: %w", err)
@@ -318,7 +318,7 @@ func finalTaskStatusUpdateToEvent(ctx agent.InvocationContext, update *a2a.TaskS
 	return event, nil
 }
 
-func getLongRunningToolIDs(parts []*a2a.Part, converted []*genai.Part) []string {
+func getLongRunningToolIDs(parts []*a2a.Part, converted []*model.Part) []string {
 	var ids []string
 	for i, part := range parts {
 		if part.Data() == nil {
@@ -339,11 +339,11 @@ func getLongRunningToolIDs(parts []*a2a.Part, converted []*genai.Part) []string 
 	return ids
 }
 
-func toGenAIRole(role a2a.MessageRole) genai.Role {
+func toGenAIRole(role a2a.MessageRole) model.Role {
 	if role == a2a.MessageRoleUser {
-		return genai.RoleUser
+		return model.RoleUser
 	} else {
-		return genai.RoleModel
+		return model.RoleModel
 	}
 }
 
@@ -361,8 +361,8 @@ func toEventActions(meta map[string]any) session.EventActions {
 // The returned slice preserves index alignment with the input: parts for which
 // the converter returns nil are kept as nil entries. Use filterNilParts to get a
 // dense slice suitable for content creation.
-func convertParts(ctx agent.InvocationContext, event a2a.Event, parts []*a2a.Part, partConverter A2APartConverter) ([]*genai.Part, error) {
-	genaiParts := make([]*genai.Part, len(parts))
+func convertParts(ctx agent.InvocationContext, event a2a.Event, parts []*a2a.Part, partConverter A2APartConverter) ([]*model.Part, error) {
+	genaiParts := make([]*model.Part, len(parts))
 	for i, part := range parts {
 		genaiPart, err := partConverter(ctx, event, part)
 		if err != nil {
@@ -373,8 +373,8 @@ func convertParts(ctx agent.InvocationContext, event a2a.Event, parts []*a2a.Par
 	return genaiParts, nil
 }
 
-func filterNilParts(parts []*genai.Part) []*genai.Part {
-	var result []*genai.Part
+func filterNilParts(parts []*model.Part) []*model.Part {
+	var result []*model.Part
 	for _, p := range parts {
 		if p != nil {
 			result = append(result, p)

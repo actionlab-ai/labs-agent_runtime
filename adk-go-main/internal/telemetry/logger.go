@@ -36,7 +36,6 @@ import (
 	"go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/global"
 	semconv "go.opentelemetry.io/otel/semconv/v1.36.0"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/internal/version"
 	"google.golang.org/adk/model"
@@ -66,7 +65,7 @@ var otelLogger = global.GetLoggerProvider().Logger(
 // LogRequest logs the request to the model - the system message and user messages.
 // It iterates over the request contents and logs each as a separate event.
 // Check [logSystemMessage] and [logUserMessage] for emitted event details.
-func LogRequest(ctx context.Context, req *model.LLMRequest, backend genai.Backend) {
+func LogRequest(ctx context.Context, req *model.LLMRequest, backend model.Backend) {
 	genAISystem := variantToGenAISystem(backend)
 	logSystemMessage(ctx, req, genAISystem)
 	for _, content := range req.Contents {
@@ -79,12 +78,12 @@ func LogRequest(ctx context.Context, req *model.LLMRequest, backend genai.Backen
 // NOTE: The current implementation doesn't fully follow the spec, but aims for consistency with ADK Python. The differences are:
 // * The spec embeds the "content" field to be under the "message" key, but it's added directly in body.
 // * The "tool_calls" field is required if available in the spec, but it's omitted.
-func LogResponse(ctx context.Context, resp *model.LLMResponse, backend genai.Backend) {
+func LogResponse(ctx context.Context, resp *model.LLMResponse, backend model.Backend) {
 	record := log.Record{}
 	record.SetEventName("gen_ai.choice")
 
 	var finishReason string
-	var content *genai.Content
+	var content *model.Content
 	if resp != nil {
 		finishReason = string(resp.FinishReason)
 		if resp.Content != nil {
@@ -130,8 +129,8 @@ func logSystemMessage(ctx context.Context, req *model.LLMRequest, genAISystem *l
 // logUserMessage logs the user message from the request.
 // Semconv reference: https://github.com/open-telemetry/semantic-conventions/blob/v1.36.0/docs/gen-ai/gen-ai-events.md#event-gen_aiusermessage.
 // NOTE: The current implementation doesn't fully follow the spec, but aims for consistency with ADK Python. The differences are:
-// * The spec requires a "role" body field, but it's ommited. If the role is set in [genai.Content], then it will be available in body.content.role.
-func logUserMessage(ctx context.Context, content *genai.Content, genAISystem *log.KeyValue) {
+// * The spec requires a "role" body field, but it's ommited. If the role is set in [model.Content], then it will be available in body.content.role.
+func logUserMessage(ctx context.Context, content *model.Content, genAISystem *log.KeyValue) {
 	record := log.Record{}
 	record.SetEventName("gen_ai.user.message")
 	record.SetBody(log.MapValue(
@@ -145,12 +144,12 @@ func logUserMessage(ctx context.Context, content *genai.Content, genAISystem *lo
 }
 
 // Ref: https://github.com/open-telemetry/semantic-conventions/blob/v1.36.0/docs/registry/attributes/gen-ai.md#gen-ai-system well-known values.
-func variantToGenAISystem(variant genai.Backend) *log.KeyValue {
-	if variant == genai.BackendVertexAI {
+func variantToGenAISystem(variant model.Backend) *log.KeyValue {
+	if variant == model.BackendVertexAI {
 		val := log.KeyValueFromAttribute(semconv.GenAISystemGCPVertexAI)
 		return &val
 	}
-	if variant == genai.BackendGeminiAPI {
+	if variant == model.BackendGeminiAPI {
 		val := log.KeyValueFromAttribute(semconv.GenAISystemGCPGemini)
 		return &val
 	}
@@ -176,12 +175,12 @@ func extractSystemMessage(req *model.LLMRequest) log.Value {
 	return log.StringValue(content)
 }
 
-func contentToLogValue(c *genai.Content) log.Value {
+func contentToLogValue(c *model.Content) log.Value {
 	return toLogValue(contentToJSONLikeValue(c))
 }
 
-// contentToJSONLikeValue converts a genai.Content to a JSON, which is then converted to a log.Value.
-func contentToJSONLikeValue(c *genai.Content) any {
+// contentToJSONLikeValue converts a model.Content to a JSON, which is then converted to a log.Value.
+func contentToJSONLikeValue(c *model.Content) any {
 	if !getGenAICaptureMessageContent() {
 		return elidedContent
 	}

@@ -22,6 +22,7 @@ package gcsartifact
 import (
 	"context"
 	"fmt"
+	"google.golang.org/adk/model"
 	"io"
 	"io/fs"
 	"maps"
@@ -34,7 +35,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/artifact"
 )
@@ -222,8 +222,8 @@ func (s *gcsService) Load(ctx context.Context, req *artifact.LoadRequest) (_ *ar
 		return nil, fmt.Errorf("could not read data from blob '%s': %w", blobName, err)
 	}
 
-	// Create the genai.Part and return the response.
-	part := genai.NewPartFromBytes(data, attrs.ContentType)
+	// Create the model.Part and return the response.
+	part := model.NewPartFromBytes(data, attrs.ContentType)
 
 	return &artifact.LoadResponse{Part: part}, nil
 }

@@ -16,11 +16,11 @@ package remoteagent
 
 import (
 	"fmt"
+	"google.golang.org/adk/model"
 	"maps"
 	"slices"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	icontext "google.golang.org/adk/internal/context"
@@ -30,11 +30,11 @@ import (
 )
 
 type artifactAggregation struct {
-	parts      []*genai.Part
-	citations  *genai.CitationMetadata
-	grounding  *genai.GroundingMetadata
+	parts      []*model.Part
+	citations  *model.CitationMetadata
+	grounding  *model.GroundingMetadata
 	customMeta map[string]any
-	usage      *genai.GenerateContentResponseUsageMetadata
+	usage      *model.GenerateContentResponseUsageMetadata
 }
 
 type a2aAgentRunProcessor struct {
@@ -139,7 +139,7 @@ func (p *a2aAgentRunProcessor) updateAggregation(aid a2a.ArtifactID, agg *artifa
 						continue
 					}
 				}
-				agg.parts = append(agg.parts, &genai.Part{
+				agg.parts = append(agg.parts, &model.Part{
 					Text:    part.Text,
 					Thought: part.Thought,
 				})
@@ -151,7 +151,7 @@ func (p *a2aAgentRunProcessor) updateAggregation(aid a2a.ArtifactID, agg *artifa
 
 	if event.CitationMetadata != nil {
 		if agg.citations == nil {
-			agg.citations = &genai.CitationMetadata{}
+			agg.citations = &model.CitationMetadata{}
 		}
 		agg.citations.Citations = append(agg.citations.Citations, event.CitationMetadata.Citations...)
 	}
@@ -175,7 +175,7 @@ func (p *a2aAgentRunProcessor) updateAggregation(aid a2a.ArtifactID, agg *artifa
 func (p *a2aAgentRunProcessor) buildNonPartialAggregation(ctx agent.InvocationContext, agg *artifactAggregation) *session.Event {
 	parts := agg.parts
 	result := adka2a.NewRemoteAgentEvent(ctx)
-	result.Content = genai.NewContentFromParts(parts, genai.RoleModel)
+	result.Content = model.NewContentFromParts(parts, model.RoleModel)
 	result.CustomMetadata = agg.customMeta
 	result.GroundingMetadata = agg.grounding
 	result.CitationMetadata = agg.citations

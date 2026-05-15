@@ -34,7 +34,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
@@ -506,7 +505,7 @@ func RunServiceTests(t *testing.T, opts SuiteOptions, setup func(t *testing.T) s
 				Author:       "user",
 				InvocationID: "inv1",
 				LLMResponse: model.LLMResponse{
-					Content: genai.NewContentFromBytes([]byte("test_image_data"), "image/png", "user"),
+					Content: model.NewContentFromBytes([]byte("test_image_data"), "image/png", "user"),
 				},
 			}
 			err = s.AppendEvent(ctx, created.Session, event)
@@ -592,22 +591,22 @@ func RunServiceTests(t *testing.T, opts SuiteOptions, setup func(t *testing.T) s
 				LongRunningToolIDs: []string{"tool123"},
 				Actions:            session.EventActions{StateDelta: map[string]any{"user:k2": "v2"}},
 				LLMResponse: model.LLMResponse{
-					Content:      genai.NewContentFromText("test_text", "user"),
+					Content:      model.NewContentFromText("test_text", "user"),
 					TurnComplete: true,
 					Partial:      false,
 					ErrorCode:    "error_code",
 					ErrorMessage: "error_message",
 					Interrupted:  true,
-					GroundingMetadata: &genai.GroundingMetadata{
+					GroundingMetadata: &model.GroundingMetadata{
 						WebSearchQueries: []string{"query1"},
 					},
-					UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+					UsageMetadata: &model.GenerateContentResponseUsageMetadata{
 						PromptTokenCount:     1,
 						CandidatesTokenCount: 1,
 						TotalTokenCount:      2,
 					},
-					CitationMetadata: &genai.CitationMetadata{
-						Citations: []*genai.Citation{{Title: "test", URI: "google.com"}},
+					CitationMetadata: &model.CitationMetadata{
+						Citations: []*model.Citation{{Title: "test", URI: "google.com"}},
 					},
 					CustomMetadata: map[string]any{
 						"custom_key": "custom_value",

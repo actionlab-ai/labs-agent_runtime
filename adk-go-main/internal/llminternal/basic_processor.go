@@ -19,8 +19,6 @@ import (
 	"iter"
 	"reflect"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
@@ -40,7 +38,7 @@ func basicRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest, f
 
 		req.Config = clone(state.GenerateContentConfig)
 		if req.Config == nil {
-			req.Config = &genai.GenerateContentConfig{}
+			req.Config = &model.GenerateContentConfig{}
 		}
 
 		// Set OutputSchema directly if no tools are present or native combo support exists.

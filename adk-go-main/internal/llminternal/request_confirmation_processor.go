@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"iter"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/model"
@@ -31,7 +29,7 @@ import (
 
 type confirmedCall struct {
 	confirmation *toolconfirmation.ToolConfirmation
-	call         genai.FunctionCall
+	call         model.FunctionCall
 }
 
 func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest, f *Flow) iter.Seq2[*session.Event, error] {
@@ -154,15 +152,15 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 				continue
 			}
 
-			parts := make([]*genai.Part, 0)
+			parts := make([]*model.Part, 0)
 			toolsToResumeConfirmation := make(map[string]*toolconfirmation.ToolConfirmation, len(toolsToResumeByFunctionCallID))
 			for callID, cc := range toolsToResumeByFunctionCallID {
-				parts = append(parts, &genai.Part{FunctionCall: &cc.call})
+				parts = append(parts, &model.Part{FunctionCall: &cc.call})
 				toolsToResumeConfirmation[callID] = cc.confirmation
 			}
 
 			ev, err := f.handleFunctionCalls(ctx, toolsmap, &model.LLMResponse{
-				Content: &genai.Content{Parts: parts, Role: genai.RoleUser},
+				Content: &model.Content{Parts: parts, Role: model.RoleUser},
 			}, toolsToResumeConfirmation)
 			if !yield(ev, err) {
 				return

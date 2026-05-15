@@ -26,8 +26,8 @@ import (
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/internal/llminternal"
-	"google.golang.org/adk/internal/llminternal/converters"
 	"google.golang.org/adk/internal/llminternal/googlellm"
+	modelconv "google.golang.org/adk/internal/modelconv/genai"
 	"google.golang.org/adk/internal/version"
 	"google.golang.org/adk/model"
 )
@@ -88,10 +88,10 @@ func (m *geminiModel) Name() string {
 func (m *geminiModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	m.maybeAppendUserContent(req)
 	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
+		req.Config = &model.GenerateConfig{}
 	}
 	if req.Config.HTTPOptions == nil {
-		req.Config.HTTPOptions = &genai.HTTPOptions{}
+		req.Config.HTTPOptions = &model.HTTPOptions{}
 	}
 	if req.Config.HTTPOptions.Headers == nil {
 		req.Config.HTTPOptions.Headers = make(http.Header)
@@ -126,7 +126,7 @@ func (m *geminiModel) modelName(req *model.LLMRequest) string {
 
 // generate calls the model synchronously returning result from the first candidate.
 func (m *geminiModel) generate(ctx context.Context, req *model.LLMRequest) (*model.LLMResponse, error) {
-	resp, err := m.client.Models.GenerateContent(ctx, m.modelName(req), req.Contents, req.Config)
+	resp, err := m.client.Models.GenerateContent(ctx, m.modelName(req), modelconv.ToGenaiContents(req.Contents), modelconv.ToGenaiConfig(req.Config))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call model: %w", err)
 	}
@@ -134,7 +134,7 @@ func (m *geminiModel) generate(ctx context.Context, req *model.LLMRequest) (*mod
 		// shouldn't happen?
 		return nil, fmt.Errorf("empty response")
 	}
-	return converters.Genai2LLMResponse(resp), nil
+	return modelconv.FromGenaiGenerateContentResponse(resp), nil
 }
 
 // generateStream returns a stream of responses from the model.
@@ -142,12 +142,16 @@ func (m *geminiModel) generateStream(ctx context.Context, req *model.LLMRequest)
 	aggregator := llminternal.NewStreamingResponseAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
-		for resp, err := range m.client.Models.GenerateContentStream(ctx, m.modelName(req), req.Contents, req.Config) {
+		for resp, err := range m.client.Models.GenerateContentStream(ctx, m.modelName(req), modelconv.ToGenaiContents(req.Contents), modelconv.ToGenaiConfig(req.Config)) {
 			if err != nil {
 				yield(nil, err)
 				return
 			}
-			for llmResponse, err := range aggregator.ProcessResponse(ctx, resp) {
+			llmResp := modelconv.FromGenaiGenerateContentResponse(resp)
+			if len(resp.Candidates) > 0 && resp.Candidates[0] != nil {
+				llmResp.TurnComplete = resp.Candidates[0].FinishReason != ""
+			}
+			for llmResponse, err := range aggregator.ProcessResponse(ctx, llmResp) {
 				if !yield(llmResponse, err) {
 					return // Consumer stopped
 				}
@@ -162,11 +166,11 @@ func (m *geminiModel) generateStream(ctx context.Context, req *model.LLMRequest)
 // maybeAppendUserContent appends a user content, so that model can continue to output.
 func (m *geminiModel) maybeAppendUserContent(req *model.LLMRequest) {
 	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Handle the requests as specified in the System Instruction.", "user"))
+		req.Contents = append(req.Contents, model.NewContentFromText("Handle the requests as specified in the System Instruction.", model.RoleUser))
 	}
 
 	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != "user" {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", "user"))
+		req.Contents = append(req.Contents, model.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", model.RoleUser))
 	}
 }
 
@@ -189,11 +193,18 @@ func (h *mergeHeadersInterceptor) RoundTrip(req *http.Request) (*http.Response, 
 	return h.base.RoundTrip(req)
 }
 
-func (m *geminiModel) GetGoogleLLMVariant() genai.Backend {
+func (m *geminiModel) GetGoogleLLMVariant() model.Backend {
 	if m == nil || m.client == nil {
-		return genai.BackendUnspecified
+		return model.BackendUnspecified
 	}
-	return m.client.ClientConfig().Backend
+	switch m.client.ClientConfig().Backend {
+	case genai.BackendGeminiAPI:
+		return model.BackendGeminiAPI
+	case genai.BackendVertexAI:
+		return model.BackendVertexAI
+	default:
+		return model.BackendUnspecified
+	}
 }
 
 var _ googlellm.GoogleLLM = &geminiModel{}

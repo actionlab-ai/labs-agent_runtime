@@ -29,7 +29,7 @@
 package plugin
 
 import (
-	"google.golang.org/genai"
+	"google.golang.org/adk/model"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -172,9 +172,9 @@ func (p *Plugin) OnToolErrorCallback() llmagent.OnToolErrorCallback {
 	return p.onToolErrorCallback
 }
 
-type OnUserMessageCallback func(agent.InvocationContext, *genai.Content) (*genai.Content, error)
+type OnUserMessageCallback func(agent.InvocationContext, *model.Content) (*model.Content, error)
 
-type BeforeRunCallback func(agent.InvocationContext) (*genai.Content, error)
+type BeforeRunCallback func(agent.InvocationContext) (*model.Content, error)
 
 type AfterRunCallback func(agent.InvocationContext)
 

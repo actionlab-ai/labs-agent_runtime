@@ -28,7 +28,7 @@
 package adka2a
 
 import (
-	"google.golang.org/genai"
+	"google.golang.org/adk/model"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/plugin"
@@ -45,7 +45,7 @@ func newExecutorPlugin() (*executorPlugin, error) {
 	execPlugin := &executorPlugin{}
 	plugin, err := plugin.New(plugin.Config{
 		Name: "a2a-executor",
-		BeforeRunCallback: func(ic agent.InvocationContext) (*genai.Content, error) {
+		BeforeRunCallback: func(ic agent.InvocationContext) (*model.Content, error) {
 			execPlugin.invocationSession = ic.Session()
 			return nil, nil
 		},

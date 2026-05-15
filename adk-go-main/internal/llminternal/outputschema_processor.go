@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"iter"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/llminternal/googlellm"
 	"google.golang.org/adk/internal/toolinternal/toolutils"
@@ -70,9 +68,9 @@ func createFinalModelResponseEvent(invocationContext agent.InvocationContext, re
 	finalEvent := session.NewEvent(invocationContext.InvocationID())
 	finalEvent.Author = invocationContext.Agent().Name()
 	finalEvent.Branch = invocationContext.Branch()
-	finalEvent.Content = &genai.Content{
+	finalEvent.Content = &model.Content{
 		Role:  "model",
-		Parts: []*genai.Part{{Text: response}},
+		Parts: []*model.Part{{Text: response}},
 	}
 	return finalEvent
 }
@@ -106,7 +104,7 @@ func needOutputSchemaProcessor(state *State) bool {
 
 // setModelResponseTool implements tool.Tool and toolinternal.FunctionTool.
 type setModelResponseTool struct {
-	schema *genai.Schema
+	schema *model.Schema
 }
 
 func (t *setModelResponseTool) Name() string {
@@ -121,8 +119,8 @@ func (t *setModelResponseTool) IsLongRunning() bool {
 	return false
 }
 
-func (t *setModelResponseTool) Declaration() *genai.FunctionDeclaration {
-	return &genai.FunctionDeclaration{
+func (t *setModelResponseTool) Declaration() *model.FunctionDeclaration {
+	return &model.FunctionDeclaration{
 		Name:                 t.Name(),
 		Description:          t.Description(),
 		ParametersJsonSchema: t.schema,

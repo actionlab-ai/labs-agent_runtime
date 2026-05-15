@@ -16,11 +16,11 @@ package remoteagent
 
 import (
 	"fmt"
+	"google.golang.org/adk/model"
 	"slices"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/log"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/server/adka2a/v2"
@@ -65,7 +65,7 @@ func isFunctionCallEvent(event *session.Event, callID string) bool {
 	if event == nil || event.Content == nil {
 		return false
 	}
-	return slices.ContainsFunc(event.Content.Parts, func(part *genai.Part) bool {
+	return slices.ContainsFunc(event.Content.Parts, func(part *model.Part) bool {
 		return part.FunctionCall != nil && part.FunctionCall.ID == callID
 	})
 }
@@ -75,7 +75,7 @@ func getFunctionResponseCallID(event *session.Event) (string, bool) {
 	if event.Content == nil {
 		return "", false
 	}
-	responsePartIndex := slices.IndexFunc(event.Content.Parts, func(part *genai.Part) bool {
+	responsePartIndex := slices.IndexFunc(event.Content.Parts, func(part *model.Part) bool {
 		return part.FunctionResponse != nil
 	})
 	if responsePartIndex < 0 {
@@ -133,29 +133,29 @@ func presentAsUserMessage(ctx agent.InvocationContext, agentEvent *session.Event
 		return event
 	}
 
-	parts := make([]*genai.Part, 0, len(agentEvent.Content.Parts)+1)
-	parts = append(parts, &genai.Part{Text: "For context:"})
+	parts := make([]*model.Part, 0, len(agentEvent.Content.Parts)+1)
+	parts = append(parts, &model.Part{Text: "For context:"})
 	for _, part := range agentEvent.Content.Parts {
 		if part.Thought {
 			continue
 		}
 		if part.Text != "" {
 			text := fmt.Sprintf("[%s] said: %s", agentEvent.Author, part.Text)
-			parts = append(parts, genai.NewPartFromText(text))
+			parts = append(parts, model.NewPartFromText(text))
 		} else if part.FunctionCall != nil {
 			call := part.FunctionCall
 			text := fmt.Sprintf("[%s] called tool %s with parameters: %v", agentEvent.Author, call.Name, call.Args)
-			parts = append(parts, genai.NewPartFromText(text))
+			parts = append(parts, model.NewPartFromText(text))
 		} else if part.FunctionResponse != nil {
 			resp := part.FunctionResponse
 			text := fmt.Sprintf("[%s] %s tool returned result: %v", agentEvent.Author, resp.Name, resp.Response)
-			parts = append(parts, genai.NewPartFromText(text))
+			parts = append(parts, model.NewPartFromText(text))
 		} else {
 			parts = append(parts, part)
 		}
 	}
 	if len(parts) > 1 { // not only "For context:" part
-		event.Content = genai.NewContentFromParts(parts, genai.RoleUser)
+		event.Content = model.NewContentFromParts(parts, model.RoleUser)
 	}
 	return event
 }

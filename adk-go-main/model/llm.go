@@ -18,8 +18,6 @@ package model
 import (
 	"context"
 	"iter"
-
-	"google.golang.org/genai"
 )
 
 // ADK 不关心你后面接的是 Gemini、OpenAI、Qwen、DeepSeek、LiteLLM 还是本地模型。
@@ -37,8 +35,8 @@ type LLM interface {
 // Config.Tools：给模型看的工具 schema
 // Tools：给 ADK 自己执行的 Go 工具实例
 type LLMRequest struct {
-	Model    string           // 这次实际要用的模型。如果为空，就用 NewModel(...) 时创建模型对象的默认名称。这意味着 ADK 支持 callback 在调用前改模型：默认模型：qwen_qwen3.5-397b-a17b，BeforeModelCallback 里可以改成 deepseek-v4-flash
-	Contents []*genai.Content // 这是模型上下文。它不是普通字符串，而是 ADK 当前复用的内部统一消息格式。
+	Model    string     // 这次实际要用的模型。如果为空，就用 NewModel(...) 时创建模型对象的默认名称。这意味着 ADK 支持 callback 在调用前改模型：默认模型：qwen_qwen3.5-397b-a17b，BeforeModelCallback 里可以改成 deepseek-v4-flash
+	Contents []*Content // 这是模型上下文。它不是普通字符串，而是 ADK 当前复用的内部统一消息格式。
 	/*
 		SystemInstruction    系统提示词
 		Temperature          温度
@@ -50,7 +48,7 @@ type LLMRequest struct {
 	*/
 	// 对 OpenAI-compatible 最重要的是这两个：Config.SystemInstruction / Config.Tools
 	// 也就是：SystemInstruction -> OpenAI messages[0] role=system / Tools             -> OpenAI tools
-	Config *genai.GenerateContentConfig
+	Config *GenerateConfig
 	Tools  map[string]any `json:"-"` // 这个字段有：`json:"-"`,说明它不会发给模型。它是 ADK Runtime 内部用的，主要为了保留真实工具对象。
 }
 
@@ -64,7 +62,7 @@ FinishReason = "stop"
 ---------------------
 工具调用响应：
 Content.Role = "model"
-Content.Parts[0].FunctionCall = &genai.FunctionCall{
+Content.Parts[0].FunctionCall = &FunctionCall{
     ID: "call_001",
     Name: "get_weather",
     Args: map[string]any{"city": "Beijing"},
@@ -72,12 +70,12 @@ Content.Parts[0].FunctionCall = &genai.FunctionCall{
 FinishReason = "tool_calls"
 */
 type LLMResponse struct {
-	Content           *genai.Content // 模型输出内容
-	CitationMetadata  *genai.CitationMetadata
-	GroundingMetadata *genai.GroundingMetadata
-	UsageMetadata     *genai.GenerateContentResponseUsageMetadata
+	Content           *Content // 模型输出内容
+	CitationMetadata  *CitationMetadata
+	GroundingMetadata *GroundingMetadata
+	UsageMetadata     *UsageMetadata
 	CustomMetadata    map[string]any
-	LogprobsResult    *genai.LogprobsResult
+	LogprobsResult    *LogprobsResult
 	ModelVersion      string // 实际模型名
 	// Partial indicates whether the content is part of a unfinished content stream.
 	// Only used for streaming mode and when the content is plain text.
@@ -90,8 +88,8 @@ type LLMResponse struct {
 	// Flag indicating that LLM was interrupted when generating the content.
 	// Usually it is due to user interruption during a bidi streaming.
 	Interrupted  bool
-	ErrorCode    string             // 错误码
-	ErrorMessage string             // 错误信息
-	FinishReason genai.FinishReason //  stop / tool_calls / safety 等
+	ErrorCode    string       // 错误码
+	ErrorMessage string       // 错误信息
+	FinishReason FinishReason //  stop / tool_calls / safety 等
 	AvgLogprobs  float64
 }

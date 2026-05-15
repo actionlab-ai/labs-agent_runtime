@@ -32,8 +32,6 @@ import (
 	"fmt"
 	"maps"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/plugin"
@@ -41,7 +39,7 @@ import (
 
 type FunctionCallModifierConfig struct {
 	Predicate           func(toolName string) bool
-	Args                map[string]*genai.Schema
+	Args                map[string]*model.Schema
 	OverrideDescription func(originalDescription string) string
 }
 
@@ -83,10 +81,10 @@ func beforeModelCallback(cfg FunctionCallModifierConfig) func(agent.CallbackCont
 
 				if shouldAddArgs {
 					if decl.Parameters == nil {
-						decl.Parameters = &genai.Schema{Type: "OBJECT", Properties: map[string]*genai.Schema{}}
+						decl.Parameters = &model.Schema{Type: "OBJECT", Properties: map[string]*model.Schema{}}
 					}
 					if decl.Parameters.Properties == nil {
-						decl.Parameters.Properties = map[string]*genai.Schema{}
+						decl.Parameters.Properties = map[string]*model.Schema{}
 					}
 
 					maps.Copy(decl.Parameters.Properties, cfg.Args)

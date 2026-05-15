@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
 )
@@ -207,14 +205,14 @@ func createEventFromStorageEvent(se *storageEvent) (*session.Event, error) {
 		}
 	}
 
-	var content *genai.Content
+	var content *model.Content
 	if len(se.Content) > 0 {
 		if err := json.Unmarshal(se.Content, &content); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal content: %w", err)
 		}
 	}
 
-	var groundingMetadata *genai.GroundingMetadata
+	var groundingMetadata *model.GroundingMetadata
 	if len(se.GroundingMetadata) > 0 {
 		if err := json.Unmarshal(se.GroundingMetadata, &groundingMetadata); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal grounding metadata: %w", err)
@@ -228,14 +226,14 @@ func createEventFromStorageEvent(se *storageEvent) (*session.Event, error) {
 		}
 	}
 
-	var usageMetadata *genai.GenerateContentResponseUsageMetadata
+	var usageMetadata *model.GenerateContentResponseUsageMetadata
 	if len(se.UsageMetadata) > 0 {
 		if err := json.Unmarshal(se.UsageMetadata, &usageMetadata); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal usage metadata: %w", err)
 		}
 	}
 
-	var citationMetadata *genai.CitationMetadata
+	var citationMetadata *model.CitationMetadata
 	if len(se.CitationMetadata) > 0 {
 		if err := json.Unmarshal(se.CitationMetadata, &citationMetadata); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal citation metadata: %w", err)

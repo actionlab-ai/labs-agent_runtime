@@ -16,9 +16,9 @@ package context
 
 import (
 	"context"
+	"google.golang.org/adk/model"
 
 	"github.com/google/uuid"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/session"
@@ -32,7 +32,7 @@ type InvocationContextParams struct {
 	Branch string
 	Agent  agent.Agent
 
-	UserContent   *genai.Content
+	UserContent   *model.Content
 	RunConfig     *agent.RunConfig
 	EndInvocation bool
 	InvocationID  string
@@ -78,7 +78,7 @@ func (c *InvocationContext) Session() session.Session {
 	return c.params.Session
 }
 
-func (c *InvocationContext) UserContent() *genai.Content {
+func (c *InvocationContext) UserContent() *model.Content {
 	return c.params.UserContent
 }
 

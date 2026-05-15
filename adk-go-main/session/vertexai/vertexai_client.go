@@ -24,7 +24,6 @@ import (
 
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
-	"google.golang.org/genai"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -316,7 +315,7 @@ func (c *vertexAiClient) listSessionEvents(ctx context.Context, appName, session
 			return nil, fmt.Errorf("error fetching session events: %w", err)
 		}
 
-		content := aiplatformToGenaiContent(rpcResp)
+		content := aiplatformToModelContent(rpcResp)
 		id, err := sessionIdBySessionName(rpcResp.Name)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching session events: %w", err)
@@ -440,42 +439,42 @@ func (c *vertexAiClient) getReasoningEngineID(appName string) (string, error) {
 	return matches[1], nil
 }
 
-func aiplatformToGenaiContent(rpcResp *aiplatformpb.SessionEvent) *genai.Content {
+func aiplatformToModelContent(rpcResp *aiplatformpb.SessionEvent) *model.Content {
 	// TODO add logic for other types of parts
-	var content *genai.Content
+	var content *model.Content
 	if rpcResp.Content != nil {
-		var parts []*genai.Part
+		var parts []*model.Part
 		role := rpcResp.Content.Role
 		for _, respPart := range rpcResp.Content.Parts {
-			part := &genai.Part{}
+			part := &model.Part{}
 			part.Thought = respPart.Thought
 			part.ThoughtSignature = respPart.ThoughtSignature
 			switch v := respPart.Data.(type) {
 			case *aiplatformpb.Part_Text:
 				part.Text = v.Text
 			case *aiplatformpb.Part_InlineData:
-				part.InlineData = &genai.Blob{
+				part.InlineData = &model.Blob{
 					MIMEType: v.InlineData.MimeType,
 					Data:     v.InlineData.Data,
 				}
 			case *aiplatformpb.Part_FunctionCall:
 				argsMap := v.FunctionCall.Args.AsMap() // Converts *structpb.Struct -> map[string]any
-				part.FunctionCall = &genai.FunctionCall{
+				part.FunctionCall = &model.FunctionCall{
 					Name: v.FunctionCall.Name,
 					Args: argsMap,
 				}
 			case *aiplatformpb.Part_FunctionResponse:
 				responseMap := v.FunctionResponse.Response.AsMap() // Converts *structpb.Struct -> map[string]any
-				part.FunctionResponse = &genai.FunctionResponse{
+				part.FunctionResponse = &model.FunctionResponse{
 					Name:     v.FunctionResponse.Name,
 					Response: responseMap,
 				}
 			}
 			parts = append(parts, part)
 		}
-		content = &genai.Content{
+		content = &model.Content{
 			Parts: parts,
-			Role:  role,
+			Role:  model.Role(role),
 		}
 	}
 	return content
@@ -531,7 +530,7 @@ func createAiplatformpbContent(event *session.Event) (*aiplatformpb.Content, err
 		}
 		content = &aiplatformpb.Content{
 			Parts: parts,
-			Role:  event.Content.Role,
+			Role:  string(event.Content.Role),
 		}
 	}
 	return content, nil
@@ -663,12 +662,12 @@ func createAiplatformpbMetadata(event *session.Event) (*aiplatformpb.EventMetada
 	return metadata, nil
 }
 
-func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *genai.GroundingMetadata {
+func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *model.GroundingMetadata {
 	if metadata == nil {
 		return nil
 	}
 
-	out := &genai.GroundingMetadata{
+	out := &model.GroundingMetadata{
 		WebSearchQueries: metadata.WebSearchQueries,
 		RetrievalQueries: metadata.RetrievalQueries,
 	}
@@ -678,7 +677,7 @@ func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *genai.Gr
 
 	// Search Entry Point
 	if metadata.SearchEntryPoint != nil {
-		out.SearchEntryPoint = &genai.SearchEntryPoint{
+		out.SearchEntryPoint = &model.SearchEntryPoint{
 			RenderedContent: metadata.SearchEntryPoint.RenderedContent,
 			SDKBlob:         metadata.SearchEntryPoint.SdkBlob,
 		}
@@ -686,20 +685,20 @@ func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *genai.Gr
 
 	// Retrieval Metadata
 	if metadata.RetrievalMetadata != nil {
-		out.RetrievalMetadata = &genai.RetrievalMetadata{
+		out.RetrievalMetadata = &model.RetrievalMetadata{
 			GoogleSearchDynamicRetrievalScore: metadata.RetrievalMetadata.GoogleSearchDynamicRetrievalScore,
 		}
 	}
 
 	// Grounding Chunks
 	if len(metadata.GroundingChunks) > 0 {
-		var chunks []*genai.GroundingChunk
+		var chunks []*model.GroundingChunk
 		for _, chunk := range metadata.GroundingChunks {
-			newChunk := &genai.GroundingChunk{}
+			newChunk := &model.GroundingChunk{}
 
 			// Handle 'Maps' Chunk
 			if maps := chunk.GetMaps(); maps != nil {
-				newMaps := &genai.GroundingChunkMaps{
+				newMaps := &model.GroundingChunkMaps{
 					URI:     derefString(maps.Uri),
 					Title:   derefString(maps.Title),
 					Text:    derefString(maps.Text),
@@ -707,9 +706,9 @@ func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *genai.Gr
 				}
 
 				if maps.PlaceAnswerSources != nil {
-					newMaps.PlaceAnswerSources = &genai.GroundingChunkMapsPlaceAnswerSources{}
+					newMaps.PlaceAnswerSources = &model.GroundingChunkMapsPlaceAnswerSources{}
 					for _, snippet := range maps.PlaceAnswerSources.ReviewSnippets {
-						newSnippet := &genai.GroundingChunkMapsPlaceAnswerSourcesReviewSnippet{
+						newSnippet := &model.GroundingChunkMapsPlaceAnswerSourcesReviewSnippet{
 							Review:        snippet.ReviewId,
 							GoogleMapsURI: snippet.GoogleMapsUri,
 						}
@@ -721,7 +720,7 @@ func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *genai.Gr
 
 			// Handle 'RetrievedContext' Chunk
 			if rc := chunk.GetRetrievedContext(); rc != nil {
-				newRC := &genai.GroundingChunkRetrievedContext{
+				newRC := &model.GroundingChunkRetrievedContext{
 					URI:          derefString(rc.Uri),
 					Title:        derefString(rc.Title),
 					Text:         derefString(rc.Text),
@@ -730,11 +729,11 @@ func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *genai.Gr
 
 				// Handle RAG Chunk (oneof in pb, usually a nested struct in genai)
 				if rag := rc.GetRagChunk(); rag != nil {
-					newRC.RAGChunk = &genai.RAGChunk{
+					newRC.RAGChunk = &model.RAGChunk{
 						Text: rag.Text,
 					}
 					if rag.PageSpan != nil {
-						newRC.RAGChunk.PageSpan = &genai.RAGChunkPageSpan{
+						newRC.RAGChunk.PageSpan = &model.RAGChunkPageSpan{
 							FirstPage: rag.PageSpan.FirstPage,
 							LastPage:  rag.PageSpan.LastPage,
 						}
@@ -745,7 +744,7 @@ func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *genai.Gr
 
 			// Handle 'Web' Chunk
 			if web := chunk.GetWeb(); web != nil {
-				newChunk.Web = &genai.GroundingChunkWeb{
+				newChunk.Web = &model.GroundingChunkWeb{
 					URI:   derefString(web.Uri),
 					Title: derefString(web.Title),
 				}
@@ -758,15 +757,15 @@ func createGroundingMetadata(metadata *aiplatformpb.GroundingMetadata) *genai.Gr
 
 	// Grounding Supports
 	if len(metadata.GroundingSupports) > 0 {
-		var supports []*genai.GroundingSupport
+		var supports []*model.GroundingSupport
 		for _, gs := range metadata.GroundingSupports {
-			newSupport := &genai.GroundingSupport{
+			newSupport := &model.GroundingSupport{
 				GroundingChunkIndices: gs.GroundingChunkIndices,
 				ConfidenceScores:      gs.ConfidenceScores,
 			}
 
 			if gs.Segment != nil {
-				newSupport.Segment = &genai.Segment{
+				newSupport.Segment = &model.Segment{
 					PartIndex:  gs.Segment.PartIndex,
 					StartIndex: gs.Segment.StartIndex,
 					EndIndex:   gs.Segment.EndIndex,

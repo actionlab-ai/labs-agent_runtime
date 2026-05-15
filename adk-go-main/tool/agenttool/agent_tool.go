@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/artifact"
 	"google.golang.org/adk/internal/llminternal"
@@ -83,13 +81,13 @@ func (t *agentTool) IsLongRunning() bool {
 // It generates a function declaration based on the agent's input schema.
 // If the agent does not have an input schema, a default schema with a
 // "request" string parameter is used.
-func (t *agentTool) Declaration() *genai.FunctionDeclaration {
-	decl := &genai.FunctionDeclaration{
+func (t *agentTool) Declaration() *model.FunctionDeclaration {
+	decl := &model.FunctionDeclaration{
 		Name:        t.Name(),
 		Description: t.Description(),
 	}
 
-	var agentInputSchema *genai.Schema
+	var agentInputSchema *model.Schema
 	llmAgent, ok := t.agent.(llminternal.Agent)
 	if ok && llmAgent != nil {
 		// TODO - understand what build_function_declaration does in python and apply if needed.
@@ -103,9 +101,9 @@ func (t *agentTool) Declaration() *genai.FunctionDeclaration {
 	if agentInputSchema != nil {
 		decl.Parameters = agentInputSchema
 	} else {
-		decl.Parameters = &genai.Schema{
+		decl.Parameters = &model.Schema{
 			Type: "OBJECT",
-			Properties: map[string]*genai.Schema{
+			Properties: map[string]*model.Schema{
 				"request": {Type: "STRING"},
 			},
 			Required: []string{"request"},
@@ -130,7 +128,7 @@ func (t *agentTool) Run(toolCtx tool.Context, args any) (map[string]any, error) 
 		}
 	}
 
-	var agentInputSchema *genai.Schema
+	var agentInputSchema *model.Schema
 	llmAgent, ok := t.agent.(llminternal.Agent)
 	isLllmAgent := (ok && llmAgent != nil)
 	if isLllmAgent {
@@ -141,7 +139,7 @@ func (t *agentTool) Run(toolCtx tool.Context, args any) (map[string]any, error) 
 		agentInputSchema = llminternal.Reveal(internalLlmAgent).InputSchema
 	}
 
-	var content *genai.Content
+	var content *model.Content
 	var err error
 	if agentInputSchema != nil {
 		if err = utils.ValidateMapOnSchema(margs, agentInputSchema, true); err != nil {
@@ -151,7 +149,7 @@ func (t *agentTool) Run(toolCtx tool.Context, args any) (map[string]any, error) 
 		if err != nil {
 			return nil, fmt.Errorf("error serializing tool arguments for agent %s: %w", t.agent.Name(), err)
 		}
-		content = genai.NewContentFromText(string(jsonData), genai.RoleUser)
+		content = model.NewContentFromText(string(jsonData), model.RoleUser)
 	} else {
 		input, ok := margs["request"]
 		if !ok {
@@ -162,7 +160,7 @@ func (t *agentTool) Run(toolCtx tool.Context, args any) (map[string]any, error) 
 			// Try to convert to string if not already one
 			inputText = fmt.Sprint(input)
 		}
-		content = genai.NewContentFromText(inputText, genai.RoleUser)
+		content = model.NewContentFromText(inputText, model.RoleUser)
 	}
 
 	sessionService := session.InMemoryService()

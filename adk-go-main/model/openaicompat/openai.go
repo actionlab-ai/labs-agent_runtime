@@ -18,9 +18,9 @@
 // 业务说明：
 //
 //	ADK Go 的核心运行时只依赖 model.LLM 接口，不强绑定 Gemini。
-//	这个适配器把 ADK 内部的 genai.Content / FunctionDeclaration 转换成
+//	这个适配器把 ADK 内部的 model.Content / FunctionDeclaration 转换成
 //	OpenAI Chat Completions 的 messages / tools，再把模型返回的文本或
-//	tool_calls 转回 ADK 的 genai.Content。这样自建 OpenAI 格式模型可以
+//	tool_calls 转回 ADK 的 model.Content。这样自建 OpenAI 格式模型可以
 //	参与 Runner、Session、Tool Calling、REST/SSE 等完整链路。
 //
 // 设计原则：
@@ -45,8 +45,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/model"
 )
@@ -73,7 +71,7 @@ var (
 	// 可通过 errors.Is(err, ErrAPIResponse) 判断。
 	ErrAPIResponse = errors.New("openai-compatible endpoint returned api error")
 
-	// ErrUnsupportedPart 表示 ADK genai.Part 中存在当前适配器还不能转换成 OpenAI messages 的内容。
+	// ErrUnsupportedPart 表示 ADK model.Part 中存在当前适配器还不能转换成 OpenAI messages 的内容。
 	//
 	// 常见场景：InlineData、FileData、ExecutableCode 等多模态/代码执行类型。
 	ErrUnsupportedPart = errors.New("unsupported genai part for openai-compatible adapter")
@@ -617,7 +615,7 @@ func (a *streamAccumulator) AddChunk(chunk *chatCompletionStreamChunk) ([]*model
 		if choice.Delta.Content != "" {
 			a.text.WriteString(choice.Delta.Content)
 			out = append(out, &model.LLMResponse{
-				Content:      &genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{genai.NewPartFromText(choice.Delta.Content)}},
+				Content:      &model.Content{Role: model.RoleModel, Parts: []*model.Part{model.NewPartFromText(choice.Delta.Content)}},
 				ModelVersion: a.modelVersion,
 				Partial:      true,
 			})
@@ -651,9 +649,9 @@ func (a *streamAccumulator) FinalResponse() (*model.LLMResponse, error) {
 		return nil, fmt.Errorf("%w: empty streaming response", ErrEmptyResponse)
 	}
 
-	parts := make([]*genai.Part, 0, 1+len(a.toolOrder))
+	parts := make([]*model.Part, 0, 1+len(a.toolOrder))
 	if a.text.Len() > 0 {
-		parts = append(parts, genai.NewPartFromText(a.text.String()))
+		parts = append(parts, model.NewPartFromText(a.text.String()))
 	}
 	for _, idx := range a.toolOrder {
 		entry := a.toolCalls[idx]
@@ -671,10 +669,10 @@ func (a *streamAccumulator) FinalResponse() (*model.LLMResponse, error) {
 		if id == "" {
 			id = "call_" + entry.Name
 		}
-		parts = append(parts, &genai.Part{FunctionCall: &genai.FunctionCall{ID: id, Name: entry.Name, Args: args}})
+		parts = append(parts, &model.Part{FunctionCall: &model.FunctionCall{ID: id, Name: entry.Name, Args: args}})
 	}
 	if len(parts) == 0 {
-		parts = append(parts, genai.NewPartFromText(""))
+		parts = append(parts, model.NewPartFromText(""))
 	}
 
 	finishReason := a.finishReason
@@ -701,9 +699,9 @@ func (a *streamAccumulator) FinalResponse() (*model.LLMResponse, error) {
 	}
 
 	return &model.LLMResponse{
-		Content:        &genai.Content{Role: genai.RoleModel, Parts: parts},
+		Content:        &model.Content{Role: model.RoleModel, Parts: parts},
 		ModelVersion:   a.modelVersion,
-		FinishReason:   genai.FinishReason(finishReason),
+		FinishReason:   model.FinishReason(finishReason),
 		TurnComplete:   true,
 		CustomMetadata: customMetadata,
 	}, nil
@@ -770,7 +768,7 @@ func maybeAppendContinuationPrompt(messages []chatMessage) []chatMessage {
 	return messages
 }
 
-func messagesFromContent(c *genai.Content) ([]chatMessage, error) {
+func messagesFromContent(c *model.Content) ([]chatMessage, error) {
 	if c == nil || len(c.Parts) == 0 {
 		return nil, nil
 	}
@@ -843,7 +841,7 @@ func messagesFromContent(c *genai.Content) ([]chatMessage, error) {
 	return out, nil
 }
 
-func openAIRole(role string) string {
+func openAIRole(role model.Role) string {
 	switch role {
 	case "model":
 		return "assistant"
@@ -857,7 +855,7 @@ func openAIRole(role string) string {
 	}
 }
 
-func contentTextStrict(c *genai.Content) (string, error) {
+func contentTextStrict(c *model.Content) (string, error) {
 	if c == nil {
 		return "", nil
 	}
@@ -878,7 +876,7 @@ func contentTextStrict(c *genai.Content) (string, error) {
 	return strings.Join(parts, "\n"), nil
 }
 
-func toolsFromConfig(cfg *genai.GenerateContentConfig) ([]chatTool, error) {
+func toolsFromConfig(cfg *model.GenerateContentConfig) ([]chatTool, error) {
 	if cfg == nil {
 		return nil, nil
 	}
@@ -926,9 +924,9 @@ func toADKResponse(resp *chatCompletionResponse) (*model.LLMResponse, error) {
 	choice := resp.Choices[0]
 	msg := choice.Message
 
-	parts := make([]*genai.Part, 0, 1+len(msg.ToolCalls))
+	parts := make([]*model.Part, 0, 1+len(msg.ToolCalls))
 	if msg.Content != "" {
-		parts = append(parts, genai.NewPartFromText(msg.Content))
+		parts = append(parts, model.NewPartFromText(msg.Content))
 	}
 	for _, tc := range msg.ToolCalls {
 		args := map[string]any{}
@@ -939,14 +937,14 @@ func toADKResponse(resp *chatCompletionResponse) (*model.LLMResponse, error) {
 				args = map[string]any{"_raw_arguments": tc.Function.Arguments}
 			}
 		}
-		parts = append(parts, &genai.Part{FunctionCall: &genai.FunctionCall{
+		parts = append(parts, &model.Part{FunctionCall: &model.FunctionCall{
 			ID:   tc.ID,
 			Name: tc.Function.Name,
 			Args: args,
 		}})
 	}
 	if len(parts) == 0 {
-		parts = append(parts, genai.NewPartFromText(""))
+		parts = append(parts, model.NewPartFromText(""))
 	}
 
 	finishReason := choice.FinishReason
@@ -973,12 +971,12 @@ func toADKResponse(resp *chatCompletionResponse) (*model.LLMResponse, error) {
 	}
 
 	return &model.LLMResponse{
-		Content: &genai.Content{
-			Role:  genai.RoleModel,
+		Content: &model.Content{
+			Role:  model.RoleModel,
 			Parts: parts,
 		},
 		ModelVersion:   resp.Model,
-		FinishReason:   genai.FinishReason(finishReason),
+		FinishReason:   model.FinishReason(finishReason),
 		CustomMetadata: customMetadata,
 	}, nil
 }
@@ -1010,7 +1008,7 @@ func cloneJSONValue(v any) (any, error) {
 	return out, nil
 }
 
-func isEmptyPart(part *genai.Part) bool {
+func isEmptyPart(part *model.Part) bool {
 	if part == nil {
 		return true
 	}

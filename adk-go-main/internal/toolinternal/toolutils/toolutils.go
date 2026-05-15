@@ -18,14 +18,12 @@ package toolutils
 import (
 	"fmt"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/model"
 )
 
 type Tool interface {
 	Name() string
-	Declaration() *genai.FunctionDeclaration
+	Declaration() *model.FunctionDeclaration
 }
 
 // The PackTool ensures that in case there is a usage of multiple function tools,
@@ -45,13 +43,13 @@ func PackTool(req *model.LLMRequest, tool Tool) error {
 	req.Tools[name] = tool
 
 	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
+		req.Config = &model.GenerateContentConfig{}
 	}
 	if decl := tool.Declaration(); decl == nil {
 		return nil
 	}
-	// Find an existing genai.Tool with FunctionDeclarations
-	var funcTool *genai.Tool
+	// Find an existing model.Tool with FunctionDeclarations
+	var funcTool *model.Tool
 	for _, tool := range req.Config.Tools {
 		if tool != nil && tool.FunctionDeclarations != nil {
 			funcTool = tool
@@ -59,8 +57,8 @@ func PackTool(req *model.LLMRequest, tool Tool) error {
 		}
 	}
 	if funcTool == nil {
-		req.Config.Tools = append(req.Config.Tools, &genai.Tool{
-			FunctionDeclarations: []*genai.FunctionDeclaration{tool.Declaration()},
+		req.Config.Tools = append(req.Config.Tools, &model.Tool{
+			FunctionDeclarations: []*model.FunctionDeclaration{tool.Declaration()},
 		})
 	} else {
 		funcTool.FunctionDeclarations = append(funcTool.FunctionDeclarations, tool.Declaration())

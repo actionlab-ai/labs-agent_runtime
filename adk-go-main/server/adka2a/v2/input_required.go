@@ -30,12 +30,12 @@ package adka2a
 import (
 	"context"
 	"fmt"
+	"google.golang.org/adk/model"
 	"slices"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	"github.com/a2aproject/a2a-go/v2/log"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/session"
@@ -46,7 +46,7 @@ type inputRequiredProcessor struct {
 	event         *a2a.TaskStatusUpdateEvent
 	partConverter GenAIPartConverter
 	// handles possible duplication in partial and non-partial events
-	addedParts []*genai.Part
+	addedParts []*model.Part
 }
 
 func newInputRequiredProcessor(reqCtx *a2asrv.ExecutorContext, partConverter GenAIPartConverter) *inputRequiredProcessor {
@@ -63,8 +63,8 @@ func (p *inputRequiredProcessor) process(ctx context.Context, event *session.Eve
 	}
 
 	var longRunningCallIDs []string
-	var inputRequiredParts []*genai.Part
-	var remainingParts []*genai.Part
+	var inputRequiredParts []*model.Part
+	var remainingParts []*model.Part
 	for _, part := range resp.Content.Parts {
 		callID := ""
 		if part.FunctionCall != nil && slices.Contains(event.LongRunningToolIDs, part.FunctionCall.ID) {
@@ -77,7 +77,7 @@ func (p *inputRequiredProcessor) process(ctx context.Context, event *session.Eve
 			remainingParts = append(remainingParts, part)
 			continue
 		}
-		added := slices.ContainsFunc(p.addedParts, func(p *genai.Part) bool {
+		added := slices.ContainsFunc(p.addedParts, func(p *model.Part) bool {
 			if part.FunctionCall != nil && p.FunctionCall != nil && part.FunctionCall.ID == p.FunctionCall.ID {
 				return true
 			}
@@ -118,7 +118,7 @@ func (p *inputRequiredProcessor) process(ctx context.Context, event *session.Eve
 	return &modifiedEvent, nil
 }
 
-func (p *inputRequiredProcessor) convertParts(ctx context.Context, event *session.Event, parts []*genai.Part, longRunningCallIDs []string) ([]*a2a.Part, error) {
+func (p *inputRequiredProcessor) convertParts(ctx context.Context, event *session.Event, parts []*model.Part, longRunningCallIDs []string) ([]*a2a.Part, error) {
 	if p.partConverter == nil {
 		return ToA2AParts(parts, longRunningCallIDs)
 	}
@@ -136,7 +136,7 @@ func (p *inputRequiredProcessor) convertParts(ctx context.Context, event *sessio
 	return converted, nil
 }
 
-func (p *inputRequiredProcessor) isLongRunningResponse(event *session.Event, part *genai.Part) bool {
+func (p *inputRequiredProcessor) isLongRunningResponse(event *session.Event, part *model.Part) bool {
 	if part.FunctionResponse == nil {
 		return false
 	}
@@ -162,7 +162,7 @@ func (p *inputRequiredProcessor) isLongRunningResponse(event *session.Event, par
 // HandleInputRequired checks if the input message contains responses to all function calls
 // that happened during the previous invocation and were recorded in the Task input-required state message.
 // If a non-nil event is returned the invoking code needs to use the event as the result of the execution
-func HandleInputRequired(reqCtx *a2asrv.ExecutorContext, content *genai.Content) (*a2a.TaskStatusUpdateEvent, error) {
+func HandleInputRequired(reqCtx *a2asrv.ExecutorContext, content *model.Content) (*a2a.TaskStatusUpdateEvent, error) {
 	if reqCtx.StoredTask == nil {
 		return nil, nil
 	}
@@ -180,7 +180,7 @@ func HandleInputRequired(reqCtx *a2asrv.ExecutorContext, content *genai.Content)
 		if statusPart.FunctionCall == nil {
 			continue
 		}
-		hasMatchingResponse := slices.ContainsFunc(content.Parts, func(p *genai.Part) bool {
+		hasMatchingResponse := slices.ContainsFunc(content.Parts, func(p *model.Part) bool {
 			return p.FunctionResponse != nil && p.FunctionResponse.ID == statusPart.FunctionCall.ID
 		})
 		if !hasMatchingResponse {

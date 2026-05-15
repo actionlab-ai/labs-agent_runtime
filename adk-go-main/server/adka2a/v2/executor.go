@@ -18,14 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/adk/model"
 	"iter"
 	"slices"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	"github.com/a2aproject/a2a-go/v2/log"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	iremoteagent "google.golang.org/adk/internal/agent/remoteagent"
@@ -46,12 +45,12 @@ type AfterExecuteCallback func(ctx ExecutorContext, finalEvent *a2a.TaskStatusUp
 // A2APartConverter is a custom converter for converting A2A parts to GenAI parts.
 // Implementations should generally remember to leverage adka2a.ToGenAiPart for default conversions
 // nil returns are considered intentionally dropped parts.
-type A2APartConverter func(ctx context.Context, a2aEvent a2a.Event, part *a2a.Part) (*genai.Part, error)
+type A2APartConverter func(ctx context.Context, a2aEvent a2a.Event, part *a2a.Part) (*model.Part, error)
 
 // GenAIPartConverter is a custom converter for converting GenAI parts to A2A parts.
 // Implementations should generally remember to leverage adka2a.ToA2APart for default conversions
 // nil returns are considered intentionally dropped parts.
-type GenAIPartConverter func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (*a2a.Part, error)
+type GenAIPartConverter func(ctx context.Context, adkEvent *session.Event, part *model.Part) (*a2a.Part, error)
 
 // A2AExecutionCleanupCallback is a callback which will be called after an execution or cancellation has completed or failed.
 type A2AExecutionCleanupCallback func(ctx context.Context, reqCtx *a2asrv.ExecutorContext, subAgentCards []*a2a.AgentCard, result a2a.SendMessageResult, cause error)
@@ -73,7 +72,7 @@ const (
 // It exists to let users use custom runner implementations with A2A agent executor.
 type Runner interface {
 	// Run runs the agent for the given user input, yielding events from agents.
-	Run(ctx context.Context, userID, sessionID string, msg *genai.Content, cfg agent.RunConfig) iter.Seq2[*session.Event, error]
+	Run(ctx context.Context, userID, sessionID string, msg *model.Content, cfg agent.RunConfig) iter.Seq2[*session.Event, error]
 }
 
 // RunnerProvider is a [Runner] factory function. The provided plugin must be installed in the returned [Runner] for
@@ -450,7 +449,7 @@ type defaultRunner struct {
 	runner *runner.Runner
 }
 
-func (r *defaultRunner) Run(ctx context.Context, userID, sessionID string, msg *genai.Content, cfg agent.RunConfig) iter.Seq2[*session.Event, error] {
+func (r *defaultRunner) Run(ctx context.Context, userID, sessionID string, msg *model.Content, cfg agent.RunConfig) iter.Seq2[*session.Event, error] {
 	return r.runner.Run(ctx, userID, sessionID, msg, cfg)
 }
 

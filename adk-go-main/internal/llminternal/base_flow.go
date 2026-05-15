@@ -25,7 +25,6 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/agent/parentmap"
@@ -547,7 +546,7 @@ func (f *Flow) finalizeModelResponseEvent(ctx agent.InvocationContext, resp *res
 
 // findLongRunningFunctionCallIDs iterates over the FunctionCalls and
 // returns the callIDs of the long running functions
-func findLongRunningFunctionCallIDs(c *genai.Content, tools map[string]tool.Tool) []string {
+func findLongRunningFunctionCallIDs(c *model.Content, tools map[string]tool.Tool) []string {
 	set := make(map[string]struct{})
 	// Iterate over function calls.
 	for _, fc := range utils.FunctionCalls(c) {
@@ -612,7 +611,7 @@ func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[st
 
 	for i, fnCall := range fnCalls {
 		wg.Add(1)
-		go func(i int, fnCall *genai.FunctionCall) {
+		go func(i int, fnCall *model.FunctionCall) {
 			defer wg.Done()
 
 			sctx, span := telemetry.StartExecuteToolSpan(ctx, telemetry.StartExecuteToolSpanParams{
@@ -648,11 +647,11 @@ func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[st
 			// TODO: handle long-running tool.
 			ev := session.NewEvent(ctx.InvocationID())
 			ev.LLMResponse = model.LLMResponse{
-				Content: &genai.Content{
+				Content: &model.Content{
 					Role: "user",
-					Parts: []*genai.Part{
+					Parts: []*model.Part{
 						{
-							FunctionResponse: &genai.FunctionResponse{
+							FunctionResponse: &model.FunctionResponse{
 								ID:       fnCall.ID,
 								Name:     fnCall.Name,
 								Response: result,
@@ -808,7 +807,7 @@ func mergeParallelFunctionResponseEvents(events []*session.Event) (*session.Even
 	case 1:
 		return events[0], nil
 	}
-	var parts []*genai.Part
+	var parts []*model.Part
 	var actions *session.EventActions
 	for _, ev := range events {
 		if ev == nil || ev.LLMResponse.Content == nil {
@@ -820,7 +819,7 @@ func mergeParallelFunctionResponseEvents(events []*session.Event) (*session.Even
 	// reuse events[0]
 	ev := events[0]
 	ev.LLMResponse = model.LLMResponse{
-		Content: &genai.Content{
+		Content: &model.Content{
 			Role:  "user",
 			Parts: parts,
 		},

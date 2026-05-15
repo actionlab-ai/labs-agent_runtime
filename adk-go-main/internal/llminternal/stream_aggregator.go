@@ -22,9 +22,6 @@ import (
 	"reflect"
 	"strings"
 
-	"google.golang.org/genai"
-
-	"google.golang.org/adk/internal/llminternal/converters"
 	"google.golang.org/adk/model"
 )
 
@@ -32,17 +29,17 @@ import (
 // It aggregates content from partial responses, and generates LlmResponses for
 // individual (partial) model responses, as well as for aggregated content.
 type streamingResponseAggregator struct {
-	usageMetadata     *genai.GenerateContentResponseUsageMetadata
-	groundingMetadata *genai.GroundingMetadata
-	citationMetadata  *genai.CitationMetadata
+	usageMetadata     *model.UsageMetadata
+	groundingMetadata *model.GroundingMetadata
+	citationMetadata  *model.CitationMetadata
 	response          *model.LLMResponse
 
 	currentThoughtSignature []byte
 
-	sequence             []*genai.Part
+	sequence             []*model.Part
 	currentTextBuffer    string
 	currentTextIsThought bool
-	finishReason         genai.FinishReason
+	finishReason         model.FinishReason
 
 	currentFunctionName             string
 	currentFunctionID               string
@@ -55,18 +52,13 @@ func NewStreamingResponseAggregator() *streamingResponseAggregator {
 	return &streamingResponseAggregator{}
 }
 
-// ProcessResponse transforms the GenerateContentResponse into an model.Response and yields that result,
-// also yielding an aggregated response if the GenerateContentResponse has zero parts or is audio data
-func (s *streamingResponseAggregator) ProcessResponse(ctx context.Context, genResp *genai.GenerateContentResponse) iter.Seq2[*model.LLMResponse, error] {
+// ProcessResponse yields an ADK-owned model response and any aggregate response derived from it.
+func (s *streamingResponseAggregator) ProcessResponse(ctx context.Context, resp *model.LLMResponse) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
-		if len(genResp.Candidates) == 0 {
-			// shouldn't happen?
+		if resp == nil {
 			yield(nil, fmt.Errorf("empty response"))
 			return
 		}
-		candidate := genResp.Candidates[0]
-		resp := converters.Genai2LLMResponse(genResp)
-		resp.TurnComplete = candidate.FinishReason != ""
 		// Aggregate the response and check if an intermediate event to yield was created
 		if aggrResp := s.aggregateResponse(resp); aggrResp != nil {
 			if !yield(aggrResp, nil) {
@@ -128,7 +120,7 @@ func (s *streamingResponseAggregator) aggregateResponse(llmResponse *model.LLMRe
 	return nil
 }
 
-func (s *streamingResponseAggregator) processFunctionCallPart(part *genai.Part) {
+func (s *streamingResponseAggregator) processFunctionCallPart(part *model.Part) {
 	if part.FunctionCall == nil {
 		return
 	}
@@ -150,7 +142,7 @@ func (s *streamingResponseAggregator) processFunctionCallPart(part *genai.Part) 
 }
 
 // Process a streaming function call with partialArgs.
-func (s *streamingResponseAggregator) processStreamingFunctionCallPart(part *genai.Part) {
+func (s *streamingResponseAggregator) processStreamingFunctionCallPart(part *model.Part) {
 	if part.FunctionCall.Name != "" {
 		s.currentFunctionName = part.FunctionCall.Name
 	}
@@ -175,7 +167,7 @@ func (s *streamingResponseAggregator) processStreamingFunctionCallPart(part *gen
 	s.flushFunctionCallToSequence()
 }
 
-func (s *streamingResponseAggregator) getValueFromPartialArg(partialArg *genai.PartialArg, jsonPath string) (any, bool) {
+func (s *streamingResponseAggregator) getValueFromPartialArg(partialArg *model.PartialArg, jsonPath string) (any, bool) {
 	var value any
 	var hasValue bool
 
@@ -269,7 +261,7 @@ func (s *streamingResponseAggregator) setValueByJSONPath(jsonPath string, value 
 func (s *streamingResponseAggregator) flushTextBufferToSequence() {
 	// Check if buffer has content (strings.Builder.Len() is efficient)
 	if s.currentTextBuffer != "" {
-		s.sequence = append(s.sequence, &genai.Part{
+		s.sequence = append(s.sequence, &model.Part{
 			Text:    s.currentTextBuffer,
 			Thought: s.currentTextIsThought,
 		})
@@ -281,13 +273,13 @@ func (s *streamingResponseAggregator) flushTextBufferToSequence() {
 
 func (s *streamingResponseAggregator) flushFunctionCallToSequence() {
 	if s.currentFunctionName != "" {
-		fc := &genai.FunctionCall{
+		fc := &model.FunctionCall{
 			Name: s.currentFunctionName,
 			Args: maps.Clone(s.currentFunctionArgs),
 			ID:   s.currentFunctionID,
 		}
 
-		fcPart := &genai.Part{
+		fcPart := &model.Part{
 			FunctionCall: fc,
 		}
 		if s.currentFunctionThoughtSignature != nil {
@@ -311,15 +303,15 @@ func (s *streamingResponseAggregator) Close() *model.LLMResponse {
 		s.flushFunctionCallToSequence()
 		errorCode := ""
 		errorMessage := ""
-		if s.finishReason != genai.FinishReasonStop {
+		if s.finishReason != model.FinishReasonStop {
 			errorCode = s.response.ErrorCode
 			errorMessage = s.response.ErrorMessage
 		}
 
 		return &model.LLMResponse{
-			Content: &genai.Content{
+			Content: &model.Content{
 				Parts: s.sequence,
-				Role:  genai.RoleModel,
+				Role:  model.RoleModel,
 			},
 			UsageMetadata:     s.usageMetadata,
 			GroundingMetadata: s.groundingMetadata,

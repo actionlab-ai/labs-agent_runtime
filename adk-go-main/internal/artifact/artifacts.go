@@ -16,8 +16,7 @@ package artifact
 
 import (
 	"context"
-
-	"google.golang.org/genai"
+	"google.golang.org/adk/model"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/artifact"
@@ -31,7 +30,7 @@ type Artifacts struct {
 	SessionID string
 }
 
-func (a *Artifacts) Save(ctx context.Context, name string, data *genai.Part) (*artifact.SaveResponse, error) {
+func (a *Artifacts) Save(ctx context.Context, name string, data *model.Part) (*artifact.SaveResponse, error) {
 	return a.Service.Save(ctx, &artifact.SaveRequest{
 		AppName:   a.AppName,
 		UserID:    a.UserID,

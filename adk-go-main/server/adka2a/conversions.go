@@ -17,13 +17,12 @@ package adka2a
 import (
 	"context"
 	"fmt"
+	"google.golang.org/adk/model"
 
 	"github.com/a2aproject/a2a-go/a2a"
 	"github.com/a2aproject/a2a-go/log"
 	v2a2a "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2acompat/a2av0"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	v2 "google.golang.org/adk/server/adka2a/v2"
@@ -96,7 +95,7 @@ func IsPartialFlagSet(meta map[string]any) bool {
 
 // ToA2APart converts the provided genai part to A2A equivalent. Long running tool IDs are used for attaching metadata to
 // the relevant data parts.
-func ToA2APart(part *genai.Part, longRunningToolIDs []string) (a2a.Part, error) {
+func ToA2APart(part *model.Part, longRunningToolIDs []string) (a2a.Part, error) {
 	v1p, err := v2.ToA2APart(part, longRunningToolIDs)
 	if err != nil {
 		return nil, err
@@ -106,7 +105,7 @@ func ToA2APart(part *genai.Part, longRunningToolIDs []string) (a2a.Part, error) 
 
 // ToA2AParts converts the provided genai parts to A2A equivalents. Long running tool IDs are used for attaching metadata to
 // the relevant data parts.
-func ToA2AParts(parts []*genai.Part, longRunningToolIDs []string) ([]a2a.Part, error) {
+func ToA2AParts(parts []*model.Part, longRunningToolIDs []string) ([]a2a.Part, error) {
 	v1ps, err := v2.ToA2AParts(parts, longRunningToolIDs)
 	if err != nil {
 		return nil, err
@@ -119,12 +118,12 @@ func ToA2AParts(parts []*genai.Part, longRunningToolIDs []string) ([]a2a.Part, e
 }
 
 // ToGenAIPart converts the provided A2A part to a genai equivalent.
-func ToGenAIPart(part a2a.Part) (*genai.Part, error) {
+func ToGenAIPart(part a2a.Part) (*model.Part, error) {
 	return v2.ToGenAIPart(a2av0.ToV1Part(part))
 }
 
 // ToGenAIParts converts the provided A2A parts to genai equivalents.
-func ToGenAIParts(parts []a2a.Part) ([]*genai.Part, error) {
+func ToGenAIParts(parts []a2a.Part) ([]*model.Part, error) {
 	v1ps := make([]*v2a2a.Part, len(parts))
 	for i, p := range parts {
 		v1ps[i] = a2av0.ToV1Part(p)

@@ -19,8 +19,6 @@ import (
 	"iter"
 	"strings"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	agentinternal "google.golang.org/adk/internal/agent"
 	icontext "google.golang.org/adk/internal/context"
@@ -164,7 +162,7 @@ type Config struct {
 	//
 	// For example: use this config to adjust model temperature, configure
 	// safety settings, etc.
-	GenerateContentConfig *genai.GenerateContentConfig
+	GenerateContentConfig *model.GenerateContentConfig
 
 	// BeforeModelCallbacks will be called in the order they are provided until
 	// there's a callback that returns a non-nil LLMResponse or error. Then
@@ -251,12 +249,12 @@ type Config struct {
 
 	// TODO(ngeorgy): consider to switch to jsonschema for input and output schema.
 	// The input schema when agent is used as a tool.
-	InputSchema *genai.Schema
+	InputSchema *model.Schema
 	// The output schema when agent replies.
 	//
 	// NOTE: when this is set, agent can only reply and cannot use any tools,
 	// such as function tools, RAGs, agent transfer, etc.
-	OutputSchema *genai.Schema
+	OutputSchema *model.Schema
 
 	// Callbacks are executed in the order they are provided.
 	// If a callback returns result/error, then the execution of the callback
@@ -352,8 +350,8 @@ type llmAgent struct {
 	afterToolCallbacks   []llminternal.AfterToolCallback
 	onToolErrorCallbacks []llminternal.OnToolErrorCallback
 
-	inputSchema  *genai.Schema
-	outputSchema *genai.Schema
+	inputSchema  *model.Schema
+	outputSchema *model.Schema
 }
 
 type agentState = agentinternal.State

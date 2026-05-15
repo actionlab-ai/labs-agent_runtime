@@ -19,25 +19,23 @@ import (
 	"strconv"
 	"strings"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/model"
 )
 
 var geminiModelVersionRegex = regexp.MustCompile(`^gemini-(\d+(\.\d+)?)`)
 
 // GetGoogleLLMVariant returns the Google LLM variant used (GeminiAPI or VertexAI).
-func GetGoogleLLMVariant(llm model.LLM) genai.Backend {
+func GetGoogleLLMVariant(llm model.LLM) model.Backend {
 	i, ok := llm.(GoogleLLM)
 	if !ok {
-		return genai.BackendUnspecified
+		return model.BackendUnspecified
 	}
 	return i.GetGoogleLLMVariant()
 }
 
 // GoogleLLM is an interface which allows to distinguish between Vertex AI and Gemini API models.
 type GoogleLLM interface {
-	GetGoogleLLMVariant() genai.Backend
+	GetGoogleLLMVariant() model.Backend
 }
 
 // IsGeminiModel returns true if the model is a Gemini model.
@@ -63,7 +61,7 @@ func IsGemini25OrLower(model string) bool {
 
 // IsGeminiAPIVariant returns true if the model is a Gemini API model (not Vertex AI).
 func IsGeminiAPIVariant(llm model.LLM) bool {
-	return GetGoogleLLMVariant(llm) == genai.BackendGeminiAPI
+	return GetGoogleLLMVariant(llm) == model.BackendGeminiAPI
 }
 
 // NeedsOutputSchemaProcessor returns true if the Gemini model doesn't support output schema with tools natively and requires a processor to handle it.

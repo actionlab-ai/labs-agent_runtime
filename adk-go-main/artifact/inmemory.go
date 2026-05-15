@@ -17,6 +17,7 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"google.golang.org/adk/model"
 	"io/fs"
 	"iter"
 	"maps"
@@ -26,7 +27,6 @@ import (
 	"strings"
 	"sync"
 
-	"google.golang.org/genai"
 	"rsc.io/omap"
 	"rsc.io/ordered"
 )
@@ -36,7 +36,7 @@ import (
 type inMemoryService struct {
 	mu sync.RWMutex
 	// ordered(appName, userID, sessionID) -> session
-	artifacts omap.Map[string, *genai.Part]
+	artifacts omap.Map[string, *model.Part]
 }
 
 // InMemoryService returns a new in-memory artifact service.
@@ -80,8 +80,8 @@ func (ak *artifactKey) Decode(key string) error {
 // scan returns an iterator over all key-value pairs
 // in the range begin ≤ key ≤ end.
 // TODO: add a concurrent tests.
-func (s *inMemoryService) scan(lo, hi string) iter.Seq2[artifactKey, *genai.Part] {
-	return func(yield func(key artifactKey, val *genai.Part) bool) {
+func (s *inMemoryService) scan(lo, hi string) iter.Seq2[artifactKey, *model.Part] {
+	return func(yield func(key artifactKey, val *model.Part) bool) {
 		for k, val := range s.artifacts.Scan(lo, hi) {
 			var key artifactKey
 			if err := key.Decode(k); err != nil {
@@ -95,7 +95,7 @@ func (s *inMemoryService) scan(lo, hi string) iter.Seq2[artifactKey, *genai.Part
 	}
 }
 
-func (s *inMemoryService) find(appName, userID, sessionID, fileName string) (int64, *genai.Part, bool) {
+func (s *inMemoryService) find(appName, userID, sessionID, fileName string) (int64, *model.Part, bool) {
 	lo := artifactKey{AppName: appName, UserID: userID, SessionID: sessionID, FileName: fileName, Version: math.MaxInt64}.Encode()
 	hi := artifactKey{AppName: appName, UserID: userID, SessionID: sessionID, FileName: fileName, Version: 0}.Encode()
 	for key, val := range s.scan(lo, hi) {
@@ -105,7 +105,7 @@ func (s *inMemoryService) find(appName, userID, sessionID, fileName string) (int
 	return 0, nil, false
 }
 
-func (s *inMemoryService) get(appName, userID, sessionID, fileName string, version int64) (*genai.Part, bool) {
+func (s *inMemoryService) get(appName, userID, sessionID, fileName string, version int64) (*model.Part, bool) {
 	key := artifactKey{
 		AppName:   appName,
 		UserID:    userID,
@@ -116,7 +116,7 @@ func (s *inMemoryService) get(appName, userID, sessionID, fileName string, versi
 	return s.artifacts.Get(key)
 }
 
-func (s *inMemoryService) set(appName, userID, sessionID, fileName string, version int64, artifact *genai.Part) {
+func (s *inMemoryService) set(appName, userID, sessionID, fileName string, version int64, artifact *model.Part) {
 	key := artifactKey{
 		AppName:   appName,
 		UserID:    userID,
@@ -299,7 +299,7 @@ func (s *inMemoryService) GetArtifactVersion(ctx context.Context, req *GetArtifa
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var artifact *genai.Part
+	var artifact *model.Part
 	var ok bool
 	if version > 0 {
 		artifact, ok = s.get(appName, userID, sessionID, fileName, version)

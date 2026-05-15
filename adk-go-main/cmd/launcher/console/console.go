@@ -21,13 +21,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"google.golang.org/adk/model"
 	"io"
 	"log"
 	"os"
 	"os/signal"
 	"time"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/cmd/launcher"
@@ -156,7 +155,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			log.Fatal(err)
 		case userInput := <-inputChan:
 
-			userMsg := genai.NewContentFromText(userInput, genai.RoleUser)
+			userMsg := model.NewContentFromText(userInput, model.RoleUser)
 			streamingMode := l.config.streamingMode
 			if streamingMode == "" {
 				streamingMode = defaultStreamingMode

@@ -31,8 +31,7 @@ package toolconfirmation
 
 import (
 	"fmt"
-
-	"google.golang.org/genai"
+	"google.golang.org/adk/model"
 
 	"google.golang.org/adk/internal/converters"
 )
@@ -83,7 +82,7 @@ type ToolConfirmation struct {
 // to pending requests or queued for execution.
 //
 // It handles the "originalFunctionCall" argument in two formats:
-//  1. *genai.FunctionCall: Returns the object directly if already typed.
+//  1. *model.FunctionCall: Returns the object directly if already typed.
 //  2. map[string]any: Deserializes the raw JSON map received from the model.
 //
 // Usage:
@@ -94,9 +93,9 @@ type ToolConfirmation struct {
 //   - functionCall: The wrapper function call (e.g., RequestConfirmation) containing the arguments.
 //
 // Returns:
-//   - *genai.FunctionCall: The extracted original tool call.
+//   - *model.FunctionCall: The extracted original tool call.
 //   - error: If the "originalFunctionCall" argument is missing or malformed.
-func OriginalCallFrom(functionCall *genai.FunctionCall) (*genai.FunctionCall, error) {
+func OriginalCallFrom(functionCall *model.FunctionCall) (*model.FunctionCall, error) {
 	if functionCall == nil || functionCall.Args == nil {
 		return nil, fmt.Errorf("functionCall or its arguments cannot be nil")
 	}
@@ -107,17 +106,17 @@ func OriginalCallFrom(functionCall *genai.FunctionCall) (*genai.FunctionCall, er
 		return nil, fmt.Errorf("required argument %q is missing from call with ID %s", key, functionCall.ID)
 	}
 
-	originalCall, ok := val.(*genai.FunctionCall)
+	originalCall, ok := val.(*model.FunctionCall)
 	if ok {
 		return originalCall, nil
 	}
 
 	originalCallRaw, ok := val.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("argument %q has invalid type: expected JSON object (map[string]any) or *genai.FunctionCall, got %T", key, val)
+		return nil, fmt.Errorf("argument %q has invalid type: expected JSON object (map[string]any) or *model.FunctionCall, got %T", key, val)
 	}
 
-	originalFunctionCall, err := converters.FromMapStructure[genai.FunctionCall](originalCallRaw)
+	originalFunctionCall, err := converters.FromMapStructure[model.FunctionCall](originalCallRaw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode %q structure for call ID %s: %w", key, functionCall.ID, err)
 	}

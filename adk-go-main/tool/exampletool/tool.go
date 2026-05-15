@@ -32,16 +32,14 @@ import (
 	"fmt"
 	"strings"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/tool"
 )
 
 type Example struct {
-	Input  *genai.Content   `json:"input"`
-	Output []*genai.Content `json:"output"`
+	Input  *model.Content   `json:"input"`
+	Output []*model.Content `json:"output"`
 }
 
 type ExampleToolConfig struct {

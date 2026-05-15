@@ -17,15 +17,14 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"google.golang.org/adk/model"
 	"math"
 	"reflect"
 	"strings"
-
-	"google.golang.org/genai"
 )
 
 // matchType checks if the value matches the schema type.
-func matchType(value any, schema *genai.Schema, isInput bool) (bool, error) {
+func matchType(value any, schema *model.Schema, isInput bool) (bool, error) {
 	if schema == nil {
 		return false, fmt.Errorf("schema is nil")
 	}
@@ -35,23 +34,23 @@ func matchType(value any, schema *genai.Schema, isInput bool) (bool, error) {
 	}
 
 	// Convert type to upper case to match the type in the schema.
-	switch genai.Type(strings.ToUpper(string(schema.Type))) {
-	case genai.TypeString:
+	switch model.Type(strings.ToUpper(string(schema.Type))) {
+	case model.TypeString:
 		_, ok := value.(string)
 		return ok, nil
-	case genai.TypeInteger:
+	case model.TypeInteger:
 		f, ok := value.(float64)
 		if !ok {
 			return false, nil
 		}
 		return f == math.Trunc(f), nil
-	case genai.TypeBoolean:
+	case model.TypeBoolean:
 		_, ok := value.(bool)
 		return ok, nil
-	case genai.TypeNumber:
+	case model.TypeNumber:
 		_, ok := value.(float64)
 		return ok, nil
-	case genai.TypeArray:
+	case model.TypeArray:
 		val := reflect.ValueOf(value)
 		if val.Kind() != reflect.Slice {
 			return false, nil
@@ -69,7 +68,7 @@ func matchType(value any, schema *genai.Schema, isInput bool) (bool, error) {
 			}
 		}
 		return true, nil
-	case genai.TypeObject:
+	case model.TypeObject:
 		obj, ok := value.(map[string]any)
 		if !ok {
 			return false, nil
@@ -82,14 +81,14 @@ func matchType(value any, schema *genai.Schema, isInput bool) (bool, error) {
 }
 
 // ValidateMapOnSchema validates a map against a schema.
-func ValidateMapOnSchema(args map[string]any, schema *genai.Schema, isInput bool) error {
+func ValidateMapOnSchema(args map[string]any, schema *model.Schema, isInput bool) error {
 	if schema == nil {
 		return fmt.Errorf("schema cannot be nil")
 	}
 
 	properties := schema.Properties
 	if properties == nil {
-		properties = make(map[string]*genai.Schema)
+		properties = make(map[string]*model.Schema)
 	}
 
 	argType := "input"
@@ -121,7 +120,7 @@ func ValidateMapOnSchema(args map[string]any, schema *genai.Schema, isInput bool
 }
 
 // ValidateOutputSchema validates an output JSON string against a schema.
-func ValidateOutputSchema(output string, schema *genai.Schema) (map[string]any, error) {
+func ValidateOutputSchema(output string, schema *model.Schema) (map[string]any, error) {
 	if schema == nil {
 		return nil, fmt.Errorf("schema cannot be nil")
 	}

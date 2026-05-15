@@ -20,7 +20,6 @@ import (
 	"iter"
 
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/artifact"
 	agentinternal "google.golang.org/adk/internal/agent"
@@ -110,7 +109,7 @@ type Config struct {
 // Artifacts interface provides methods to work with artifacts of the current
 // session.
 type Artifacts interface {
-	Save(ctx context.Context, name string, data *genai.Part) (*artifact.SaveResponse, error)
+	Save(ctx context.Context, name string, data *model.Part) (*artifact.SaveResponse, error)
 	List(context.Context) (*artifact.ListResponse, error)
 	Load(ctx context.Context, name string) (*artifact.LoadResponse, error)
 	LoadVersion(ctx context.Context, name string, version int) (*artifact.LoadResponse, error)
@@ -127,7 +126,7 @@ type Memory interface {
 // its run.
 // If it returns non-nil content or error, the agent run will be skipped and a
 // new event will be created.
-type BeforeAgentCallback func(CallbackContext) (*genai.Content, error)
+type BeforeAgentCallback func(CallbackContext) (*model.Content, error)
 
 // AfterAgentCallback is a function that is called after the agent has completed
 // its run.
@@ -135,7 +134,7 @@ type BeforeAgentCallback func(CallbackContext) (*genai.Content, error)
 //
 // The callback will be skipped also if EndInvocation was called before or
 // BeforeAgentCallbacks returned non-nil results.
-type AfterAgentCallback func(CallbackContext) (*genai.Content, error)
+type AfterAgentCallback func(CallbackContext) (*model.Content, error)
 
 type agent struct {
 	agentinternal.State
@@ -238,8 +237,8 @@ func (a *agent) FindSubAgent(name string) Agent {
 }
 
 func getAuthorForEvent(ctx InvocationContext, event *session.Event) string {
-	if event.LLMResponse.Content != nil && event.LLMResponse.Content.Role == genai.RoleUser {
-		return genai.RoleUser
+	if event.LLMResponse.Content != nil && event.LLMResponse.Content.Role == model.RoleUser {
+		return model.RoleUser
 	}
 
 	return ctx.Agent().Name()
@@ -396,7 +395,7 @@ func (c *callbackContext) InvocationID() string {
 	return c.invocationContext.InvocationID()
 }
 
-func (c *callbackContext) UserContent() *genai.Content {
+func (c *callbackContext) UserContent() *model.Content {
 	return c.invocationContext.UserContent()
 }
 
@@ -456,7 +455,7 @@ type invocationContext struct {
 
 	invocationID  string
 	branch        string
-	userContent   *genai.Content
+	userContent   *model.Content
 	runConfig     *RunConfig
 	endInvocation bool
 }
@@ -485,7 +484,7 @@ func (c *invocationContext) Branch() string {
 	return c.branch
 }
 
-func (c *invocationContext) UserContent() *genai.Content {
+func (c *invocationContext) UserContent() *model.Content {
 	return c.userContent
 }
 
@@ -517,8 +516,8 @@ func pluginManagerFromContext(ctx context.Context) pluginManager {
 }
 
 type pluginManager interface {
-	RunBeforeAgentCallback(cctx CallbackContext) (*genai.Content, error)
-	RunAfterAgentCallback(cctx CallbackContext) (*genai.Content, error)
+	RunBeforeAgentCallback(cctx CallbackContext) (*model.Content, error)
+	RunAfterAgentCallback(cctx CallbackContext) (*model.Content, error)
 }
 
 var _ InvocationContext = (*invocationContext)(nil)

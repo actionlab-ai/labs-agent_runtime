@@ -16,15 +16,13 @@
 package toolinternal
 
 import (
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/tool"
 )
 
 type FunctionTool interface {
 	tool.Tool
-	Declaration() *genai.FunctionDeclaration
+	Declaration() *model.FunctionDeclaration
 	Run(ctx tool.Context, args any) (result map[string]any, err error)
 }
 

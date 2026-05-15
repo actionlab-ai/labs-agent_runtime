@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/adk/model"
 	"iter"
 
 	"github.com/a2aproject/a2a-go/a2a"
@@ -29,8 +30,6 @@ import (
 	"github.com/a2aproject/a2a-go/log"
 	v2a2a "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2acompat/a2av0"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	v2 "google.golang.org/adk/agent/remoteagent/v2"
@@ -227,7 +226,7 @@ func NewA2A(cfg A2AConfig) (agent.Agent, error) {
 	}
 
 	if cfg.A2APartConverter != nil {
-		v1Cfg.A2APartConverter = func(ctx context.Context, a2aEvent v2a2a.Event, part *v2a2a.Part) (*genai.Part, error) {
+		v1Cfg.A2APartConverter = func(ctx context.Context, a2aEvent v2a2a.Event, part *v2a2a.Part) (*model.Part, error) {
 			legacyEvent, convErr := a2av0.FromV1Event(a2aEvent)
 			if convErr != nil {
 				return nil, convErr
@@ -237,7 +236,7 @@ func NewA2A(cfg A2AConfig) (agent.Agent, error) {
 	}
 
 	if cfg.GenAIPartConverter != nil {
-		v1Cfg.GenAIPartConverter = func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (*v2a2a.Part, error) {
+		v1Cfg.GenAIPartConverter = func(ctx context.Context, adkEvent *session.Event, part *model.Part) (*v2a2a.Part, error) {
 			legacyPart, err := cfg.GenAIPartConverter(ctx, adkEvent, part)
 			if err != nil {
 				return nil, err

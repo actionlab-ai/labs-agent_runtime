@@ -32,8 +32,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/plugininternal/plugincontext"
 	"google.golang.org/adk/model"
@@ -86,7 +84,7 @@ func (pm *PluginManager) registerPlugin(plugin *plugin.Plugin) error {
 }
 
 // RunOnUserMessageCallback runs the OnUserMessageCallback for all plugins.
-func (pm *PluginManager) RunOnUserMessageCallback(cctx agent.InvocationContext, userMessage *genai.Content) (*genai.Content, error) {
+func (pm *PluginManager) RunOnUserMessageCallback(cctx agent.InvocationContext, userMessage *model.Content) (*model.Content, error) {
 	for _, plugin := range pm.plugins {
 		callback := plugin.OnUserMessageCallback()
 		if callback != nil {
@@ -103,7 +101,7 @@ func (pm *PluginManager) RunOnUserMessageCallback(cctx agent.InvocationContext, 
 }
 
 // RunBeforeRunCallback runs the BeforeRunCallback for all plugins.
-func (pm *PluginManager) RunBeforeRunCallback(cctx agent.InvocationContext) (*genai.Content, error) {
+func (pm *PluginManager) RunBeforeRunCallback(cctx agent.InvocationContext) (*model.Content, error) {
 	for _, plugin := range pm.plugins {
 		callback := plugin.BeforeRunCallback()
 		if callback != nil {
@@ -147,7 +145,7 @@ func (pm *PluginManager) RunOnEventCallback(cctx agent.InvocationContext, event 
 }
 
 // RunBeforeAgentCallback runs the BeforeAgentCallback for all plugins.
-func (pm *PluginManager) RunBeforeAgentCallback(cctx agent.CallbackContext) (*genai.Content, error) {
+func (pm *PluginManager) RunBeforeAgentCallback(cctx agent.CallbackContext) (*model.Content, error) {
 	for _, plugin := range pm.plugins {
 		callback := plugin.BeforeAgentCallback()
 		if callback != nil {
@@ -164,7 +162,7 @@ func (pm *PluginManager) RunBeforeAgentCallback(cctx agent.CallbackContext) (*ge
 }
 
 // RunAfterAgentCallback runs the AfterAgentCallback for all plugins.
-func (pm *PluginManager) RunAfterAgentCallback(cctx agent.CallbackContext) (*genai.Content, error) {
+func (pm *PluginManager) RunAfterAgentCallback(cctx agent.CallbackContext) (*model.Content, error) {
 	for _, plugin := range pm.plugins {
 		callback := plugin.AfterAgentCallback()
 		if callback != nil {

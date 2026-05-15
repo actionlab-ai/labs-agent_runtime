@@ -16,9 +16,8 @@ package context
 
 import (
 	"context"
+	"google.golang.org/adk/model"
 	"iter"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/artifact"
@@ -30,7 +29,7 @@ type internalArtifacts struct {
 	eventActions *session.EventActions
 }
 
-func (ia *internalArtifacts) Save(ctx context.Context, name string, data *genai.Part) (*artifact.SaveResponse, error) {
+func (ia *internalArtifacts) Save(ctx context.Context, name string, data *model.Part) (*artifact.SaveResponse, error) {
 	resp, err := ia.Artifacts.Save(ctx, name, data)
 	if err != nil {
 		return resp, err
@@ -96,7 +95,7 @@ func (c *callbackContext) InvocationID() string {
 	return c.invocationCtx.InvocationID()
 }
 
-func (c *callbackContext) UserContent() *genai.Content {
+func (c *callbackContext) UserContent() *model.Content {
 	return c.invocationCtx.UserContent()
 }
 

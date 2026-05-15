@@ -32,6 +32,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/adk/model"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,8 +40,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gopkg.in/yaml.v3"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -95,13 +94,13 @@ func init() {
 		panic(err)
 	}
 	err = RegisterToolFactory("url_context", func(_ context.Context, _ map[string]any) (tool.Tool, error) {
-		return geminitool.New("url_context", "url context", &genai.Tool{URLContext: &genai.URLContext{}}), nil
+		return geminitool.New("url_context", "url context", &model.Tool{URLContext: &model.URLContext{}}), nil
 	})
 	if err != nil {
 		panic(err)
 	}
 	err = RegisterToolFactory("google_maps_grounding", func(_ context.Context, _ map[string]any) (tool.Tool, error) {
-		return geminitool.New("google_maps_grounding", "google maps grounding", &genai.Tool{GoogleMaps: &genai.GoogleMaps{}}), nil
+		return geminitool.New("google_maps_grounding", "google maps grounding", &model.Tool{GoogleMaps: &model.GoogleMaps{}}), nil
 	})
 	if err != nil {
 		panic(err)

@@ -15,8 +15,6 @@
 package llminternal
 
 import (
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/tool"
@@ -35,7 +33,7 @@ type State struct {
 
 	IncludeContents string
 
-	GenerateContentConfig *genai.GenerateContentConfig
+	GenerateContentConfig *model.GenerateContentConfig
 
 	Instruction               string
 	InstructionProvider       InstructionProvider
@@ -45,8 +43,8 @@ type State struct {
 	DisallowTransferToParent bool
 	DisallowTransferToPeers  bool
 
-	InputSchema  *genai.Schema
-	OutputSchema *genai.Schema
+	InputSchema  *model.Schema
+	OutputSchema *model.Schema
 
 	OutputKey string
 }

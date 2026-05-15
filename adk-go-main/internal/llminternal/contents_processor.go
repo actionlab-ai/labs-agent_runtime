@@ -23,8 +23,6 @@ import (
 	"sort"
 	"strings"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/model"
@@ -64,7 +62,7 @@ func ContentsRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest
 
 // buildContentsDefault returns the contents for the LLM request by applying
 // filtering, rearrangement, and content processing to the given events.
-func buildContentsDefault(agentName, invocationBranch string, events []*session.Event) ([]*genai.Content, error) {
+func buildContentsDefault(agentName, invocationBranch string, events []*session.Event) ([]*model.Content, error) {
 	// parse the events, leaving the contents and the function calls and responses from the current agent.
 	var filtered []*session.Event
 	for _, ev := range events {
@@ -105,7 +103,7 @@ func buildContentsDefault(agentName, invocationBranch string, events []*session.
 		return nil, err
 	}
 
-	var contents []*genai.Content
+	var contents []*model.Content
 	for _, ev := range filtered {
 		content := clone(utils.Content(ev))
 		if content == nil {
@@ -113,7 +111,7 @@ func buildContentsDefault(agentName, invocationBranch string, events []*session.
 		}
 
 		// gemini 3 in streaming returns a last response with an empty part. We need to filter it out.
-		content.Parts = slices.DeleteFunc(content.Parts, func(p *genai.Part) bool {
+		content.Parts = slices.DeleteFunc(content.Parts, func(p *model.Part) bool {
 			return p == nil || reflect.ValueOf(*p).IsZero()
 		})
 		if len(content.Parts) == 0 {
@@ -442,7 +440,7 @@ func mergeFunctionResponseEvents(functionResponseEvents []*session.Event) (*sess
 //
 //	In multi-agent scenarios, the "current turn" for an agent starts from an
 //	actual user or from another agent.
-func buildContentsCurrentTurnContextOnly(agentName, branch string, events []*session.Event) ([]*genai.Content, error) {
+func buildContentsCurrentTurnContextOnly(agentName, branch string, events []*session.Event) ([]*model.Content, error) {
 	// Find the latest event that starts the current turn and process from there
 	for i := len(events) - 1; i >= 0; i-- {
 		event := events[i]
@@ -470,22 +468,22 @@ func ConvertForeignEvent(ev *session.Event) *session.Event {
 		return ev
 	}
 
-	converted := &genai.Content{
+	converted := &model.Content{
 		Role:  "user",
-		Parts: []*genai.Part{{Text: "For context:"}},
+		Parts: []*model.Part{{Text: "For context:"}},
 	}
 	for _, p := range content.Parts {
 		switch {
 		case p.Text != "":
-			converted.Parts = append(converted.Parts, &genai.Part{
+			converted.Parts = append(converted.Parts, &model.Part{
 				Text: fmt.Sprintf("[%s] said: %s", ev.Author, p.Text),
 			})
 		case p.FunctionCall != nil:
-			converted.Parts = append(converted.Parts, &genai.Part{
+			converted.Parts = append(converted.Parts, &model.Part{
 				Text: fmt.Sprintf("[%s] called tool `%s` with parameters: %s", ev.Author, p.FunctionCall.Name, stringify(p.FunctionCall.Args)),
 			})
 		case p.FunctionResponse != nil:
-			converted.Parts = append(converted.Parts, &genai.Part{
+			converted.Parts = append(converted.Parts, &model.Part{
 				Text: fmt.Sprintf("[%s] `%s` tool returned result: %v", ev.Author, p.FunctionResponse.Name, stringify(p.FunctionResponse.Response)),
 			})
 		default: // fallback to the original part for non-text and non-functionCall parts.
@@ -558,8 +556,8 @@ func cloneEvent(e *session.Event) *session.Event {
 	// TODO check if copy parts is needed
 	// 3. Deep copy the LLMResponse pointer struct and content
 	if e.LLMResponse.Content != nil {
-		newEvent.LLMResponse.Content = &genai.Content{
-			Parts: make([]*genai.Part, len(e.LLMResponse.Content.Parts)),
+		newEvent.LLMResponse.Content = &model.Content{
+			Parts: make([]*model.Part, len(e.LLMResponse.Content.Parts)),
 			Role:  e.LLMResponse.Content.Role,
 		}
 		copy(newEvent.LLMResponse.Content.Parts, e.LLMResponse.Content.Parts)

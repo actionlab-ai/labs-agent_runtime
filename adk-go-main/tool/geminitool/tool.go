@@ -17,9 +17,9 @@
 //
 // For example, to create a Gemini retrieval tool:
 //
-//	geminitool.New("data_retrieval", &genai.Tool{
-//		Retrieval: &genai.Retrieval{
-//			ExternalAPI: &genai.ExternalAPI{
+//	geminitool.New("data_retrieval", &model.Tool{
+//		Retrieval: &model.Retrieval{
+//			ExternalAPI: &model.ExternalAPI{
 //				Endpoint: ,
 //				AuthConfig:
 //			},
@@ -32,14 +32,12 @@ package geminitool
 import (
 	"fmt"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/tool"
 )
 
 // New creates  gemini API tool.
-func New(name, description string, t *genai.Tool) tool.Tool {
+func New(name, description string, t *model.Tool) tool.Tool {
 	return &geminiTool{
 		name:        name,
 		description: description,
@@ -47,11 +45,11 @@ func New(name, description string, t *genai.Tool) tool.Tool {
 	}
 }
 
-// geminiTool is a wrapper around a genai.Tool.
+// geminiTool is a wrapper around a model.Tool.
 type geminiTool struct {
 	name        string
 	description string
-	value       *genai.Tool
+	value       *model.Tool
 }
 
 // ProcessRequest adds the Gemini tool to the LLM request.
@@ -74,13 +72,13 @@ func (t *geminiTool) IsLongRunning() bool {
 	return false
 }
 
-func setTool(req *model.LLMRequest, t *genai.Tool) error {
+func setTool(req *model.LLMRequest, t *model.Tool) error {
 	if req == nil {
 		return fmt.Errorf("llm request is nil")
 	}
 
 	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
+		req.Config = &model.GenerateContentConfig{}
 	}
 
 	req.Config.Tools = append(req.Config.Tools, t)

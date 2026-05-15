@@ -20,7 +20,7 @@ import (
 
 	"google.golang.org/genai"
 
-	"google.golang.org/adk/internal/llminternal/converters"
+	modelconv "google.golang.org/adk/internal/modelconv/genai"
 	"google.golang.org/adk/model"
 )
 
@@ -232,7 +232,7 @@ func TestCreateResponse(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// 调用被测试的转换函数
-			got := converters.Genai2LLMResponse(&tc.input)
+			got := modelconv.FromGenaiGenerateContentResponse(&tc.input)
 
 			// 验证 AvgLogprobs 字段是否一致
 			if tc.want.AvgLogprobs != got.AvgLogprobs {

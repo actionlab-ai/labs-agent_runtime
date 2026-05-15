@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/internal/toolinternal"
 	"google.golang.org/adk/internal/toolinternal/toolutils"
@@ -32,7 +31,7 @@ func convertTool(t *mcp.Tool, client MCPClient, requireConfirmation bool, requir
 	mcp := &mcpTool{
 		name:        t.Name,
 		description: t.Description,
-		funcDeclaration: &genai.FunctionDeclaration{
+		funcDeclaration: &model.FunctionDeclaration{
 			Name:        t.Name,
 			Description: t.Description,
 		},
@@ -58,7 +57,7 @@ func convertTool(t *mcp.Tool, client MCPClient, requireConfirmation bool, requir
 type mcpTool struct {
 	name            string
 	description     string
-	funcDeclaration *genai.FunctionDeclaration
+	funcDeclaration *model.FunctionDeclaration
 
 	mcpClient MCPClient
 
@@ -86,7 +85,7 @@ func (t *mcpTool) ProcessRequest(ctx tool.Context, req *model.LLMRequest) error 
 	return toolutils.PackTool(req, t)
 }
 
-func (t *mcpTool) Declaration() *genai.FunctionDeclaration {
+func (t *mcpTool) Declaration() *model.FunctionDeclaration {
 	return t.funcDeclaration
 }
 

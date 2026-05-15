@@ -30,6 +30,7 @@ package triggers
 import (
 	"context"
 	"fmt"
+	"google.golang.org/adk/model"
 	"math"
 	"math/rand"
 	"net/http"
@@ -37,7 +38,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/artifact"
@@ -68,9 +68,9 @@ func (r *RetriableRunner) RunAgent(ctx context.Context, appName, userID, message
 		return nil, fmt.Errorf("failed to create session: %v", err)
 	}
 
-	userMessage := genai.Content{
+	userMessage := model.Content{
 		Role: "user",
-		Parts: []*genai.Part{
+		Parts: []*model.Part{
 			{Text: messageContent},
 		},
 	}
@@ -97,7 +97,7 @@ func (r *RetriableRunner) RunAgent(ctx context.Context, appName, userID, message
 
 // runAgentWithRetry uses exponential backoff with jitter to handle 429 rate-limit errors.
 // After MaxRetries is exhausted, raises an error to signal the upstream service (Pub/Sub, Eventarc) to retry at a higher level.
-func (r *RetriableRunner) runAgentWithRetry(ctx context.Context, runR *runner.Runner, userID, sessionID string, userMessage *genai.Content) ([]*session.Event, error) {
+func (r *RetriableRunner) runAgentWithRetry(ctx context.Context, runR *runner.Runner, userID, sessionID string, userMessage *model.Content) ([]*session.Event, error) {
 	var runErr error
 	events := []*session.Event{}
 	for i := 0; i <= r.triggerConfig.MaxRetries; i++ {

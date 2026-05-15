@@ -17,9 +17,8 @@ package memory
 
 import (
 	"context"
+	"google.golang.org/adk/model"
 	"time"
-
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/session"
 )
@@ -55,7 +54,7 @@ type Entry struct {
 	// ID is the unique identifier of the memory.
 	ID string
 	// Content contains the main content of the memory.
-	Content *genai.Content
+	Content *model.Content
 	// Author of the memory.
 	Author string
 	// Timestamp shows when the original content of this memory happened.

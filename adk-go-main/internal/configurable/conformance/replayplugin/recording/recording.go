@@ -28,8 +28,6 @@
 package recording
 
 import (
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/model"
 )
 
@@ -73,8 +71,8 @@ type LLMRecording struct {
 // ToolRecording represents a paired tool call and response.
 type ToolRecording struct {
 	// Required. The tool call.
-	ToolCall *genai.FunctionCall `yaml:"toolcall,omitempty"`
+	ToolCall *model.FunctionCall `yaml:"toolcall,omitempty"`
 
 	// Required. The tool response.
-	ToolResponse *genai.FunctionResponse `yaml:"toolresponse,omitempty"`
+	ToolResponse *model.FunctionResponse `yaml:"toolresponse,omitempty"`
 }

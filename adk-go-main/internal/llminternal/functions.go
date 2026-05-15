@@ -15,8 +15,6 @@
 package llminternal
 
 import (
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/model"
@@ -41,9 +39,9 @@ func generateRequestConfirmationEvent(
 		return nil
 	}
 
-	parts := []*genai.Part{}
+	parts := []*model.Part{}
 	longRunningToolIDs := []string{}
-	functionCalls := make(map[string]*genai.FunctionCall, len(functionCallEvent.Content.Parts))
+	functionCalls := make(map[string]*model.FunctionCall, len(functionCallEvent.Content.Parts))
 	for _, call := range utils.FunctionCalls(functionCallEvent.Content) {
 		functionCalls[call.ID] = call
 	}
@@ -60,13 +58,13 @@ func generateRequestConfirmationEvent(
 			"toolConfirmation":     confirmation,
 		}
 
-		requestConfirmationFC := &genai.FunctionCall{
+		requestConfirmationFC := &model.FunctionCall{
 			ID:   utils.GenerateFunctionCallID(),
 			Name: toolconfirmation.FunctionCallName,
 			Args: args,
 		}
 
-		parts = append(parts, &genai.Part{
+		parts = append(parts, &model.Part{
 			FunctionCall: requestConfirmationFC,
 		})
 		longRunningToolIDs = append(longRunningToolIDs, requestConfirmationFC.ID)
@@ -80,9 +78,9 @@ func generateRequestConfirmationEvent(
 	ev.Author = invocationContext.Agent().Name()
 	ev.Branch = invocationContext.Branch()
 	ev.LLMResponse = model.LLMResponse{
-		Content: &genai.Content{
+		Content: &model.Content{
 			Parts: parts,
-			Role:  genai.RoleModel,
+			Role:  model.RoleModel,
 		},
 	}
 	ev.LongRunningToolIDs = longRunningToolIDs

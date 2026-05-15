@@ -30,9 +30,8 @@ package configurable
 import (
 	"context"
 	"fmt"
-	"os"
-
 	"google.golang.org/genai"
+	"os"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -123,7 +122,7 @@ type llmAgentYAMLConfig struct {
 
 	DisallowTransferToParent bool `yaml:"disallow_transfer_to_parent,omitempty"`
 
-	GenerateContentConfig *genai.GenerateContentConfig `yaml:"generate_content_config,omitempty"`
+	GenerateContentConfig *model.GenerateContentConfig `yaml:"generate_content_config,omitempty"`
 }
 
 func (c *llmAgentYAMLConfig) toLLMAgentConfig(ctx context.Context) (*llmagent.Config, error) {
@@ -131,7 +130,7 @@ func (c *llmAgentYAMLConfig) toLLMAgentConfig(ctx context.Context) (*llmagent.Co
 		return nil, fmt.Errorf("model %s is not supported", c.Model)
 	}
 
-	model, err := gemini.NewModel(ctx, c.Model, &genai.ClientConfig{
+	llmModel, err := gemini.NewModel(ctx, c.Model, &genai.ClientConfig{
 		APIKey: os.Getenv("GOOGLE_API_KEY"),
 	})
 	if err != nil {

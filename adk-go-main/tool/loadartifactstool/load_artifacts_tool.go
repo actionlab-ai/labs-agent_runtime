@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/toolinternal/toolutils"
@@ -66,16 +65,16 @@ func (t *artifactsTool) IsLongRunning() bool {
 // This declaration allows the LLM to understand and call the tool
 // by specifying the function name, a detailed description of its
 // purpose, and the required input parameters (schema).
-func (t *artifactsTool) Declaration() *genai.FunctionDeclaration {
-	return &genai.FunctionDeclaration{
+func (t *artifactsTool) Declaration() *model.FunctionDeclaration {
+	return &model.FunctionDeclaration{
 		Name:        t.name,
 		Description: t.description,
-		Parameters: &genai.Schema{
+		Parameters: &model.Schema{
 			Type: "OBJECT",
-			Properties: map[string]*genai.Schema{
+			Properties: map[string]*model.Schema{
 				"artifact_names": {
 					Type: "ARRAY",
-					Items: &genai.Schema{
+					Items: &model.Schema{
 						Type: "STRING",
 					},
 				},
@@ -181,7 +180,7 @@ func (t *artifactsTool) processLoadArtifactsFunctionCall(ctx tool.Context, req *
 		return nil
 	}
 
-	results := make([]*genai.Content, len(artifactNames))
+	results := make([]*model.Content, len(artifactNames))
 	group, childCtx := errgroup.WithContext(ctx)
 	artifactsService := ctx.Artifacts()
 
@@ -205,16 +204,16 @@ func (t *artifactsTool) processLoadArtifactsFunctionCall(ctx tool.Context, req *
 	return nil
 }
 
-func (t *artifactsTool) loadIndividualArtifact(ctx context.Context, artifactsService agent.Artifacts, artifactName string) (*genai.Content, error) {
+func (t *artifactsTool) loadIndividualArtifact(ctx context.Context, artifactsService agent.Artifacts, artifactName string) (*model.Content, error) {
 	resp, err := artifactsService.Load(ctx, artifactName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load artifact %s: %w", artifactName, err)
 	}
-	return &genai.Content{
-		Parts: []*genai.Part{
-			genai.NewPartFromText("Artifact " + artifactName + " is:"),
+	return &model.Content{
+		Parts: []*model.Part{
+			model.NewPartFromText("Artifact " + artifactName + " is:"),
 			resp.Part,
 		},
-		Role: genai.RoleUser,
+		Role: model.RoleUser,
 	}, nil
 }

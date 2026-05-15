@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"strings"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/plugin"
@@ -81,7 +79,7 @@ func (p *loggingPlugin) log(msg string) {
 	fmt.Printf("\033[90m[%s] %s\033[0m\n", p.name, msg)
 }
 
-func (p *loggingPlugin) formatContent(content *genai.Content, maxLength int) string {
+func (p *loggingPlugin) formatContent(content *model.Content, maxLength int) string {
 	if content == nil || len(content.Parts) == 0 {
 		return "None"
 	}
@@ -118,7 +116,7 @@ func (p *loggingPlugin) formatArgs(args map[string]any, maxLength int) string {
 	return formatted
 }
 
-func (p *loggingPlugin) onUserMessage(ctx agent.InvocationContext, userMessage *genai.Content) (*genai.Content, error) {
+func (p *loggingPlugin) onUserMessage(ctx agent.InvocationContext, userMessage *model.Content) (*model.Content, error) {
 	p.log("🚀 USER MESSAGE RECEIVED")
 	p.log(fmt.Sprintf("   Invocation ID: %s", ctx.InvocationID()))
 	p.log(fmt.Sprintf("   Session ID: %s", ctx.Session().ID()))
@@ -136,7 +134,7 @@ func (p *loggingPlugin) onUserMessage(ctx agent.InvocationContext, userMessage *
 	return nil, nil
 }
 
-func (p *loggingPlugin) beforeRun(ctx agent.InvocationContext) (*genai.Content, error) {
+func (p *loggingPlugin) beforeRun(ctx agent.InvocationContext) (*model.Content, error) {
 	p.log("🏃 INVOCATION STARTING")
 	p.log(fmt.Sprintf("   Invocation ID: %s", ctx.InvocationID()))
 	agentName := "Unknown"
@@ -191,7 +189,7 @@ func (p *loggingPlugin) afterRun(ctx agent.InvocationContext) {
 	p.log(fmt.Sprintf("   Final Agent: %s", agentName))
 }
 
-func (p *loggingPlugin) beforeAgent(ctx agent.CallbackContext) (*genai.Content, error) {
+func (p *loggingPlugin) beforeAgent(ctx agent.CallbackContext) (*model.Content, error) {
 	p.log("🤖 AGENT STARTING")
 	p.log(fmt.Sprintf("   Agent Name: %s", ctx.AgentName()))
 	p.log(fmt.Sprintf("   Invocation ID: %s", ctx.InvocationID()))
@@ -201,7 +199,7 @@ func (p *loggingPlugin) beforeAgent(ctx agent.CallbackContext) (*genai.Content, 
 	return nil, nil
 }
 
-func (p *loggingPlugin) afterAgent(ctx agent.CallbackContext) (*genai.Content, error) {
+func (p *loggingPlugin) afterAgent(ctx agent.CallbackContext) (*model.Content, error) {
 	p.log("🤖 AGENT COMPLETED")
 	p.log(fmt.Sprintf("   Agent Name: %s", ctx.AgentName()))
 	p.log(fmt.Sprintf("   Invocation ID: %s", ctx.InvocationID()))

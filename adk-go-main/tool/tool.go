@@ -22,8 +22,6 @@ import (
 	"errors"
 	"fmt"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/toolinternal/toolutils"
 	"google.golang.org/adk/memory"
@@ -239,11 +237,11 @@ type confirmationTool struct {
 
 type runnableTool interface {
 	Tool
-	Declaration() *genai.FunctionDeclaration
+	Declaration() *model.FunctionDeclaration
 	Run(ctx Context, args any) (result map[string]any, err error)
 }
 
-func (t *confirmationTool) Declaration() *genai.FunctionDeclaration {
+func (t *confirmationTool) Declaration() *model.FunctionDeclaration {
 	return t.runnableTool.Declaration()
 }
 

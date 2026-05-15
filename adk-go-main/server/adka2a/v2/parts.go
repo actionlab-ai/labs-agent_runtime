@@ -19,11 +19,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/adk/model"
 	"maps"
 	"slices"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
-	"google.golang.org/genai"
 
 	"google.golang.org/adk/internal/converters"
 )
@@ -60,7 +60,7 @@ func IsPartialFlagSet(meta map[string]any) bool {
 	return isSet
 }
 
-func validateDataPartJSON(d *genai.Part) ([]byte, bool) {
+func validateDataPartJSON(d *model.Part) ([]byte, bool) {
 	if d.InlineData == nil || d.InlineData.MIMEType != "text/plain" {
 		return nil, false
 	}
@@ -74,8 +74,8 @@ func validateDataPartJSON(d *genai.Part) ([]byte, bool) {
 
 // ToA2APart converts the provided genai part to A2A equivalent. Long running tool IDs are used for attaching metadata to
 // the relevant data parts.
-func ToA2APart(part *genai.Part, longRunningToolIDs []string) (*a2a.Part, error) {
-	parts, err := ToA2AParts([]*genai.Part{part}, longRunningToolIDs)
+func ToA2APart(part *model.Part, longRunningToolIDs []string) (*a2a.Part, error) {
+	parts, err := ToA2AParts([]*model.Part{part}, longRunningToolIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func ToA2APart(part *genai.Part, longRunningToolIDs []string) (*a2a.Part, error)
 
 // ToA2AParts converts the provided genai parts to A2A equivalents. Long running tool IDs are used for attaching metadata to
 // the relevant data parts.
-func ToA2AParts(parts []*genai.Part, longRunningToolIDs []string) ([]*a2a.Part, error) {
+func ToA2AParts(parts []*model.Part, longRunningToolIDs []string) ([]*a2a.Part, error) {
 	result := make([]*a2a.Part, len(parts))
 	for i, part := range parts {
 		if part.Text != "" {
@@ -125,7 +125,7 @@ func updatePartsMetadata(parts []*a2a.Part, update map[string]any) {
 	}
 }
 
-func toA2AFilePart(v *genai.Part) (*a2a.Part, error) {
+func toA2AFilePart(v *model.Part) (*a2a.Part, error) {
 	if v == nil || (v.FileData == nil && v.InlineData == nil) {
 		return nil, fmt.Errorf("not a file part: %v", v)
 	}
@@ -151,7 +151,7 @@ func toA2AFilePart(v *genai.Part) (*a2a.Part, error) {
 	return r, nil
 }
 
-func toA2ADataPart(part *genai.Part, longRunningToolIDs []string) (*a2a.Part, error) {
+func toA2ADataPart(part *model.Part, longRunningToolIDs []string) (*a2a.Part, error) {
 	if part.CodeExecutionResult != nil {
 		data, err := converters.ToMapStructure(part.CodeExecutionResult)
 		if err != nil {
@@ -200,16 +200,16 @@ func toA2ADataPart(part *genai.Part, longRunningToolIDs []string) (*a2a.Part, er
 	return a2a.NewDataPart(mapStruct), nil
 }
 
-func toGenAIContent(ctx context.Context, msg *a2a.Message, converter A2APartConverter) (*genai.Content, error) {
+func toGenAIContent(ctx context.Context, msg *a2a.Message, converter A2APartConverter) (*model.Content, error) {
 	if converter == nil {
 		parts, err := ToGenAIParts(msg.Parts)
 		if err != nil {
 			return nil, err
 		}
-		return genai.NewContentFromParts(parts, toGenAIRole(msg.Role)), nil
+		return model.NewContentFromParts(parts, toGenAIRole(msg.Role)), nil
 	}
 
-	parts := make([]*genai.Part, 0, len(msg.Parts))
+	parts := make([]*model.Part, 0, len(msg.Parts))
 	for _, part := range msg.Parts {
 		cp, err := converter(ctx, a2a.Event(msg), part)
 		if err != nil {
@@ -220,11 +220,11 @@ func toGenAIContent(ctx context.Context, msg *a2a.Message, converter A2APartConv
 		}
 		parts = append(parts, cp)
 	}
-	return genai.NewContentFromParts(parts, toGenAIRole(msg.Role)), nil
+	return model.NewContentFromParts(parts, toGenAIRole(msg.Role)), nil
 }
 
 // ToGenAIPart converts the provided A2A part to a genai equivalent.
-func ToGenAIPart(part *a2a.Part) (*genai.Part, error) {
+func ToGenAIPart(part *a2a.Part) (*model.Part, error) {
 	parts, err := ToGenAIParts([]*a2a.Part{part})
 	if err != nil {
 		return nil, err
@@ -233,11 +233,11 @@ func ToGenAIPart(part *a2a.Part) (*genai.Part, error) {
 }
 
 // ToGenAIParts converts the provided A2A parts to genai equivalents.
-func ToGenAIParts(parts []*a2a.Part) ([]*genai.Part, error) {
-	result := make([]*genai.Part, len(parts))
+func ToGenAIParts(parts []*a2a.Part) ([]*model.Part, error) {
+	result := make([]*model.Part, len(parts))
 	for i, part := range parts {
 		if text := part.Text(); text != "" {
-			r := genai.NewPartFromText(text)
+			r := model.NewPartFromText(text)
 			if thought, ok := part.Meta()[ToA2AMetaKey("thought")].(bool); ok {
 				r.Thought = thought
 			}
@@ -267,21 +267,21 @@ func ToGenAIParts(parts []*a2a.Part) ([]*genai.Part, error) {
 	return result, nil
 }
 
-func toGenAIFilePart(part *a2a.Part) (*genai.Part, error) {
+func toGenAIFilePart(part *a2a.Part) (*model.Part, error) {
 	if raw := part.Raw(); raw != nil {
-		data := &genai.Blob{Data: raw, MIMEType: part.MediaType, DisplayName: part.Filename}
-		return &genai.Part{InlineData: data}, nil
+		data := &model.Blob{Data: raw, MIMEType: part.MediaType, DisplayName: part.Filename}
+		return &model.Part{InlineData: data}, nil
 	}
 
 	if url := part.URL(); url != "" {
-		data := &genai.FileData{FileURI: string(url), MIMEType: part.MediaType, DisplayName: part.Filename}
-		return &genai.Part{FileData: data}, nil
+		data := &model.FileData{FileURI: string(url), MIMEType: part.MediaType, DisplayName: part.Filename}
+		return &model.Part{FileData: data}, nil
 	}
 
 	return nil, fmt.Errorf("no file content in part")
 }
 
-func toGenAIDataPart(part *a2a.Part) (*genai.Part, error) {
+func toGenAIDataPart(part *a2a.Part) (*model.Part, error) {
 	data := part.Data()
 	bytes, err := json.Marshal(data)
 	if err != nil {
@@ -291,32 +291,32 @@ func toGenAIDataPart(part *a2a.Part) (*genai.Part, error) {
 	adkMetaType := part.Metadata[a2aDataPartMetaTypeKey]
 	switch adkMetaType {
 	case a2aDataPartTypeCodeExecResult:
-		var val genai.CodeExecutionResult
+		var val model.CodeExecutionResult
 		if err := json.Unmarshal(bytes, &val); err != nil {
 			return nil, err
 		}
-		return &genai.Part{CodeExecutionResult: &val}, nil
+		return &model.Part{CodeExecutionResult: &val}, nil
 
 	case a2aDataPartTypeFunctionCall:
-		var val genai.FunctionCall
+		var val model.FunctionCall
 		if err := json.Unmarshal(bytes, &val); err != nil {
 			return nil, err
 		}
-		return &genai.Part{FunctionCall: &val}, nil
+		return &model.Part{FunctionCall: &val}, nil
 
 	case a2aDataPartTypeCodeExecutableCode:
-		var val genai.ExecutableCode
+		var val model.ExecutableCode
 		if err := json.Unmarshal(bytes, &val); err != nil {
 			return nil, err
 		}
-		return &genai.Part{ExecutableCode: &val}, nil
+		return &model.Part{ExecutableCode: &val}, nil
 
 	case a2aDataPartTypeFunctionResponse:
-		var val genai.FunctionResponse
+		var val model.FunctionResponse
 		if err := json.Unmarshal(bytes, &val); err != nil {
 			return nil, err
 		}
-		return &genai.Part{FunctionResponse: &val}, nil
+		return &model.Part{FunctionResponse: &val}, nil
 
 	default:
 		var jsonData []byte
@@ -326,6 +326,6 @@ func toGenAIDataPart(part *a2a.Part) (*genai.Part, error) {
 		jsonData = append(jsonData, bytes...)
 		jsonData = append(jsonData, suffix...)
 
-		return &genai.Part{InlineData: &genai.Blob{Data: jsonData, MIMEType: "text/plain"}}, nil
+		return &model.Part{InlineData: &model.Blob{Data: jsonData, MIMEType: "text/plain"}}, nil
 	}
 }
