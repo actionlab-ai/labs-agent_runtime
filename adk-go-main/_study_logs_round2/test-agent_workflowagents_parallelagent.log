@@ -1,0 +1,25 @@
+﻿=== RUN   TestNewParallelAgent
+=== RUN   TestNewParallelAgent/subagents_complete_run
+=== PAUSE TestNewParallelAgent/subagents_complete_run
+=== RUN   TestNewParallelAgent/handle_ctx_cancel
+=== PAUSE TestNewParallelAgent/handle_ctx_cancel
+=== RUN   TestNewParallelAgent/agent_returns_error
+=== PAUSE TestNewParallelAgent/agent_returns_error
+=== CONT  TestNewParallelAgent/subagents_complete_run
+=== CONT  TestNewParallelAgent/agent_returns_error
+=== CONT  TestNewParallelAgent/handle_ctx_cancel
+--- PASS: TestNewParallelAgent (0.00s)
+    --- PASS: TestNewParallelAgent/handle_ctx_cancel (0.00s)
+    --- PASS: TestNewParallelAgent/agent_returns_error (0.01s)
+    --- PASS: TestNewParallelAgent/subagents_complete_run (0.01s)
+=== RUN   TestParallelAgentWithTools
+--- PASS: TestParallelAgentWithTools (0.00s)
+=== RUN   TestParallelAgent_PropagatesContextError
+=== PAUSE TestParallelAgent_PropagatesContextError
+=== RUN   TestParallelAgent_StateSync
+--- PASS: TestParallelAgent_StateSync (0.00s)
+=== CONT  TestParallelAgent_PropagatesContextError
+    agent_test.go:442: Yielded error: failed to run sub-agent "yielder": context canceled
+--- PASS: TestParallelAgent_PropagatesContextError (0.20s)
+PASS
+ok  	google.golang.org/adk/agent/workflowagents/parallelagent	0.696s

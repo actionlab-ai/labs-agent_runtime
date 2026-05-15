@@ -1,0 +1,36 @@
+﻿=== RUN   TestRunner_findAgentToRun
+=== PAUSE TestRunner_findAgentToRun
+=== RUN   Test_isTransferrableAcrossAgentTree
+=== RUN   Test_isTransferrableAcrossAgentTree/disallow_for_agent_with_DisallowTransferToParent
+=== RUN   Test_isTransferrableAcrossAgentTree/disallow_for_non-LLM_agent
+=== RUN   Test_isTransferrableAcrossAgentTree/allow_for_the_default_LLM_agent
+--- PASS: Test_isTransferrableAcrossAgentTree (0.00s)
+    --- PASS: Test_isTransferrableAcrossAgentTree/disallow_for_agent_with_DisallowTransferToParent (0.00s)
+    --- PASS: Test_isTransferrableAcrossAgentTree/disallow_for_non-LLM_agent (0.00s)
+    --- PASS: Test_isTransferrableAcrossAgentTree/allow_for_the_default_LLM_agent (0.00s)
+=== RUN   TestRunner_SaveInputBlobsAsArtifacts
+--- PASS: TestRunner_SaveInputBlobsAsArtifacts (0.00s)
+=== RUN   TestRunner_AutoCreateSession
+=== PAUSE TestRunner_AutoCreateSession
+=== CONT  TestRunner_findAgentToRun
+=== RUN   TestRunner_findAgentToRun/last_event_from_agent_allowing_transfer
+=== RUN   TestRunner_findAgentToRun/last_event_from_agent_not_allowing_transfer
+=== RUN   TestRunner_findAgentToRun/no_events_from_agents,_call_root
+=== RUN   TestRunner_findAgentToRun/last_event_from_user_with_function_response
+--- PASS: TestRunner_findAgentToRun (0.00s)
+    --- PASS: TestRunner_findAgentToRun/last_event_from_agent_allowing_transfer (0.00s)
+    --- PASS: TestRunner_findAgentToRun/last_event_from_agent_not_allowing_transfer (0.00s)
+    --- PASS: TestRunner_findAgentToRun/no_events_from_agents,_call_root (0.00s)
+    --- PASS: TestRunner_findAgentToRun/last_event_from_user_with_function_response (0.00s)
+=== CONT  TestRunner_AutoCreateSession
+=== RUN   TestRunner_AutoCreateSession/auto_create_true_session_missing
+=== RUN   TestRunner_AutoCreateSession/auto_create_false_session_missing
+=== RUN   TestRunner_AutoCreateSession/auto_create_false_session_exists
+=== RUN   TestRunner_AutoCreateSession/auto_create_true_session_exists
+--- PASS: TestRunner_AutoCreateSession (0.00s)
+    --- PASS: TestRunner_AutoCreateSession/auto_create_true_session_missing (0.00s)
+    --- PASS: TestRunner_AutoCreateSession/auto_create_false_session_missing (0.00s)
+    --- PASS: TestRunner_AutoCreateSession/auto_create_false_session_exists (0.00s)
+    --- PASS: TestRunner_AutoCreateSession/auto_create_true_session_exists (0.00s)
+PASS
+ok  	google.golang.org/adk/runner	0.337s

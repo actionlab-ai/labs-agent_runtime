@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADK Go Agent 代码库中文走读文档</title>
+<style>
+:root {
+  --bg:#0b1020; --panel:#121a2d; --panel2:#0f1728; --text:#e8eefc; --muted:#aebbd4;
+  --brand:#7dd3fc; --brand2:#c4b5fd; --line:#26344f; --code:#0a0f1d; --ok:#86efac; --warn:#fde68a;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif; background:linear-gradient(135deg,#08101f 0%,#10172a 55%,#111827 100%); color:var(--text); line-height:1.72; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+code { font-family:"JetBrains Mono","Cascadia Code",Consolas,monospace; color:#dbeafe; background:#172033; border:1px solid #29364f; border-radius:6px; padding:1px 5px; }
+pre { overflow:auto; padding:16px; background:var(--code); border:1px solid var(--line); border-radius:14px; line-height:1.45; }
+pre code { background:transparent; border:0; padding:0; color:#e6edf7; }
+.layout { display:grid; grid-template-columns: 300px minmax(0,1fr); min-height:100vh; }
+aside { position:sticky; top:0; height:100vh; overflow:auto; padding:22px; border-right:1px solid var(--line); background:rgba(7,12,26,.82); backdrop-filter: blur(10px); }
+main { padding:34px min(5vw,64px) 80px; }
+.hero { padding:32px; border:1px solid var(--line); border-radius:26px; background:radial-gradient(circle at top left,rgba(125,211,252,.22),transparent 35%),radial-gradient(circle at right,rgba(196,181,253,.18),transparent 42%),rgba(18,26,45,.75); box-shadow:0 20px 80px rgba(0,0,0,.35); }
+.hero h1 { margin:0 0 12px; font-size:34px; line-height:1.2; }
+.badges { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+.badge { border:1px solid var(--line); background:#111b30; border-radius:999px; padding:7px 12px; color:#cfe3ff; }
+nav a { display:block; padding:7px 10px; border-radius:10px; color:#cbd5e1; }
+nav a:hover { background:#172033; color:white; text-decoration:none; }
+section { margin-top:34px; padding:28px; border:1px solid var(--line); border-radius:22px; background:rgba(18,26,45,.76); }
+h2 { margin:0 0 16px; font-size:26px; }
+h3 { margin-top:24px; color:#dbeafe; }
+.grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:16px; }
+.card { background:rgba(15,23,40,.85); border:1px solid var(--line); border-radius:18px; padding:18px; }
+.card h3 { margin-top:0; }
+.kv { display:grid; grid-template-columns: 170px 1fr; gap:8px 14px; }
+.kv div:nth-child(odd) { color:#93c5fd; }
+table { width:100%; border-collapse:collapse; margin:14px 0; }
+th,td { border:1px solid var(--line); padding:10px 12px; vertical-align:top; }
+th { background:#111b30; color:#bfdbfe; text-align:left; }
+tr:nth-child(even) td { background:rgba(15,23,40,.45); }
+.flow { display:flex; flex-wrap:wrap; gap:10px; margin:18px 0; }
+.step { position:relative; border:1px solid #355072; background:#0f1c33; border-radius:14px; padding:10px 12px; min-width:150px; }
+.step::after { content:'→'; color:#7dd3fc; margin-left:10px; }
+.step:last-child::after { content:''; }
+.callout { border-left:4px solid var(--brand); background:rgba(125,211,252,.08); padding:12px 16px; border-radius:12px; }
+.warn { border-left-color:var(--warn); background:rgba(253,230,138,.08); }
+.ok { border-left-color:var(--ok); background:rgba(134,239,172,.08); }
+.snippet summary { cursor:pointer; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:#111b30; margin-top:10px; }
+.snippet[open] summary { border-bottom-left-radius:0; border-bottom-right-radius:0; }
+.snippet pre { margin-top:0; border-top-left-radius:0; border-top-right-radius:0; }
+.search { width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--line); background:#0c1324; color:var(--text); margin:12px 0 18px; }
+.small { color:var(--muted); font-size:14px; }
+ul.tight li { margin:6px 0; }
+@media (max-width: 980px) { .layout { grid-template-columns:1fr; } aside { position:relative; height:auto; } .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+  <h2>目录</h2>
+  <input class="search" id="filter" placeholder="搜索标题/模块/文件路径..." />
+  <nav id="toc">
+    <a href="#overview">1. 总览</a>
+    <a href="#map">2. 模块地图</a>
+    <a href="#run-flow">3. 一次请求完整链路</a>
+    <a href="#session">4. Session 管理走读</a>
+    <a href="#llm-flow">5. LLM Agent 推理循环</a>
+    <a href="#tool-flow">6. Tool Calling 机制</a>
+    <a href="#plugin">7. Plugin/Callback 扩展点</a>
+    <a href="#workflow">8. 工作流 Agent</a>
+    <a href="#rest">9. REST/SSE 服务</a>
+    <a href="#code-snippets">10. 关键源码片段</a>
+    <a href="#patterns">11. 可复用 Agent 设计模式</a>
+    <a href="#roadmap">12. 学习路线</a>
+  </nav>
+</aside>
+<main>
+  <div class="hero">
+    <h1>ADK Go Agent 代码库中文走读文档</h1>
+    <p>这份文档的目标不是简单罗列 API，而是帮助你快速掌握这个 Agent 框架的运行模型、数据流、Session 管理、工具调用、插件扩展、工作流编排，以及如何把这些设计迁移到自己的 Go Agent 项目里。</p>
+    <div class="badges">
+      <span class="badge">已添加中文注释点：63</span>
+      <span class="badge">核心入口文件：24 个</span>
+      <span class="badge">离线可读</span>
+      <span class="badge">代码文件可点击跳转</span>
+    </div>
+    <p class="small">生成时间：2026-05-14 00:13:53。本 HTML 放在仓库根目录，点击文件路径会以相对路径打开源码。</p>
+  </div>
+
+  <section id="overview" data-search="总览 agent runner session llm tool plugin">
+    <h2>1. 总览：先建立正确心智模型</h2>
+    <div class="grid">
+      <div class="card"><h3>一句话理解</h3><p>这个仓库实现的是一个 <b>事件驱动的 Agent Runtime</b>：Runner 管运行时，Agent 产事件，Session 存历史和状态，LLM Flow 调模型和工具，Plugin 做横切扩展，REST/SSE 把事件流给前端。</p></div>
+      <div class="card"><h3>最重要的抽象</h3><p><code>Agent.Run(ctx)</code> 返回的是 <code>iter.Seq2[*session.Event, error]</code>，不是字符串。也就是说，整个系统是围绕事件流设计的：用户输入、模型输出、工具调用、工具结果、状态更新、转交都被表示成事件。</p></div>
+      <div class="card"><h3>为什么这样设计</h3><p>因为真实 Agent 不只是“问模型拿答案”。它需要多轮工具调用、人工确认、跨 Agent 转交、流式输出、状态更新、审计追踪、文件制品和长期记忆。这些都必须有统一的数据协议承载。</p></div>
+      <div class="card"><h3>读代码主线</h3><p>推荐从 <a href="runner/runner.go" target="_blank"><code>runner/runner.go</code></a> 开始，看一次请求如何进入系统；再看 <a href="internal/llminternal/base_flow.go" target="_blank"><code>internal/llminternal/base_flow.go</code></a> 理解模型-工具循环；最后看 <a href="session/inmemory.go" target="_blank"><code>session/inmemory.go</code></a> 理解事件如何保存。</p></div>
+    </div>
+    <div class="callout ok"><b>本次修改：</b>已经在关键源码中新增中文业务注释，并新增多个 <code>zz_cn_walkthrough.go</code> 包级走读文件，帮助你从源码内部理解模块职责。</div>
+  </section>
+
+  <section id="map" data-search="模块地图 文件 跳转">
+    <h2>2. 模块地图：每个目录负责什么</h2>
+    <table>
+      <thead><tr><th>模块</th><th>职责</th><th>关键文件</th></tr></thead>
+      <tbody><tr><td><b>运行时总控</b></td><td>Runner 负责把用户输入、Session、Agent、Plugin、Artifact、Memory 串起来。</td><td><a href="runner/runner.go" target="_blank"><code>runner/runner.go</code></a> <a href="runner/zz_cn_walkthrough.go" target="_blank"><code>runner/zz_cn_walkthrough.go</code></a></td></tr><tr><td><b>Agent 抽象</b></td><td>统一 Agent 接口、Agent 树、回调、事件流。</td><td><a href="agent/agent.go" target="_blank"><code>agent/agent.go</code></a> <a href="agent/context.go" target="_blank"><code>agent/context.go</code></a> <a href="agent/zz_cn_walkthrough.go" target="_blank"><code>agent/zz_cn_walkthrough.go</code></a></td></tr><tr><td><b>LLM Agent</b></td><td>面向业务开发者的 LLM Agent 配置入口。</td><td><a href="agent/llmagent/llmagent.go" target="_blank"><code>agent/llmagent/llmagent.go</code></a> <a href="agent/llmagent/zz_cn_walkthrough.go" target="_blank"><code>agent/llmagent/zz_cn_walkthrough.go</code></a></td></tr><tr><td><b>LLM Flow 内核</b></td><td>Prompt 构造、模型调用、工具循环、转交、结构化输出。</td><td><a href="internal/llminternal/base_flow.go" target="_blank"><code>internal/llminternal/base_flow.go</code></a> <a href="internal/llminternal/contents_processor.go" target="_blank"><code>internal/llminternal/contents_processor.go</code></a> <a href="internal/llminternal/instruction_processor.go" target="_blank"><code>internal/llminternal/instruction_processor.go</code></a> <a href="internal/llminternal/zz_cn_walkthrough.go" target="_blank"><code>internal/llminternal/zz_cn_walkthrough.go</code></a></td></tr><tr><td><b>Session 管理</b></td><td>会话、事件、状态作用域、历史过滤、内存实现。</td><td><a href="session/session.go" target="_blank"><code>session/session.go</code></a> <a href="session/service.go" target="_blank"><code>session/service.go</code></a> <a href="session/inmemory.go" target="_blank"><code>session/inmemory.go</code></a> <a href="session/zz_cn_walkthrough.go" target="_blank"><code>session/zz_cn_walkthrough.go</code></a></td></tr><tr><td><b>Tool 系统</b></td><td>Tool/Toolset/FunctionTool/人工确认/工具过滤。</td><td><a href="tool/tool.go" target="_blank"><code>tool/tool.go</code></a> <a href="tool/functiontool/function.go" target="_blank"><code>tool/functiontool/function.go</code></a> <a href="tool/zz_cn_walkthrough.go" target="_blank"><code>tool/zz_cn_walkthrough.go</code></a></td></tr><tr><td><b>Plugin 扩展</b></td><td>运行时、消息、事件、模型、工具的横切拦截点。</td><td><a href="plugin/plugin.go" target="_blank"><code>plugin/plugin.go</code></a> <a href="plugin/zz_cn_walkthrough.go" target="_blank"><code>plugin/zz_cn_walkthrough.go</code></a></td></tr><tr><td><b>工作流 Agent</b></td><td>顺序、并行、循环三类编排 Agent。</td><td><a href="agent/workflowagents/sequentialagent/agent.go" target="_blank"><code>agent/workflowagents/sequentialagent/agent.go</code></a> <a href="agent/workflowagents/parallelagent/agent.go" target="_blank"><code>agent/workflowagents/parallelagent/agent.go</code></a> <a href="agent/workflowagents/loopagent/agent.go" target="_blank"><code>agent/workflowagents/loopagent/agent.go</code></a></td></tr><tr><td><b>REST/SSE 服务</b></td><td>把 Runtime 暴露给 WebUI/外部客户端。</td><td><a href="server/adkrest/handler.go" target="_blank"><code>server/adkrest/handler.go</code></a> <a href="server/adkrest/controllers/runtime.go" target="_blank"><code>server/adkrest/controllers/runtime.go</code></a> <a href="server/adkrest/controllers/sessions.go" target="_blank"><code>server/adkrest/controllers/sessions.go</code></a></td></tr><tr><td><b>Artifact/Memory</b></td><td>文件制品与长期记忆能力。</td><td><a href="artifact/service.go" target="_blank"><code>artifact/service.go</code></a> <a href="memory/service.go" target="_blank"><code>memory/service.go</code></a></td></tr><tr><td><b>Model 抽象</b></td><td>统一底层 LLM Provider 的请求/响应协议。</td><td><a href="model/llm.go" target="_blank"><code>model/llm.go</code></a></td></tr></tbody>
+    </table>
+    <h3>核心包之间的依赖关系</h3>
+    <div class="flow">
+      <div class="step">HTTP/WebUI</div><div class="step">server/adkrest</div><div class="step">runner</div><div class="step">agent</div><div class="step">llminternal.Flow</div><div class="step">model/tool</div><div class="step">session</div>
+    </div>
+    <p>注意：<code>server</code> 是外层适配器，<code>runner</code> 是运行时编排器，<code>agent</code> 是执行节点抽象，<code>internal/llminternal</code> 是 LLM Agent 的推理循环内核，<code>session</code> 是事件和状态的事实来源。</p>
+  </section>
+
+  <section id="run-flow" data-search="Runner Run 一次请求 数据流 InvocationContext">
+    <h2>3. 一次用户请求的完整数据链路</h2>
+    <div class="flow">
+      <div class="step">客户端发送消息</div><div class="step">REST Runtime API</div><div class="step">Runner.Run</div><div class="step">Get/Create Session</div><div class="step">findAgentToRun</div><div class="step">append 用户 Event</div><div class="step">Agent.Run</div><div class="step">Flow 调模型/工具</div><div class="step">AppendEvent</div><div class="step">SSE 返回事件</div>
+    </div>
+    <h3>源码走读</h3>
+    <ol>
+      <li><a href="runner/runner.go" target="_blank"><code>Runner.Run</code></a> 是入口。它不会直接返回最终文本，而是返回一个事件迭代器。</li>
+      <li>先通过 <a href="session/service.go" target="_blank"><code>session.Service</code></a> 读取会话；如果开启 <code>AutoCreateSession</code>，会话不存在时自动创建。</li>
+      <li><a href="runner/runner.go" target="_blank"><code>findAgentToRun</code></a> 根据历史事件判断本轮由谁接手。这样工具确认、函数响应、子 Agent 连续对话不会丢上下文。</li>
+      <li>Runner 创建 <a href="internal/context/invocation_context.go" target="_blank"><code>InvocationContext</code></a>，把 Session、Artifact、Memory、Agent、用户输入、RunConfig 装进去。</li>
+      <li><a href="runner/runner.go" target="_blank"><code>appendMessageToSession</code></a> 把用户消息先写入 Session，使后续 prompt 构造时能看到本轮输入。</li>
+      <li>Runner 消费 <code>agentToRun.Run(ctx)</code> 产生的事件；非 partial 事件会调用 <code>SessionService.AppendEvent</code> 持久化。</li>
+    </ol>
+    <div class="callout"><b>设计重点：</b>Runner 自己不做模型调用，也不做业务工具逻辑。它只负责把运行时上下文装配好，并保证事件被正确分发、保存、返回。</div>
+  </section>
+
+  <section id="session" data-search="Session 管理 Event StateDelta app user temp inmemory">
+    <h2>4. Session 管理：如何实现会话、历史、状态</h2>
+    <p>Session 是 Agent 系统里的“事实账本”。如果没有 Session，Agent 就只能做单轮问答；有了 Session，系统才能支持多轮上下文、工具结果回灌、状态变量、跨 Agent 协作和恢复执行。</p>
+    <h3>核心对象</h3>
+    <table>
+      <thead><tr><th>对象</th><th>作用</th><th>源码</th></tr></thead>
+      <tbody>
+        <tr><td><code>Session</code></td><td>一条会话线程，包含 ID、AppName、UserID、State、Events、更新时间。</td><td><a href="session/session.go" target="_blank"><code>session/session.go</code></a></td></tr>
+        <tr><td><code>Event</code></td><td>一次原子运行事实：用户消息、模型回复、工具调用、工具结果、状态变更、转交等。</td><td><a href="session/session.go" target="_blank"><code>session/session.go</code></a></td></tr>
+        <tr><td><code>State</code></td><td>KV 状态，可被指令模板、工具、回调读取。</td><td><a href="session/session.go" target="_blank"><code>session/session.go</code></a></td></tr>
+        <tr><td><code>Service</code></td><td>会话存储接口，支持 Create/Get/List/Delete/AppendEvent。</td><td><a href="session/service.go" target="_blank"><code>session/service.go</code></a></td></tr>
+        <tr><td><code>inMemoryService</code></td><td>内存实现，最适合学习状态合并和事件追加逻辑。</td><td><a href="session/inmemory.go" target="_blank"><code>session/inmemory.go</code></a></td></tr>
+      </tbody>
+    </table>
+    <h3>状态作用域</h3>
+    <table>
+      <thead><tr><th>Key 前缀</th><th>作用域</th><th>业务含义</th><th>是否长期保存</th></tr></thead>
+      <tbody>
+        <tr><td><code>app:</code></td><td>应用级</td><td>同一 app 下所有用户/会话共享，例如全局配置。</td><td>是</td></tr>
+        <tr><td><code>user:</code></td><td>用户级</td><td>同一 app + user 的多条会话共享，例如用户偏好。</td><td>是</td></tr>
+        <tr><td>无前缀</td><td>Session 级</td><td>当前会话私有，例如本轮任务进度。</td><td>是</td></tr>
+        <tr><td><code>temp:</code></td><td>Invocation 临时级</td><td>只在当前用户请求链路内使用，例如临时中间变量。</td><td>否，追加事件前会裁剪</td></tr>
+      </tbody>
+    </table>
+    <h3>AppendEvent 的业务含义</h3>
+    <p><a href="session/inmemory.go" target="_blank"><code>AppendEvent</code></a> 不是简单 append 数组，它同时做四件事：</p>
+    <ol>
+      <li>拒绝 nil session / nil event，避免破坏会话账本。</li>
+      <li>忽略 <code>Partial</code> 流式片段，只保存最终事件，防止历史被大量半截文本污染。</li>
+      <li>调用 <code>sess.appendEvent(event)</code> 更新当前返回给 Runner 的 session 副本。</li>
+      <li>把事件复制进存储层，并根据 <code>event.Actions.StateDelta</code> 更新 app/user/session 状态。</li>
+    </ol>
+    <div class="callout warn"><b>注意：</b>内存实现用 <code>sync.RWMutex</code> 保证并发安全；生产环境如果换成数据库实现，需要保持同样的语义：事件追加和状态更新最好是同一事务。</div>
+  </section>
+
+  <section id="llm-flow" data-search="LLM Flow 模型调用 prompt processor request response function call">
+    <h2>5. LLM Agent 推理循环：模型如何和工具反复协作</h2>
+    <p>LLM Agent 的真正核心在 <a href="internal/llminternal/base_flow.go" target="_blank"><code>internal/llminternal/base_flow.go</code></a>。它实现的不是“一次模型调用”，而是一个循环：模型可能先回复工具调用，框架执行工具，把工具结果作为 FunctionResponse 加入上下文，再次调用模型，直到最终回复。</p>
+    <div class="flow">
+      <div class="step">创建 LLMRequest</div><div class="step">RequestProcessors 注入指令/历史/工具</div><div class="step">BeforeModel 回调</div><div class="step">model.GenerateContent</div><div class="step">AfterModel 回调</div><div class="step">生成模型 Event</div><div class="step">执行工具</div><div class="step">生成 FunctionResponse Event</div><div class="step">下一轮模型步</div>
+    </div>
+    <h3>RequestProcessors 是什么</h3>
+    <p><code>DefaultRequestProcessors</code> 是一条 Prompt 构造流水线。它按顺序把基础配置、工具声明、认证/确认请求、Instruction、身份信息、Session 历史、规划内容、代码执行、输出 Schema、Agent 转交工具等塞进同一个 <code>LLMRequest</code>。</p>
+    <p>重点文件：</p>
+    <ul class="tight">
+      <li><a href="internal/llminternal/base_flow.go" target="_blank"><code>internal/llminternal/base_flow.go</code></a>：总流水线。</li>
+      <li><a href="internal/llminternal/contents_processor.go" target="_blank"><code>internal/llminternal/contents_processor.go</code></a>：如何读取 Session.Events 并组装历史上下文。</li>
+      <li><a href="internal/llminternal/instruction_processor.go" target="_blank"><code>internal/llminternal/instruction_processor.go</code></a>：如何处理 Instruction / GlobalInstruction / 模板变量。</li>
+      <li><a href="internal/llminternal/outputschema_processor.go" target="_blank"><code>internal/llminternal/outputschema_processor.go</code></a>：结构化输出如何进入请求。</li>
+      <li><a href="internal/llminternal/agent_transfer.go" target="_blank"><code>internal/llminternal/agent_transfer.go</code></a>：Agent 转交工具如何被注入。</li>
+    </ul>
+    <h3>什么时候停止循环</h3>
+    <p><a href="session/session.go" target="_blank"><code>Event.IsFinalResponse</code></a> 决定一个事件是否是最终响应。包含 function_call、function_response、partial、尾部代码执行结果等情况，通常不是最终响应，需要继续循环。</p>
+  </section>
+
+  <section id="tool-flow" data-search="Tool FunctionTool 工具调用 Human confirmation function_call function_response">
+    <h2>6. Tool Calling：工具如何声明、执行、回灌给模型</h2>
+    <h3>工具从哪里来</h3>
+    <p>业务开发者最常用的是 <a href="tool/functiontool/function.go" target="_blank"><code>tool/functiontool/function.go</code></a>。你写一个强类型 Go 函数，框架用泛型和反射推导 JSON Schema，再把它包装成模型可见的 <code>FunctionDeclaration</code>。</p>
+    <h3>完整链路</h3>
+    <div class="flow">
+      <div class="step">业务函数</div><div class="step">FunctionTool.New</div><div class="step">Declaration/Schema</div><div class="step">PackTool 到 LLMRequest</div><div class="step">模型输出 function_call</div><div class="step">handleFunctionCalls</div><div class="step">Tool.Run</div><div class="step">FunctionResponse Event</div><div class="step">模型继续总结</div>
+    </div>
+    <h3>工具执行的关键机制</h3>
+    <table>
+      <thead><tr><th>机制</th><th>说明</th><th>源码</th></tr></thead>
+      <tbody>
+        <tr><td>参数转换</td><td>模型传入 map，FunctionTool 按 JSON Schema 转成 Go 强类型 Args。</td><td><a href="tool/functiontool/function.go" target="_blank"><code>tool/functiontool/function.go</code></a></td></tr>
+        <tr><td>并发执行</td><td>一次模型响应里多个 function_call 会用 goroutine 并发执行。</td><td><a href="internal/llminternal/base_flow.go" target="_blank"><code>handleFunctionCalls</code></a></td></tr>
+        <tr><td>结果合并</td><td>多个工具响应最终合并为一个 FunctionResponse Event。</td><td><a href="internal/llminternal/base_flow.go" target="_blank"><code>internal/llminternal/base_flow.go</code></a></td></tr>
+        <tr><td>人工确认</td><td>高风险工具可通过 RequestConfirmation 触发 HITL。</td><td><a href="tool/tool.go" target="_blank"><code>tool/tool.go</code></a> <a href="tool/toolconfirmation/tool_confirmation.go" target="_blank"><code>tool/toolconfirmation/tool_confirmation.go</code></a></td></tr>
+        <tr><td>错误兜底</td><td>工具不存在、工具报错可走 OnToolErrorCallback。</td><td><a href="internal/llminternal/base_flow.go" target="_blank"><code>internal/llminternal/base_flow.go</code></a></td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><b>实践建议：</b>工具描述要像 API 文档一样清晰：什么时候用、参数含义、限制条件、返回值语义。否则模型容易调用错工具或幻觉工具名。</div>
+  </section>
+
+  <section id="plugin" data-search="Plugin Callback Hook 插件 回调 拦截">
+    <h2>7. Plugin/Callback：在哪里插入自己的横切逻辑</h2>
+    <p>如果你要做透明 LLM 代理、日志审计、成本统计、模型缓存、安全拦截、提示词注入检查，优先看 <a href="plugin/plugin.go" target="_blank"><code>plugin/plugin.go</code></a> 和 <code>internal/plugininternal</code>。</p>
+    <table>
+      <thead><tr><th>扩展点</th><th>触发位置</th><th>适合做什么</th></tr></thead>
+      <tbody>
+        <tr><td><code>OnUserMessageCallback</code></td><td>用户消息写入 Session 前</td><td>清洗输入、追加业务元数据、敏感词预检。</td></tr>
+        <tr><td><code>BeforeRunCallback</code></td><td>Runner 真正执行 Agent 前</td><td>鉴权、限流、全局开关、任务提前拦截。</td></tr>
+        <tr><td><code>OnEventCallback</code></td><td>Agent 产出事件后、落 Session 前</td><td>事件审计、响应改写、指标采集。</td></tr>
+        <tr><td><code>BeforeModelCallback</code></td><td>模型调用前</td><td>记录 prompt、缓存命中、动态改写请求。</td></tr>
+        <tr><td><code>AfterModelCallback</code></td><td>模型返回后</td><td>记录 response、token 统计、输出安全检查。</td></tr>
+        <tr><td><code>BeforeToolCallback</code></td><td>工具执行前</td><td>权限校验、参数修正、危险操作拦截。</td></tr>
+        <tr><td><code>AfterToolCallback</code></td><td>工具执行后</td><td>格式标准化、结果脱敏、错误转义。</td></tr>
+      </tbody>
+    </table>
+    <div class="callout ok"><b>和 Agent Callback 的区别：</b>Plugin 更偏全局横切；Agent Callback 更偏单个 Agent 的业务流程。</div>
+  </section>
+
+  <section id="workflow" data-search="Workflow Sequential Parallel Loop 工作流 多Agent 编排">
+    <h2>8. 工作流 Agent：顺序、并行、循环</h2>
+    <table>
+      <thead><tr><th>类型</th><th>行为</th><th>适合场景</th><th>源码</th></tr></thead>
+      <tbody>
+        <tr><td>SequentialAgent</td><td>按顺序执行所有子 Agent。</td><td>固定流水线：需求分析 -> 生成 -> 审查 -> 修复。</td><td><a href="agent/workflowagents/sequentialagent/agent.go" target="_blank"><code>agent/workflowagents/sequentialagent/agent.go</code></a></td></tr>
+        <tr><td>ParallelAgent</td><td>并发执行子 Agent，并用 Branch 隔离上下文。</td><td>多专家并行评审、多方案生成。</td><td><a href="agent/workflowagents/parallelagent/agent.go" target="_blank"><code>agent/workflowagents/parallelagent/agent.go</code></a></td></tr>
+        <tr><td>LoopAgent</td><td>重复执行子 Agent，直到次数结束或 Escalate。</td><td>迭代改进：写代码 -> 测试 -> 修复。</td><td><a href="agent/workflowagents/loopagent/agent.go" target="_blank"><code>agent/workflowagents/loopagent/agent.go</code></a></td></tr>
+      </tbody>
+    </table>
+    <h3>ParallelAgent 的关键点</h3>
+    <p>并行 Agent 会给每个子 Agent 创建新的 InvocationContext，并设置不同的 <code>Branch</code>。Branch 的意义是隔离同一轮并行任务中的中间历史，避免 A 专家看到 B 专家的中间输出。</p>
+    <p>源码里还有一个重要细节：子 Agent 把事件发给 Runner 后会等待 ack，确保上游已处理事件再继续，降低并发乱序风险。</p>
+  </section>
+
+  <section id="rest" data-search="REST SSE WebUI API Runtime Controller Server">
+    <h2>9. REST/SSE：WebUI 如何调用这个 Agent Runtime</h2>
+    <p><a href="server/adkrest/handler.go" target="_blank"><code>server/adkrest/handler.go</code></a> 创建 HTTP Server，并注册 Sessions、Runtime、Apps、Debug、Artifacts 等 Router。真正执行对话的是 Runtime Controller，它会把 HTTP 请求转成 Runner 调用，并通过 SSE 输出事件。</p>
+    <div class="flow">
+      <div class="step">浏览器/WebUI</div><div class="step">POST /run 或 stream</div><div class="step">RuntimeAPIController</div><div class="step">AgentLoader 加载 Agent</div><div class="step">runner.New</div><div class="step">Runner.Run</div><div class="step">SSE Event</div>
+    </div>
+    <h3>调试链路</h3>
+    <p>DebugTelemetry 使用 OpenTelemetry Span/Log 记录请求、模型调用、工具调用、Agent 执行结果。你之前做透明 LLM 网关时关心“看到 prompt 和 response”，在这个框架里可以优先从 Plugin 的 BeforeModel/AfterModel 或 DebugTelemetry 两条线扩展。</p>
+  </section>
+
+  <section id="code-snippets" data-search="源码片段 关键代码 注释">
+    <h2>10. 关键源码片段：带中文注释的入口</h2>
+    <p>下面摘出的是最值得反复读的片段。点击标题可以展开。</p>
+    <details class="snippet"><summary>Runner.Run：一次用户请求如何进入运行时</summary><pre><code> 130  // For each user message it finds the proper agent within an agent tree to
+ 131  // continue the conversation within the session.
+ 132  // 中文业务注释：Run 是一次用户请求的总入口。它返回事件迭代器，所以调用方可以边读边推给前端，而不是等待整轮完成。
+ 133  func (r *Runner) Run(ctx context.Context, userID, sessionID string, msg *genai.Content, cfg agent.RunConfig, opts ...RunOption) iter.Seq2[*session.Event, error] {
+ 134  	// TODO(hakim): we need to validate whether cfg is compatible with the Agent.
+ 135  	//   see adk-python/src/google/adk/runners.py Runner._new_invocation_context.
+ 136  	// TODO: setup tracer.
+ 137  	return func(yield func(*session.Event, error) bool) {
+ 138  		options := runOptions{}
+ 139  		for _, opt := range opts {
+ 140  			opt(&amp;options)
+ 141  		}
+ 142  
+ 143  		// 中文业务注释：先恢复已有会话。Agent 的上下文、历史消息、状态都从 SessionService 来；如果开启 AutoCreateSession，找不到会话时会自动创建。
+ 144  		var storedSession session.Session
+ 145  		getResp, err := r.sessionService.Get(ctx, &amp;session.GetRequest{
+ 146  			AppName:   r.appName,
+ 147  			UserID:    userID,
+ 148  			SessionID: sessionID,
+ 149  		})
+ 150  		if err != nil {
+ 151  			if !r.autoCreateSession {
+ 152  				yield(nil, err)
+ 153  				return
+ 154  			}
+ 155  			createResp, err := r.sessionService.Create(ctx, &amp;session.CreateRequest{
+ 156  				AppName:   r.appName,
+ 157  				UserID:    userID,
+ 158  				SessionID: sessionID,
+ 159  			})
+ 160  			if err != nil {
+ 161  				yield(nil, err)
+ 162  				return
+ 163  			}
+ 164  			storedSession = createResp.Session
+ 165  		} else {
+ 166  			storedSession = getResp.Session
+ 167  		}
+ 168  
+ 169  		// 中文业务注释：根据历史事件决定本轮继续由哪个 Agent 接手。典型场景：上轮子 Agent 发起工具调用，本轮用户返回工具确认/函数响应，需要回到同一个子 Agent。
+ 170  		agentToRun, err := r.findAgentToRun(storedSession, msg)</code></pre></details>
+<details class="snippet"><summary>Runner：如何决定本轮由哪个 Agent 执行</summary><pre><code> 165  		} else {
+ 166  			storedSession = getResp.Session
+ 167  		}
+ 168  
+ 169  		// 中文业务注释：根据历史事件决定本轮继续由哪个 Agent 接手。典型场景：上轮子 Agent 发起工具调用，本轮用户返回工具确认/函数响应，需要回到同一个子 Agent。
+ 170  		agentToRun, err := r.findAgentToRun(storedSession, msg)
+ 171  		if err != nil {
+ 172  			yield(nil, err)
+ 173  			return
+ 174  		}
+ 175  
+ 176  		ctx = parentmap.ToContext(ctx, r.parents)
+ 177  		ctx = runconfig.ToContext(ctx, &amp;runconfig.RunConfig{
+ 178  			StreamingMode: runconfig.StreamingMode(cfg.StreamingMode),
+ 179  		})
+ 180  		ctx = plugininternal.ToContext(ctx, r.pluginManager)
+ 181  
+ 182  		var artifacts agent.Artifacts
+ 183  		if r.artifactService != nil {
+ 184  			artifacts = &amp;artifactinternal.Artifacts{
+ 185  				Service:   r.artifactService,
+ 186  				SessionID: storedSession.ID(),
+ 187  				AppName:   storedSession.AppName(),</code></pre></details>
+<details class="snippet"><summary>Session.AppendEvent：事件追加与状态更新</summary><pre><code> 197  }
+ 198  
+ 199  // 中文业务注释：追加事件是 Session 管理的核心。每个非 partial Event 都会进入历史，同时根据 StateDelta 更新不同作用域的状态。
+ 200  func (s *inMemoryService) AppendEvent(ctx context.Context, curSession Session, event *Event) error {
+ 201  	if curSession == nil {
+ 202  		return fmt.Errorf(&quot;session is nil&quot;)
+ 203  	}
+ 204  	if event == nil {
+ 205  		return fmt.Errorf(&quot;event is nil&quot;)
+ 206  	}
+ 207  	// 中文业务注释：流式 partial 只用于实时展示，不进入长期历史；最终非 partial 事件才是可回放、可持久化的事实。
+ 208  	if event.Partial {
+ 209  		return nil
+ 210  	}
+ 211  
+ 212  	sess, ok := curSession.(*session)
+ 213  	if !ok {
+ 214  		return fmt.Errorf(&quot;unexpected session type %T for session ID %s&quot;, curSession, curSession.ID())
+ 215  	}
+ 216  
+ 217  	s.mu.Lock()
+ 218  	defer s.mu.Unlock()
+ 219  
+ 220  	stored_session, ok := s.sessions.Get(sess.id.Encode())
+ 221  	if !ok {
+ 222  		return fmt.Errorf(&quot;session not found, cannot apply event&quot;)
+ 223  	}
+ 224  
+ 225  	// update the in-memory session
+ 226  	if err := sess.appendEvent(event); err != nil {
+ 227  		return fmt.Errorf(&quot;fail to set state on appendEvent: %w&quot;, err)
+ 228  	}
+ 229  
+ 230  	eventCopy := &amp;Event{
+ 231  		ID:           event.ID,
+ 232  		InvocationID: event.InvocationID,
+ 233  		Timestamp:    event.Timestamp,
+ 234  		Author:       event.Author,
+ 235  		Branch:       event.Branch,
+ 236  		Actions: EventActions{
+ 237  			StateDelta:                 maps.Clone(event.Actions.StateDelta),
+ 238  			ArtifactDelta:              maps.Clone(event.Actions.ArtifactDelta),
+ 239  			RequestedToolConfirmations: maps.Clone(event.Actions.RequestedToolConfirmations),
+ 240  			TransferToAgent:            event.Actions.TransferToAgent,
+ 241  			Escalate:                   event.Actions.Escalate,
+ 242  			SkipSummarization:          event.Actions.SkipSummarization,
+ 243  		},
+ 244  		LongRunningToolIDs: slices.Clone(event.LongRunningToolIDs),
+ 245  		LLMResponse:        event.LLMResponse,
+ 246  	}
+ 247  
+ 248  	// update the in-memory session service
+ 249  	stored_session.events = append(stored_session.events, eventCopy)
+ 250  	stored_session.updatedAt = event.Timestamp
+ 251  	// 中文业务注释：StateDelta 是“事件驱动状态更新”的入口。这里把 app:/user:/session 普通 key 拆分到对应存储层。
+ 252  	if len(event.Actions.StateDelta) &gt; 0 {
+ 253  		appDelta, userDelta, sessionDelta := sessionutils.ExtractStateDeltas(event.Actions.StateDelta)
+ 254  		s.updateAppState(appDelta, curSession.AppName())
+ 255  		s.updateUserState(userDelta, curSession.AppName(), curSession.UserID())</code></pre></details>
+<details class="snippet"><summary>Session.Event：为什么事件不只是聊天消息</summary><pre><code>  90  // It is used to store the content of the conversation, as well as
+  91  // the actions taken by the agents like function calls, etc.
+  92  // 中文业务注释：Event 是框架里的“事实记录”。不要把它只理解成聊天消息，它还承载工具调用、工具响应、状态变化、转交、人工确认等运行时信息。
+  93  type Event struct {
+  94  	model.LLMResponse
+  95  
+  96  	// Set by storage
+  97  	ID        string
+  98  	Timestamp time.Time
+  99  
+ 100  	// Set by agent.Context implementation.
+ 101  	InvocationID string
+ 102  	// The branch of the event.
+ 103  	//
+ 104  	// The format is like agent_1.agent_2.agent_3, where agent_1 is
+ 105  	// the parent of agent_2, and agent_2 is the parent of agent_3.
+ 106  	//
+ 107  	// Branch is used when multiple sub-agent shouldn&#x27;t see their peer agents&#x27;
+ 108  	// conversation history.
+ 109  	Branch string
+ 110  	// Author is the name of the event&#x27;s author
+ 111  	Author string
+ 112  
+ 113  	// The actions taken by the agent.
+ 114  	Actions EventActions
+ 115  	// Set of IDs of the long running function calls.
+ 116  	// Agent client will know from this field about which function call is long running.
+ 117  	// Only valid for function call event.
+ 118  	LongRunningToolIDs []string
+ 119  }
+ 120  
+ 121  // IsFinalResponse returns whether the event is the final response of an agent.
+ 122  //
+ 123  // Note: when multiple agents participate in one invocation, there could be
+ 124  // multiple events with IsFinalResponse() as True, for each participating agent.
+ 125  // 中文业务注释：判断一个事件是否让本轮 Flow 停止。只要还包含 function_call/function_response/partial，通常说明还需要继续下一步模型或工具循环。
+ 126  func (e *Event) IsFinalResponse() bool {
+ 127  	if (e.Actions.SkipSummarization) || len(e.LongRunningToolIDs) &gt; 0 {
+ 128  		return true
+ 129  	}
+ 130  
+ 131  	return !hasFunctionCalls(&amp;e.LLMResponse) &amp;&amp; !hasFunctionResponses(&amp;e.LLMResponse) &amp;&amp; !e.LLMResponse.Partial &amp;&amp; !hasTrailingCodeExecutionResult(&amp;e.LLMResponse)
+ 132  }
+ 133  
+ 134  // NewEvent creates a new event defining now as the timestamp.
+ 135  func NewEvent(invocationID string) *Event {
+ 136  	return &amp;Event{
+ 137  		ID:           uuid.NewString(),</code></pre></details>
+<details class="snippet"><summary>LLM Flow：一次模型步完整流程</summary><pre><code> 125  }
+ 126  
+ 127  // 中文业务注释：runOneStep 表示一次“模型步”：加工请求 -&gt; 调模型 -&gt; 产出模型事件 -&gt; 如有工具调用则执行工具并产出工具响应事件。
+ 128  func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+ 129  	return func(yield func(*session.Event, error) bool) {
+ 130  		if f.Model == nil {
+ 131  			yield(nil, fmt.Errorf(&quot;agent %q: %w&quot;, ctx.Agent().Name(), ErrModelNotConfigured))
+ 132  			return
+ 133  		}
+ 134  
+ 135  		// 中文业务注释：先创建空的 LLMRequest，随后由 RequestProcessors 逐步填入指令、历史、工具声明、输出 Schema 等内容。
+ 136  		req := &amp;model.LLMRequest{
+ 137  			Model: f.Model.Name(),
+ 138  		}
+ 139  
+ 140  		// Preprocess before calling the LLM.
+ 141  		// 中文业务注释：请求预处理流水线。这里是 Prompt/工具/历史上下文真正被拼入 LLMRequest 的地方。
+ 142  		for ev, err := range f.preprocess(ctx, req) {
+ 143  			if err != nil {
+ 144  				yield(nil, err)
+ 145  				return
+ 146  			}
+ 147  			if ev != nil {
+ 148  				if !yield(ev, nil) {
+ 149  					return
+ 150  				}
+ 151  			}
+ 152  		}
+ 153  		if ctx.Ended() {
+ 154  			return
+ 155  		}
+ 156  		// Create event to pass to callback state delta
+ 157  		stateDelta := make(map[string]any)
+ 158  		artifactDelta := make(map[string]int64)
+ 159  		// Calls the LLM.
+ 160  		// 中文业务注释：调用模型。callLLM 内部会执行插件/回调、记录遥测，并兼容流式与非流式响应。
+ 161  		for resp, err := range f.callLLM(ctx, req, stateDelta, artifactDelta) {
+ 162  			if err != nil {
+ 163  				yield(nil, err)
+ 164  				return
+ 165  			}
+ 166  			if err := f.postprocess(ctx, req, resp); err != nil {
+ 167  				yield(nil, err)
+ 168  				return
+ 169  			}
+ 170  			// Skip the model response event if there is no content and no error code.
+ 171  			// This is needed for the code executor to trigger another loop according to
+ 172  			// adk-python src/google/adk/flows/llm_flows/base_llm_flow.py BaseLlmFlow._postprocess_async.
+ 173  			if resp.Content == nil &amp;&amp; resp.ErrorCode == &quot;&quot; &amp;&amp; !resp.Interrupted {
+ 174  				continue
+ 175  			}
+ 176  
+ 177  			// TODO: temporarily convert
+ 178  			tools := make(map[string]tool.Tool)
+ 179  			for k, v := range req.Tools {
+ 180  				tool, ok := v.(tool.Tool)
+ 181  				if !ok {
+ 182  					if !yield(nil, fmt.Errorf(&quot;unexpected tool type %T for tool %v&quot;, v, k)) {
+ 183  						return
+ 184  					}
+ 185  				}
+ 186  				tools[k] = tool
+ 187  			}
+ 188  
+ 189  			// Build the event and yield.
+ 190  			modelResponseEvent := f.finalizeModelResponseEvent(ctx, resp, tools, stateDelta)
+ 191  			if !yield(modelResponseEvent, nil) {
+ 192  				return
+ 193  			}
+ 194  			// TODO: generate and yield an auth event if needed.
+ 195  
+ 196  			if resp.Partial {
+ 197  				continue
+ 198  			}
+ 199  			// Handle function calls.
+ 200  
+ 201  			// 中文业务注释：如果模型返回 function_call，这里会真正执行工具，并生成 function_response 事件给下一轮模型消费。
+ 202  			ev, err := f.handleFunctionCalls(ctx, tools, resp.LLMResponse, nil)
+ 203  			if err != nil {
+ 204  				yield(nil, err)
+ 205  				return
+ 206  			}
+ 207  			if ev == nil {
+ 208  				// nothing to yield/process.
+ 209  				continue
+ 210  			}
+ 211  
+ 212  			toolConfirmationEvent := generateRequestConfirmationEvent(ctx, modelResponseEvent, ev)
+ 213  			if toolConfirmationEvent != nil {
+ 214  				if !yield(toolConfirmationEvent, nil) {
+ 215  					return
+ 216  				}
+ 217  			}
+ 218  
+ 219  			if !yield(ev, nil) {
+ 220  				return
+ 221  			}
+ 222  </code></pre></details>
+<details class="snippet"><summary>Tool Calling：并发工具调用与 FunctionResponse 合并</summary><pre><code> 593  // TODO: accept filters to include/exclude function calls.
+ 594  // TODO: check feasibility of running tool.Run concurrently.
+ 595  // 中文业务注释：执行模型请求的所有工具调用。多个 function_call 会并发运行，最后合并为一个 function_response event，减少后续模型上下文碎片。
+ 596  func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.Tool, resp *model.LLMResponse, toolConfirmations map[string]*toolconfirmation.ToolConfirmation) (mergedEvent *session.Event, err error) {
+ 597  	fnCalls := utils.FunctionCalls(resp.Content)
+ 598  	toolNames := slices.Collect(maps.Keys(toolsDict))
+ 599  
+ 600  	// Merged span for parallel tool calls - create only if there is more than one tool call.
+ 601  	if len(fnCalls) &gt; 1 {
+ 602  		mergedCtx, mergedToolCallSpan := telemetry.StartTrace(ctx, &quot;execute_tool (merged)&quot;)
+ 603  		ctx = ctx.WithContext(mergedCtx)
+ 604  		defer func() {
+ 605  			telemetry.TraceMergedToolCallsResult(mergedToolCallSpan, mergedEvent, err)
+ 606  			mergedToolCallSpan.End()
+ 607  		}()
+ 608  	}
+ 609  
+ 610  	fnResponseEvents := make([]*session.Event, len(fnCalls))
+ 611  	var wg sync.WaitGroup
+ 612  
+ 613  	for i, fnCall := range fnCalls {
+ 614  		wg.Add(1)
+ 615  		go func(i int, fnCall *genai.FunctionCall) {
+ 616  			defer wg.Done()
+ 617  
+ 618  			sctx, span := telemetry.StartExecuteToolSpan(ctx, telemetry.StartExecuteToolSpanParams{
+ 619  				ToolName: fnCall.Name,
+ 620  				Args:     fnCall.Args,
+ 621  			})
+ 622  			defer span.End()
+ 623  			toolCallCtx := ctx.WithContext(sctx)
+ 624  			var confirmation *toolconfirmation.ToolConfirmation
+ 625  			if toolConfirmations != nil {
+ 626  				confirmation = toolConfirmations[fnCall.ID]
+ 627  			}
+ 628  			toolCtx := toolinternal.NewToolContext(toolCallCtx, fnCall.ID, &amp;session.EventActions{StateDelta: make(map[string]any)}, confirmation)
+ 629  
+ 630  			var result map[string]any
+ 631  			curTool, found := toolsDict[fnCall.Name]
+ 632  			if !found {
+ 633  				err := newToolNotFoundError(fnCall.Name, toolNames)
+ 634  				result, err = f.runOnToolErrorCallbacks(toolCtx, &amp;fakeTool{name: fnCall.Name}, fnCall.Args, err)
+ 635  				if err != nil {
+ 636  					result = map[string]any{&quot;error&quot;: err.Error()}
+ 637  				}
+ 638  			} else if funcTool, ok := curTool.(toolinternal.FunctionTool); !ok {
+ 639  				err := newToolNotFoundError(fnCall.Name, toolNames)
+ 640  				result, err = f.runOnToolErrorCallbacks(toolCtx, &amp;fakeTool{name: fnCall.Name}, fnCall.Args, err)
+ 641  				if err != nil {
+ 642  					result = map[string]any{&quot;error&quot;: err.Error()}
+ 643  				}
+ 644  			} else {
+ 645  				result = f.callTool(toolCtx, funcTool, fnCall.Args)
+ 646  			}
+ 647  
+ 648  			// TODO: handle long-running tool.
+ 649  			ev := session.NewEvent(ctx.InvocationID())
+ 650  			ev.LLMResponse = model.LLMResponse{
+ 651  				Content: &amp;genai.Content{
+ 652  					Role: &quot;user&quot;,
+ 653  					Parts: []*genai.Part{
+ 654  						{
+ 655  							FunctionResponse: &amp;genai.FunctionResponse{
+ 656  								ID:       fnCall.ID,
+ 657  								Name:     fnCall.Name,
+ 658  								Response: result,
+ 659  							},
+ 660  						},
+ 661  					},
+ 662  				},
+ 663  			}
+ 664  			ev.Author = ctx.Agent().Name()
+ 665  			ev.Branch = ctx.Branch()
+ 666  			ev.Actions = *toolCtx.Actions()
+ 667  
+ 668  			traceTool := curTool
+ 669  			if traceTool == nil {
+ 670  				traceTool = &amp;fakeTool{name: fnCall.Name}
+ 671  			}
+ 672  			var toolErr error
+ 673  			resultErr := result[&quot;error&quot;]
+ 674  			if resultErr != nil {
+ 675  				if err, ok := resultErr.(error); ok {
+ 676  					toolErr = err
+ 677  				} else if errStr, ok := resultErr.(string); ok {
+ 678  					toolErr = errors.New(errStr)
+ 679  				}
+ 680  			}
+ 681  			telemetry.TraceToolResult(span, telemetry.TraceToolResultParams{
+ 682  				Description:   traceTool.Description(),
+ 683  				ResponseEvent: ev,
+ 684  				Error:         toolErr,
+ 685  			})
+ 686  
+ 687  			fnResponseEvents[i] = ev</code></pre></details>
+<details class="snippet"><summary>FunctionTool.Run：强类型 Go 函数如何变成工具</summary><pre><code> 137  }
+ 138  
+ 139  // Description implements tool.Tool.
+ 140  func (f *functionTool[TArgs, TResults]) Description() string {
+ 141  	return f.cfg.Description
+ 142  }
+ 143  
+ 144  // Name implements tool.Tool.
+ 145  func (f *functionTool[TArgs, TResults]) Name() string {
+ 146  	return f.cfg.Name
+ 147  }
+ 148  
+ 149  // IsLongRunning implements tool.Tool.
+ 150  func (f *functionTool[TArgs, TResults]) IsLongRunning() bool {
+ 151  	return f.cfg.IsLongRunning
+ 152  }
+ 153  
+ 154  // ProcessRequest packs the function tool&#x27;s declaration into the LLM request.
+ 155  func (f *functionTool[TArgs, TResults]) ProcessRequest(ctx tool.Context, req *model.LLMRequest) error {
+ 156  	return toolutils.PackTool(req, f)
+ 157  }
+ 158  
+ 159  // FunctionDeclaration implements interfaces.FunctionTool.
+ 160  // 中文业务注释：Declaration 决定模型看到的工具说明。工具名、描述、参数 Schema 写得越清楚，模型越不容易幻觉调用。
+ 161  func (f *functionTool[TArgs, TResults]) Declaration() *genai.FunctionDeclaration {
+ 162  	decl := &amp;genai.FunctionDeclaration{
+ 163  		Name:        f.Name(),
+ 164  		Description: f.Description(),
+ 165  	}
+ 166  	if f.inputSchema != nil {
+ 167  		decl.ParametersJsonSchema = f.inputSchema.Schema()
+ 168  	}
+ 169  	if f.outputSchema != nil {
+ 170  		decl.ResponseJsonSchema = f.outputSchema.Schema()
+ 171  	}
+ 172  
+ 173  	if f.cfg.IsLongRunning {
+ 174  		instruction := &quot;NOTE: This is a long-running operation. Do not call this tool again if it has already returned some intermediate or pending status.&quot;
+ 175  		if decl.Description != &quot;&quot; {
+ 176  			decl.Description += &quot;\n\n&quot; + instruction
+ 177  		} else {
+ 178  			decl.Description = instruction
+ 179  		}
+ 180  	}
+ 181  
+ 182  	return decl
+ 183  }
+ 184  
+ 185  // Run executes the tool with the provided context and yields events.
+ 186  // 中文业务注释：Run 是工具执行入口。它完成 map 参数 -&gt; 强类型参数 -&gt; 业务函数 -&gt; 结构化 map 返回的双向转换，并处理人工确认。
+ 187  func (f *functionTool[TArgs, TResults]) Run(ctx tool.Context, args any) (result map[string]any, err error) {
+ 188  	// TODO: Handle function call request from tc.InvocationContext.
+ 189  	defer func() {
+ 190  		if r := recover(); r != nil {
+ 191  			err = fmt.Errorf(&quot;panic in tool %q: %v\nstack: %s&quot;, f.Name(), r, debug.Stack())
+ 192  		}
+ 193  	}()
+ 194  
+ 195  	m, ok := args.(map[string]any)
+ 196  	if !ok {
+ 197  		return nil, fmt.Errorf(&quot;unexpected args type, got: %T&quot;, args)
+ 198  	}
+ 199  	input, err := typeutil.ConvertToWithJSONSchema[map[string]any, TArgs](m, f.inputSchema)
+ 200  	if err != nil {
+ 201  		return nil, err
+ 202  	}
+ 203  
+ 204  	if confirmation := ctx.ToolConfirmation(); confirmation != nil {
+ 205  		if !confirmation.Confirmed {
+ 206  			return nil, fmt.Errorf(&quot;error tool %q %w&quot;, f.Name(), tool.ErrConfirmationRejected)
+ 207  		}</code></pre></details>
+<details class="snippet"><summary>ParallelAgent：并行子 Agent 与 Branch 隔离</summary><pre><code>  65  }
+  66  
+  67  // 中文业务注释：并行工作流入口。每个子 Agent 使用同一用户输入，但写入不同 Branch，从而隔离彼此中间历史。
+  68  func run(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+  69  	curAgent := ctx.Agent()
+  70  
+  71  	var (
+  72  		errGroup, errGroupCtx = errgroup.WithContext(ctx)
+  73  		doneChan              = make(chan bool)
+  74  		resultsChan           = make(chan result)
+  75  	)
+  76  
+  77  	for _, sa := range ctx.Agent().SubAgents() {
+  78  		branch := fmt.Sprintf(&quot;%s.%s&quot;, curAgent.Name(), sa.Name())
+  79  		if ctx.Branch() != &quot;&quot; {
+  80  			branch = fmt.Sprintf(&quot;%s.%s&quot;, ctx.Branch(), branch)
+  81  		}
+  82  		subAgent := sa
+  83  		errGroup.Go(func() error {
+  84  			subCtx := icontext.NewInvocationContext(errGroupCtx, icontext.InvocationContextParams{
+  85  				Artifacts:    ctx.Artifacts(),
+  86  				Memory:       ctx.Memory(),
+  87  				Session:      ctx.Session(),
+  88  				Branch:       branch,
+  89  				Agent:        subAgent,
+  90  				UserContent:  ctx.UserContent(),
+  91  				RunConfig:    ctx.RunConfig(),
+  92  				InvocationID: ctx.InvocationID(),
+  93  			})
+  94  
+  95  			if err := runSubAgent(subCtx, subAgent, resultsChan, doneChan); err != nil {
+  96  				return fmt.Errorf(&quot;failed to run sub-agent %q: %w&quot;, subAgent.Name(), err)
+  97  			}
+  98  
+  99  			return nil
+ 100  		})
+ 101  	}
+ 102  
+ 103  	go func() {
+ 104  		if err := errGroup.Wait(); err != nil {
+ 105  			select {
+ 106  			case resultsChan &lt;- result{err: err}:
+ 107  			case &lt;-doneChan:
+ 108  			}
+ 109  		}
+ 110  		close(resultsChan)
+ 111  	}()
+ 112  
+ 113  	return func(yield func(*session.Event, error) bool) {
+ 114  		defer close(doneChan)
+ 115  
+ 116  		for res := range resultsChan {
+ 117  			shouldContinue := yield(res.event, res.err)
+ 118  
+ 119  			// Signal sub-agent that event processing (including session append) is complete
+ 120  			if res.ackChan != nil {
+ 121  				close(res.ackChan)
+ 122  			}
+ 123  
+ 124  			if !shouldContinue {
+ 125  				break
+ 126  			}
+ 127  		}
+ 128  	}
+ 129  }
+ 130  
+ 131  // 中文业务注释：子 Agent 事件发送后会等待 ack，确保 Runner 已经完成事件处理/落库，避免并发事件顺序失控。
+ 132  func runSubAgent(ctx agent.InvocationContext, agent agent.Agent, results chan&lt;- result, done &lt;-chan bool) error {
+ 133  	for event, err := range agent.Run(ctx) {
+ 134  		if err != nil {
+ 135  			return err
+ 136  		}
+ 137  
+ 138  		ackChan := make(chan struct{})
+ 139  </code></pre></details>
+  </section>
+
+  <section id="patterns" data-search="设计模式 agent 架构 可复用 golang">
+    <h2>11. 你可以迁移到自己 Agent 项目的设计模式</h2>
+    <div class="grid">
+      <div class="card"><h3>事件驱动，而不是字符串驱动</h3><p>把模型输出、工具调用、工具结果、状态更新都抽象成 Event。这样系统天然支持回放、审计、恢复、多 Agent 协作。</p></div>
+      <div class="card"><h3>Runner 做编排，Agent 做执行</h3><p>Runner 不写业务，Agent 不管 HTTP。职责分离后，你可以替换前端、替换存储、替换模型，而不改 Agent 核心。</p></div>
+      <div class="card"><h3>上下文对象集中传能力</h3><p>InvocationContext/ToolContext/CallbackContext 让各层拿到该拿的能力，同时避免函数参数爆炸。</p></div>
+      <div class="card"><h3>Prompt 构造做成 Pipeline</h3><p>Instruction、History、Tools、Schema、Memory 都是 RequestProcessor。以后加新能力不是改一坨 prompt 拼接代码，而是加 processor。</p></div>
+      <div class="card"><h3>工具是结构化协议</h3><p>工具参数和返回值要有 Schema，工具结果以 FunctionResponse 形式回灌模型，避免自由文本不可控。</p></div>
+      <div class="card"><h3>插件处理横切问题</h3><p>日志、审计、缓存、限流、安全检查不要塞进 Agent 业务逻辑，而是做成 Plugin。</p></div>
+    </div>
+    <h3>最小自研 Go Agent 框架可以按这个骨架做</h3>
+    <pre><code>type Event struct { /* 用户消息、模型消息、工具调用、工具结果、状态变化 */ }
+type SessionService interface { Get(...); Create(...); AppendEvent(...) }
+type Agent interface { Run(ctx InvocationContext) iter.Seq2[*Event, error] }
+type Runner struct { session SessionService; root Agent; plugins []Plugin }
+type Tool interface { Name() string; Declaration() Schema; Run(ctx ToolContext, args map[string]any) (map[string]any, error) }</code></pre>
+  </section>
+
+  <section id="roadmap" data-search="学习路线 阅读顺序 教程">
+    <h2>12. 推荐学习路线</h2>
+    <ol>
+      <li><b>先读 Runner：</b><a href="runner/runner.go" target="_blank"><code>runner/runner.go</code></a>，搞懂一次请求的总控。</li>
+      <li><b>再读 Session：</b><a href="session/session.go" target="_blank"><code>session/session.go</code></a> + <a href="session/inmemory.go" target="_blank"><code>session/inmemory.go</code></a>，搞懂事件和状态。</li>
+      <li><b>再读 LLM Flow：</b><a href="internal/llminternal/base_flow.go" target="_blank"><code>internal/llminternal/base_flow.go</code></a>，搞懂模型和工具循环。</li>
+      <li><b>再读 FunctionTool：</b><a href="tool/functiontool/function.go" target="_blank"><code>tool/functiontool/function.go</code></a>，搞懂普通 Go 函数如何暴露给模型。</li>
+      <li><b>再读 Workflow：</b><a href="agent/workflowagents/sequentialagent/agent.go" target="_blank"><code>agent/workflowagents/sequentialagent/agent.go</code></a>、<a href="agent/workflowagents/parallelagent/agent.go" target="_blank"><code>agent/workflowagents/parallelagent/agent.go</code></a>、<a href="agent/workflowagents/loopagent/agent.go" target="_blank"><code>agent/workflowagents/loopagent/agent.go</code></a>。</li>
+      <li><b>最后读 REST：</b><a href="server/adkrest/handler.go" target="_blank"><code>server/adkrest/handler.go</code></a> 和 <a href="server/adkrest/controllers/runtime.go" target="_blank"><code>server/adkrest/controllers/runtime.go</code></a>，理解 WebUI/API 怎么接入。</li>
+    </ol>
+    <div class="callout warn"><b>验证说明：</b>我尝试运行 <code>go test ./...</code>，但当前环境只有 Go 1.23.2，而仓库 <code>go.mod</code> 要求 Go 1.25.0；环境又无法联网下载 toolchain，所以测试未能执行。源码修改为注释和文档类修改，未改业务逻辑。</div>
+  </section>
+</main>
+</div>
+<script>
+const input = document.getElementById('filter');
+input.addEventListener('input', () => {
+  const q = input.value.trim().toLowerCase();
+  document.querySelectorAll('main section').forEach(sec => {
+    const text = (sec.innerText + ' ' + (sec.dataset.search || '')).toLowerCase();
+    sec.style.display = !q || text.includes(q) ? '' : 'none';
+  });
+});
+</script>
+</body>
+</html>

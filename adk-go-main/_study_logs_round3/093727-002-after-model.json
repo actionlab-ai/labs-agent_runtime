@@ -1,0 +1,26 @@
+{
+  "error": "",
+  "response": {
+    "Content": {
+      "parts": [
+        {
+          "text": "\n\n您好！看起来您的消息可能出现了编码问题，我无法正确理解您想问的内容。\n\n我是 qwen_weather_time_agent，一个用于学习 ADK Go Agent Runtime 的中文调试 Agent。我可以帮您：\n\n1. **查询天气** - 告诉我城市名称，我可以查询该城市的模拟天气\n2. **查询时间** - 告诉我城市名称，我可以查询该城市的模拟时间\n3. **回答框架原理问题** - 关于 ADK Go Agent Runtime 的问题\n\n请问您想了解什么？请重新发送您的问题，谢谢！"
+        }
+      ],
+      "role": "model"
+    },
+    "CitationMetadata": null,
+    "GroundingMetadata": null,
+    "UsageMetadata": null,
+    "CustomMetadata": null,
+    "LogprobsResult": null,
+    "ModelVersion": "qwen_qwen3.5-397b-a17b",
+    "Partial": false,
+    "TurnComplete": false,
+    "Interrupted": false,
+    "ErrorCode": "",
+    "ErrorMessage": "",
+    "FinishReason": "stop",
+    "AvgLogprobs": 0
+  }
+}

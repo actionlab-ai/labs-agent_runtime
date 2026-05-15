@@ -1,0 +1,13 @@
+﻿{
+    "id":  "s_utf8_001",
+    "appName":  "qwen_weather_time_agent",
+    "userId":  "u1",
+    "lastUpdateTime":  1778723223,
+    "events":  [
+
+               ],
+    "state":  {
+                  "from":  "powershell-round3b-utf8-bytes",
+                  "purpose":  "learn-adk-openai-compatible-runtime-with-correct-chinese-encoding"
+              }
+}

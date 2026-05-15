@@ -1,0 +1,30 @@
+﻿{
+    "value":  [
+                  {
+                      "id":  "2c108102-9b25-4c38-8096-cb51deffbbdf",
+                      "invocationId":  "e-7286bc6b-4556-4e97-b64e-3d83e526f7b3",
+                      "author":  "qwen_weather_time_agent",
+                      "groundingMetadata":  null,
+                      "usageMetadata":  null,
+                      "finishReason":  "stop",
+                      "modelVersion":  "qwen_qwen3.5-397b-a17b",
+                      "actions":  {
+                                      "stateDelta":  {
+
+                                                     },
+                                      "artifactDelta":  {
+
+                                                        }
+                                  },
+                      "content":  {
+                                      "role":  "model",
+                                      "parts":  [
+                                                    {
+                                                        "text":  "\n\n您好！您的消息仍然显示为乱码（????），我无法正常读取内容。这可能是编码或传输问题导致的。\n\n**我能为您提供的帮助：**\n\n| 服务 | 示例提问 |\n|------|----------|\n| 🌤️ 天气查询 | \"北京天气怎么样？\" |\n| 🕐 时间查询 | \"上海现在几点？\" |\n| 💡 框架咨询 | \"ADK Agent 工作原理是什么？\" |\n\n**建议您：**\n1. 刷新页面后重新输入\n2. 确保使用 UTF-8 编码\n3. 直接用中文描述您的需求\n\n请问您想查询**天气**、**时间**，还是想了解**ADK 框架**相关信息？请重新发送您的问题，我会尽力帮助您！🙏"
+                                                    }
+                                                ]
+                                  }
+                  }
+              ],
+    "Count":  1
+}

@@ -1,0 +1,108 @@
+﻿=== RUN   TestFunctionTool_Simple
+=== RUN   TestFunctionTool_Simple/london
+=== RUN   TestFunctionTool_Simple/paris
+=== RUN   TestFunctionTool_Simple/new_york
+--- PASS: TestFunctionTool_Simple (0.00s)
+    --- PASS: TestFunctionTool_Simple/london (0.00s)
+    --- PASS: TestFunctionTool_Simple/paris (0.00s)
+    --- PASS: TestFunctionTool_Simple/new_york (0.00s)
+=== RUN   TestFunctionTool_DifferentFunctionDeclarations_ConsolidatedInOneGenAiTool
+--- PASS: TestFunctionTool_DifferentFunctionDeclarations_ConsolidatedInOneGenAiTool (0.00s)
+=== RUN   TestFunctionTool_ReturnsBasicType
+=== RUN   TestFunctionTool_ReturnsBasicType/london
+=== RUN   TestFunctionTool_ReturnsBasicType/paris
+=== RUN   TestFunctionTool_ReturnsBasicType/new_york
+--- PASS: TestFunctionTool_ReturnsBasicType (0.00s)
+    --- PASS: TestFunctionTool_ReturnsBasicType/london (0.00s)
+    --- PASS: TestFunctionTool_ReturnsBasicType/paris (0.00s)
+    --- PASS: TestFunctionTool_ReturnsBasicType/new_york (0.00s)
+=== RUN   TestFunctionTool_MapInput
+--- PASS: TestFunctionTool_MapInput (0.00s)
+=== RUN   TestFunctionTool_CustomSchema
+=== RUN   TestFunctionTool_CustomSchema/ProcessRequest
+=== RUN   TestFunctionTool_CustomSchema/Run
+=== RUN   TestFunctionTool_CustomSchema/Run/valid_item
+=== RUN   TestFunctionTool_CustomSchema/Run/invalid_item
+=== RUN   TestFunctionTool_CustomSchema/Run/unexpected_type
+=== RUN   TestFunctionTool_CustomSchema/Run/nil
+--- PASS: TestFunctionTool_CustomSchema (0.00s)
+    --- PASS: TestFunctionTool_CustomSchema/ProcessRequest (0.00s)
+    --- PASS: TestFunctionTool_CustomSchema/Run (0.00s)
+        --- PASS: TestFunctionTool_CustomSchema/Run/valid_item (0.00s)
+        --- PASS: TestFunctionTool_CustomSchema/Run/invalid_item (0.00s)
+        --- PASS: TestFunctionTool_CustomSchema/Run/unexpected_type (0.00s)
+        --- PASS: TestFunctionTool_CustomSchema/Run/nil (0.00s)
+=== RUN   TestToolConfirmation
+=== RUN   TestToolConfirmation/No_Confirmation_Required
+=== RUN   TestToolConfirmation/Confirmation_Required
+=== RUN   TestToolConfirmation/Confirmation_Required_and_is_confirmed
+=== RUN   TestToolConfirmation/Confirmation_Required_and_is_rejected
+=== RUN   TestToolConfirmation/Conditional_Confirmation_Not_Required
+=== RUN   TestToolConfirmation/Conditional_Confirmation_Required
+=== RUN   TestToolConfirmation/Conditional_Confirmation_Required_and_is_confirmed
+=== RUN   TestToolConfirmation/Conditional_Confirmation_Required_and_is_rejected
+--- PASS: TestToolConfirmation (0.00s)
+    --- PASS: TestToolConfirmation/No_Confirmation_Required (0.00s)
+    --- PASS: TestToolConfirmation/Confirmation_Required (0.00s)
+    --- PASS: TestToolConfirmation/Confirmation_Required_and_is_confirmed (0.00s)
+    --- PASS: TestToolConfirmation/Confirmation_Required_and_is_rejected (0.00s)
+    --- PASS: TestToolConfirmation/Conditional_Confirmation_Not_Required (0.00s)
+    --- PASS: TestToolConfirmation/Conditional_Confirmation_Required (0.00s)
+    --- PASS: TestToolConfirmation/Conditional_Confirmation_Required_and_is_confirmed (0.00s)
+    --- PASS: TestToolConfirmation/Conditional_Confirmation_Required_and_is_rejected (0.00s)
+=== RUN   TestNew_RequireConfirmationProvider_Validation
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Valid:_Nil_provider_is_allowed
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Valid:_Correct_function_signature
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Provider_is_not_a_function_(it's_a_struct)
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Provider_is_not_a_function_(it's_a_primitive)
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Function_has_0_arguments
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Function_has_too_many_arguments_(2)
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Argument_type_mismatch_(int_instead_of_TestArgs)
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Argument_type_mismatch_(pointer_vs_value)
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Function_returns_nothing
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Function_returns_too_many_values
+=== RUN   TestNew_RequireConfirmationProvider_Validation/Invalid:_Return_type_mismatch_(returns_int_instead_of_bool)
+--- PASS: TestNew_RequireConfirmationProvider_Validation (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Valid:_Nil_provider_is_allowed (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Valid:_Correct_function_signature (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Provider_is_not_a_function_(it's_a_struct) (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Provider_is_not_a_function_(it's_a_primitive) (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Function_has_0_arguments (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Function_has_too_many_arguments_(2) (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Argument_type_mismatch_(int_instead_of_TestArgs) (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Argument_type_mismatch_(pointer_vs_value) (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Function_returns_nothing (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Function_returns_too_many_values (0.00s)
+    --- PASS: TestNew_RequireConfirmationProvider_Validation/Invalid:_Return_type_mismatch_(returns_int_instead_of_bool) (0.00s)
+=== RUN   TestNew_InvalidInputType
+=== RUN   TestNew_InvalidInputType/string_input
+=== RUN   TestNew_InvalidInputType/int_input
+=== RUN   TestNew_InvalidInputType/bool_input
+--- PASS: TestNew_InvalidInputType (0.00s)
+    --- PASS: TestNew_InvalidInputType/string_input (0.00s)
+    --- PASS: TestNew_InvalidInputType/int_input (0.00s)
+    --- PASS: TestNew_InvalidInputType/bool_input (0.00s)
+=== RUN   TestFunctionTool_PanicRecovery
+--- PASS: TestFunctionTool_PanicRecovery (0.00s)
+=== RUN   TestNewLongRunningFunctionTool
+--- PASS: TestNewLongRunningFunctionTool (0.00s)
+=== RUN   TestLongRunningFunctionFlow
+=== RUN   TestLongRunningFunctionFlow/function_response_still_waiting
+=== RUN   TestLongRunningFunctionFlow/function_response_result_2
+=== RUN   TestLongRunningFunctionFlow/function_response_result_3
+--- PASS: TestLongRunningFunctionFlow (0.00s)
+    --- PASS: TestLongRunningFunctionFlow/function_response_still_waiting (0.00s)
+    --- PASS: TestLongRunningFunctionFlow/function_response_result_2 (0.00s)
+    --- PASS: TestLongRunningFunctionFlow/function_response_result_3 (0.00s)
+=== RUN   TestLongRunningStringFunctionFlow
+=== RUN   TestLongRunningStringFunctionFlow/function_response_still_waiting
+=== RUN   TestLongRunningStringFunctionFlow/function_response_result_2
+=== RUN   TestLongRunningStringFunctionFlow/function_response_result_3
+--- PASS: TestLongRunningStringFunctionFlow (0.00s)
+    --- PASS: TestLongRunningStringFunctionFlow/function_response_still_waiting (0.00s)
+    --- PASS: TestLongRunningStringFunctionFlow/function_response_result_2 (0.00s)
+    --- PASS: TestLongRunningStringFunctionFlow/function_response_result_3 (0.00s)
+=== RUN   TestLongRunningToolIDsAreSet
+--- PASS: TestLongRunningToolIDsAreSet (0.00s)
+PASS
+ok  	google.golang.org/adk/tool/functiontool	0.317s

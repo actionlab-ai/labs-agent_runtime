@@ -1,0 +1,18 @@
+﻿=== RUN   TestNewSequentialAgent
+=== RUN   TestNewSequentialAgent/ok
+=== RUN   TestNewSequentialAgent/ok_with_inner_sequential
+=== RUN   TestNewSequentialAgent/err_with_inner_sequential_with_same_name_as_root
+=== RUN   TestNewSequentialAgent/err_with_2_levels_of_inner_sequential_with_same_name_as_root_
+=== RUN   TestNewSequentialAgent/err_with_2_levels_of_inner_sequential_with_same_name_as_parent_
+=== RUN   TestNewSequentialAgent/err_with_repeated_inner_sequential
+=== RUN   TestNewSequentialAgent/err_with_repeated_inner_sequential_in_two_levels
+--- PASS: TestNewSequentialAgent (0.00s)
+    --- PASS: TestNewSequentialAgent/ok (0.00s)
+    --- PASS: TestNewSequentialAgent/ok_with_inner_sequential (0.00s)
+    --- PASS: TestNewSequentialAgent/err_with_inner_sequential_with_same_name_as_root (0.00s)
+    --- PASS: TestNewSequentialAgent/err_with_2_levels_of_inner_sequential_with_same_name_as_root_ (0.00s)
+    --- PASS: TestNewSequentialAgent/err_with_2_levels_of_inner_sequential_with_same_name_as_parent_ (0.00s)
+    --- PASS: TestNewSequentialAgent/err_with_repeated_inner_sequential (0.00s)
+    --- PASS: TestNewSequentialAgent/err_with_repeated_inner_sequential_in_two_levels (0.00s)
+PASS
+ok  	google.golang.org/adk/agent/workflowagents/sequentialagent	0.469s

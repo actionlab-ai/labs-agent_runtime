@@ -1,0 +1,171 @@
+﻿{
+    "id":  "s_utf8_001",
+    "appName":  "qwen_weather_time_agent",
+    "userId":  "u1",
+    "lastUpdateTime":  1778723282,
+    "events":  [
+                   {
+                       "id":  "a77c81a5-0226-4755-b633-f7881877c9a2",
+                       "invocationId":  "e-7f9e2c53-7c5c-4529-a189-1efab96f0d2b",
+                       "author":  "user",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "user",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "你好，用中文简单解释一下你现在运行在什么 Agent 框架里。"
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "eecc54e1-f9bd-4a59-9f1b-a062d2e5bbd3",
+                       "invocationId":  "e-7f9e2c53-7c5c-4529-a189-1efab96f0d2b",
+                       "author":  "qwen_weather_time_agent",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "finishReason":  "stop",
+                       "modelVersion":  "qwen_qwen3.5-397b-a17b",
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "model",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "\n\n你好！我现在运行在 **ADK Go Agent Runtime** 框架中。\n\n这是一个用于学习和调试 Agent Tool Calling 数据流的运行时环境。我的主要功能是：\n\n1. **天气查询** - 通过 `get_weather` 工具获取指定城市的模拟天气信息\n2. **时间查询** - 通过 `get_time` 工具获取指定城市的模拟时间信息\n\n这个框架支持使用自建 OpenAI-compatible Qwen 模型来处理用户请求，并在需要时调用相应的工具来获取数据。我作为一个调试 Agent，主要用于演示和学习 ADK 框架中工具调用的完整数据流。\n\n如果你需要查询天气或时间，随时告诉我城市名称即可！"
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "770c3b62-6f08-4d03-865b-6728d3ab1e9a",
+                       "invocationId":  "e-ef978985-df92-4616-b862-a4e5f4cc9424",
+                       "author":  "user",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "user",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "北京天气怎么样？必须调用 get_weather 工具，然后用中文总结。"
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "dce3925a-07f8-4b69-986d-5c8c4991300e",
+                       "invocationId":  "e-ef978985-df92-4616-b862-a4e5f4cc9424",
+                       "author":  "qwen_weather_time_agent",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "finishReason":  "tool_calls",
+                       "modelVersion":  "qwen_qwen3.5-397b-a17b",
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "model",
+                                       "parts":  [
+                                                     {
+                                                         "functionCall":  {
+                                                                              "id":  "chatcmpl-tool-95d14b34bd56a603",
+                                                                              "name":  "get_weather",
+                                                                              "args":  {
+                                                                                           "city":  "Beijing"
+                                                                                       }
+                                                                          }
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "87a1c299-474f-45ca-b868-f5e6c58757ba",
+                       "invocationId":  "e-ef978985-df92-4616-b862-a4e5f4cc9424",
+                       "author":  "qwen_weather_time_agent",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "user",
+                                       "parts":  [
+                                                     {
+                                                         "functionResponse":  {
+                                                                                  "id":  "chatcmpl-tool-95d14b34bd56a603",
+                                                                                  "name":  "get_weather",
+                                                                                  "response":  {
+                                                                                                   "city":  "Beijing",
+                                                                                                   "source":  "local-demo-tool",
+                                                                                                   "temperature":  "23°C",
+                                                                                                   "weather":  "晴，微风，适合学习 Agent 框架"
+                                                                                               }
+                                                                              }
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "722eafee-5ac8-4af4-913b-cef43b323ea5",
+                       "invocationId":  "e-ef978985-df92-4616-b862-a4e5f4cc9424",
+                       "author":  "qwen_weather_time_agent",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "finishReason":  "stop",
+                       "modelVersion":  "qwen_qwen3.5-397b-a17b",
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "model",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "\n\n根据查询结果，北京目前的天气情况如下：\n\n- **温度**：23°C\n- **天气状况**：晴朗\n- **风力**：微风\n- **总体评价**：适合学习 Agent 框架\n\n今天北京的天气很不错，温度适宜，晴空万里，微风轻拂，是个外出或学习的好天气！"
+                                                     }
+                                                 ]
+                                   }
+                   }
+               ],
+    "state":  {
+                  "from":  "powershell-round3b-utf8-bytes",
+                  "purpose":  "learn-adk-openai-compatible-runtime-with-correct-chinese-encoding"
+              }
+}

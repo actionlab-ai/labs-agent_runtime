@@ -1,0 +1,160 @@
+﻿=== RUN   TestLlmAgent_MaybeSaveOutputToState
+=== RUN   TestLlmAgent_MaybeSaveOutputToState/skips_when_event_author_differs_from_agentConfig_name
+=== RUN   TestLlmAgent_MaybeSaveOutputToState/saves_when_event_author_matches_agentConfig_name
+=== RUN   TestLlmAgent_MaybeSaveOutputToState/skips_when_output_key_is_not_set
+=== RUN   TestLlmAgent_MaybeSaveOutputToState/skips_for_non-final_responses
+=== RUN   TestLlmAgent_MaybeSaveOutputToState/skips_when_event_has_no_content_text
+=== RUN   TestLlmAgent_MaybeSaveOutputToState/concatenates_multiple_text_parts
+=== RUN   TestLlmAgent_MaybeSaveOutputToState/skips_on_case-sensitive_name_mismatch
+--- PASS: TestLlmAgent_MaybeSaveOutputToState (0.00s)
+    --- PASS: TestLlmAgent_MaybeSaveOutputToState/skips_when_event_author_differs_from_agentConfig_name (0.00s)
+    --- PASS: TestLlmAgent_MaybeSaveOutputToState/saves_when_event_author_matches_agentConfig_name (0.00s)
+    --- PASS: TestLlmAgent_MaybeSaveOutputToState/skips_when_output_key_is_not_set (0.00s)
+    --- PASS: TestLlmAgent_MaybeSaveOutputToState/skips_for_non-final_responses (0.00s)
+    --- PASS: TestLlmAgent_MaybeSaveOutputToState/skips_when_event_has_no_content_text (0.00s)
+    --- PASS: TestLlmAgent_MaybeSaveOutputToState/concatenates_multiple_text_parts (0.00s)
+    --- PASS: TestLlmAgent_MaybeSaveOutputToState/skips_on_case-sensitive_name_mismatch (0.00s)
+=== RUN   TestLLMAgent
+=== RUN   TestLLMAgent/healthy_backend
+=== RUN   TestLLMAgent/broken_backend
+--- PASS: TestLLMAgent (0.00s)
+    --- PASS: TestLLMAgent/healthy_backend (0.00s)
+    --- PASS: TestLLMAgent/broken_backend (0.00s)
+=== RUN   TestLLMAgentStreamingModeSSE
+    llmagent_test.go:113: event: &{{0x25553c6f1ad0 <nil> <nil> 0x25553c6ed200 map[] <nil> gemini-2.5-flash true false false    0} 0baba80d-9b37-4f28-b9dd-3104e7de0d17 2026-05-14 08:58:52.1442449 +0800 CST m=+0.007267401 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6f1da0 <nil> <nil> 0x25553c6ed440 map[] <nil> gemini-2.5-flash true false false    0} dd6d1337-0940-485e-8ab2-360ddfc9ef0b 2026-05-14 08:58:52.1442449 +0800 CST m=+0.007267401 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6ae180 <nil> <nil> 0x25553c6ed680 map[] <nil> gemini-2.5-flash true false false    0} 1114aaf4-a8b6-4570-9d62-d22ef18c4229 2026-05-14 08:58:52.1442449 +0800 CST m=+0.007267401 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6ae480 <nil> <nil> 0x25553c6ed8c0 map[] <nil> gemini-2.5-flash true false false    0} e1d01d32-8579-4ffb-94c8-82fefa8841ec 2026-05-14 08:58:52.1442449 +0800 CST m=+0.007267401 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6ae780 <nil> <nil> 0x25553c6edb00 map[] <nil> gemini-2.5-flash true false false    0} a62380b6-fb5c-4654-a703-ac8843e7068e 2026-05-14 08:58:52.1442449 +0800 CST m=+0.007267401 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6aea80 <nil> <nil> 0x25553c6edd40 map[] <nil> gemini-2.5-flash true false false    0} 867c3545-4256-4adb-bfa6-eb4cfc4916b0 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6aed80 <nil> <nil> 0x25553c70c090 map[] <nil> gemini-2.5-flash true false false    0} 496bee63-06c1-4e4c-bfbc-0bcbc80ca9e6 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6af080 <nil> <nil> 0x25553c70c2d0 map[] <nil> gemini-2.5-flash true false false    0} 73fa57c7-8e8c-41d1-847c-87ff30982286 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6af380 <nil> <nil> 0x25553c70c510 map[] <nil> gemini-2.5-flash true false false    0} 0956068c-f8d4-4461-9db2-1e0773e6a5ea 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6af680 <nil> <nil> 0x25553c70c750 map[] <nil> gemini-2.5-flash true false false    0} 4d851765-1076-4ede-af4a-cbea6364ef55 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6af980 <nil> <nil> 0x25553c70c990 map[] <nil> gemini-2.5-flash true false false    0} b8eb15ba-e076-4abc-acb5-ec6558e353a4 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c6afc80 <nil> <nil> 0x25553c70cbd0 map[] <nil> gemini-2.5-flash true false false    0} 9e947405-6e21-4063-b1d8-208d93f6afa7 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c710090 <nil> <nil> 0x25553c70ce10 map[] <nil> gemini-2.5-flash true false false    0} bb14fdd3-9377-4845-b844-1018c919ce7c 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c710390 <nil> <nil> 0x25553c70d050 map[] <nil> gemini-2.5-flash true false false    0} a12d3a94-c1ca-4905-9dad-374884302690 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c710690 <nil> <nil> 0x25553c70d290 map[] <nil> gemini-2.5-flash true false false    0} 8739d940-d304-458d-ab62-64992dec2f90 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c710990 <nil> <nil> 0x25553c70d4d0 map[] <nil> gemini-2.5-flash true false false    0} 01ec8245-0c5c-4730-a8c7-1062287240a4 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c710c90 <nil> <nil> 0x25553c70d710 map[] <nil> gemini-2.5-flash true false false    0} ac837f82-1b00-44dd-a171-759a39481240 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c710f90 <nil> <nil> 0x25553c70d950 map[] <nil> gemini-2.5-flash true false false    0} 6bc2329a-547c-4b59-a219-357c8bcbaadd 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c711290 <nil> <nil> 0x25553c70db90 map[] <nil> gemini-2.5-flash true true false   STOP 0} 21020e65-398f-40e9-9ed7-6558efe409d2 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+    llmagent_test.go:113: event: &{{0x25553c711380 <nil> <nil> 0x25553c70db90 map[] <nil>  false false false   STOP 0} 4a79c74c-a2a9-4374-a75f-807c83512555 2026-05-14 08:58:52.1447646 +0800 CST m=+0.007787101 e-079fd762-3677-4565-a5b2-af7237751fe5  calculator {map[] map[] map[] false  false} []}
+--- PASS: TestLLMAgentStreamingModeSSE (0.01s)
+=== RUN   TestModelCallbacks
+=== PAUSE TestModelCallbacks
+=== RUN   TestToolCallback
+=== RUN   TestToolCallback/before_callback_response_used
+=== RUN   TestToolCallback/extra_before_callback_skipped
+=== RUN   TestToolCallback/after_callback_response_used
+=== RUN   TestToolCallback/extra_after_callback_skipped
+=== RUN   TestToolCallback/after_callback_returned_when_used_with_before_callback
+=== RUN   TestToolCallback/both_callbacks_return_nil_actual_tool_is_executed
+--- PASS: TestToolCallback (0.00s)
+    --- PASS: TestToolCallback/before_callback_response_used (0.00s)
+    --- PASS: TestToolCallback/extra_before_callback_skipped (0.00s)
+    --- PASS: TestToolCallback/after_callback_response_used (0.00s)
+    --- PASS: TestToolCallback/extra_after_callback_skipped (0.00s)
+    --- PASS: TestToolCallback/after_callback_returned_when_used_with_before_callback (0.00s)
+    --- PASS: TestToolCallback/both_callbacks_return_nil_actual_tool_is_executed (0.00s)
+=== RUN   TestInstructionProvider
+=== PAUSE TestInstructionProvider
+=== RUN   TestFunctionTool
+--- PASS: TestFunctionTool (0.00s)
+=== RUN   TestAgentTransfer
+=== RUN   TestAgentTransfer/auto_to_auto
+=== RUN   TestAgentTransfer/auto_to_single
+=== RUN   TestAgentTransfer/auto_to_auto_to_single
+--- PASS: TestAgentTransfer (0.00s)
+    --- PASS: TestAgentTransfer/auto_to_auto (0.00s)
+    --- PASS: TestAgentTransfer/auto_to_single (0.00s)
+    --- PASS: TestAgentTransfer/auto_to_auto_to_single (0.00s)
+=== RUN   TestFindAgent
+=== PAUSE TestFindAgent
+=== RUN   TestAgentSessionLifecycle
+--- PASS: TestAgentSessionLifecycle (0.00s)
+=== RUN   TestToolCallbacksAgent
+=== RUN   TestToolCallbacksAgent/Weather_London_-_success
+馃攳 AUDIT: About to call tool 'get_weather' with args: map[location:London]
+鉁?ENHANCE: Adding metadata to response from 'get_weather'
+=== RUN   TestToolCallbacksAgent/Weather_Secret_-_blocked
+馃攳 AUDIT: About to call tool 'get_weather' with args: map[location:secret]
+馃毇 SECURITY: Blocked weather request for restricted location: secret
+鉁?ENHANCE: Adding metadata to response from 'get_weather'
+=== RUN   TestToolCallbacksAgent/Calculate_Add_-_success
+馃攳 AUDIT: About to call tool 'calculate' with args: map[operation:add x:5 y:3]
+鉁?ENHANCE: Adding metadata to response from 'calculate'
+=== RUN   TestToolCallbacksAgent/Calculate_Divide_by_Zero_-_blocked
+馃攳 AUDIT: About to call tool 'calculate' with args: map[operation:divide x:5 y:0]
+馃毇 VALIDATION: Prevented division by zero
+鉁?ENHANCE: Adding metadata to response from 'calculate'
+=== RUN   TestToolCallbacksAgent/Log_Activity_-_success
+馃攳 AUDIT: About to call tool 'log_activity' with args: map[message:test log]
+鉁?ENHANCE: Adding metadata to response from 'log_activity'
+--- PASS: TestToolCallbacksAgent (0.00s)
+    --- PASS: TestToolCallbacksAgent/Weather_London_-_success (0.00s)
+    --- PASS: TestToolCallbacksAgent/Weather_Secret_-_blocked (0.00s)
+    --- PASS: TestToolCallbacksAgent/Calculate_Add_-_success (0.00s)
+    --- PASS: TestToolCallbacksAgent/Calculate_Divide_by_Zero_-_blocked (0.00s)
+    --- PASS: TestToolCallbacksAgent/Log_Activity_-_success (0.00s)
+=== RUN   TestAgentToolsetPreprocessEffect
+--- PASS: TestAgentToolsetPreprocessEffect (0.00s)
+=== CONT  TestModelCallbacks
+=== RUN   TestModelCallbacks/before_model_callback_doesn't_modify_anything
+=== CONT  TestFindAgent
+=== RUN   TestModelCallbacks/before_model_callback_returns_an_error
+=== RUN   TestFindAgent/find_root_itself
+=== RUN   TestModelCallbacks/before_model_callback_returns_new_LLMResponse
+=== RUN   TestFindAgent/find_direct_child
+=== RUN   TestFindAgent/find_nested_child
+=== RUN   TestFindAgent/find_non-existent_agent
+=== RUN   TestFindAgent/find_child_from_child
+=== CONT  TestInstructionProvider
+=== RUN   TestModelCallbacks/before_model_callback_returns_both_new_LLMResponse_and_error
+--- PASS: TestFindAgent (0.00s)
+    --- PASS: TestFindAgent/find_root_itself (0.00s)
+    --- PASS: TestFindAgent/find_direct_child (0.00s)
+    --- PASS: TestFindAgent/find_nested_child (0.00s)
+    --- PASS: TestFindAgent/find_non-existent_agent (0.00s)
+    --- PASS: TestFindAgent/find_child_from_child (0.00s)
+=== RUN   TestInstructionProvider/instruction_is_evaluated
+=== RUN   TestModelCallbacks/after_model_callback_doesn't_modify_anything
+=== RUN   TestModelCallbacks/after_model_callback_returns_new_LLMResponse
+=== RUN   TestModelCallbacks/after_model_callback_returns_error
+=== RUN   TestModelCallbacks/after_model_callback_returns_both_new_LLMResponse_and_error
+=== RUN   TestModelCallbacks/on_model_error_callback_is_not_called
+=== RUN   TestModelCallbacks/on_model_error_callback_changes_message
+=== RUN   TestModelCallbacks/on_model_error_callback_changes_err
+=== RUN   TestModelCallbacks/on_model_error_callback_returns_both_new_LLMResponse_and_error
+=== RUN   TestModelCallbacks/on_model_error_callback_does_not_process_before_model_callback_error
+=== RUN   TestInstructionProvider/instruction_provider_overrides_instruction
+=== RUN   TestModelCallbacks/on_model_error_callback_does_not_process_before_model_callback_message
+=== RUN   TestModelCallbacks/after_error_callback_process_on_model_error_callback_message
+=== RUN   TestModelCallbacks/after_error_callback_does_not_process_on_model_error_callback_error
+--- PASS: TestModelCallbacks (0.00s)
+    --- PASS: TestModelCallbacks/before_model_callback_doesn't_modify_anything (0.00s)
+    --- PASS: TestModelCallbacks/before_model_callback_returns_an_error (0.00s)
+    --- PASS: TestModelCallbacks/before_model_callback_returns_new_LLMResponse (0.00s)
+    --- PASS: TestModelCallbacks/before_model_callback_returns_both_new_LLMResponse_and_error (0.00s)
+    --- PASS: TestModelCallbacks/after_model_callback_doesn't_modify_anything (0.00s)
+    --- PASS: TestModelCallbacks/after_model_callback_returns_new_LLMResponse (0.00s)
+    --- PASS: TestModelCallbacks/after_model_callback_returns_error (0.00s)
+    --- PASS: TestModelCallbacks/after_model_callback_returns_both_new_LLMResponse_and_error (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_is_not_called (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_changes_message (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_changes_err (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_returns_both_new_LLMResponse_and_error (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_does_not_process_before_model_callback_error (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_does_not_process_before_model_callback_message (0.00s)
+    --- PASS: TestModelCallbacks/after_error_callback_process_on_model_error_callback_message (0.00s)
+    --- PASS: TestModelCallbacks/after_error_callback_does_not_process_on_model_error_callback_error (0.00s)
+=== RUN   TestInstructionProvider/global_instruction_provider_overrides_global_instruction
+=== RUN   TestInstructionProvider/global_instruction_provider_merged_with_instruction_provider
+--- PASS: TestInstructionProvider (0.00s)
+    --- PASS: TestInstructionProvider/instruction_is_evaluated (0.00s)
+    --- PASS: TestInstructionProvider/instruction_provider_overrides_instruction (0.00s)
+    --- PASS: TestInstructionProvider/global_instruction_provider_overrides_global_instruction (0.00s)
+    --- PASS: TestInstructionProvider/global_instruction_provider_merged_with_instruction_provider (0.00s)
+PASS
+ok  	google.golang.org/adk/agent/llmagent	0.334s

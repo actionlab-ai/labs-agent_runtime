@@ -1,0 +1,90 @@
+﻿[
+    {
+        "id":  "dce3925a-07f8-4b69-986d-5c8c4991300e",
+        "invocationId":  "e-ef978985-df92-4616-b862-a4e5f4cc9424",
+        "author":  "qwen_weather_time_agent",
+        "groundingMetadata":  null,
+        "usageMetadata":  null,
+        "finishReason":  "tool_calls",
+        "modelVersion":  "qwen_qwen3.5-397b-a17b",
+        "actions":  {
+                        "stateDelta":  {
+
+                                       },
+                        "artifactDelta":  {
+
+                                          }
+                    },
+        "content":  {
+                        "role":  "model",
+                        "parts":  [
+                                      {
+                                          "functionCall":  {
+                                                               "id":  "chatcmpl-tool-95d14b34bd56a603",
+                                                               "name":  "get_weather",
+                                                               "args":  {
+                                                                            "city":  "Beijing"
+                                                                        }
+                                                           }
+                                      }
+                                  ]
+                    }
+    },
+    {
+        "id":  "87a1c299-474f-45ca-b868-f5e6c58757ba",
+        "invocationId":  "e-ef978985-df92-4616-b862-a4e5f4cc9424",
+        "author":  "qwen_weather_time_agent",
+        "groundingMetadata":  null,
+        "usageMetadata":  null,
+        "actions":  {
+                        "stateDelta":  {
+
+                                       },
+                        "artifactDelta":  {
+
+                                          }
+                    },
+        "content":  {
+                        "role":  "user",
+                        "parts":  [
+                                      {
+                                          "functionResponse":  {
+                                                                   "id":  "chatcmpl-tool-95d14b34bd56a603",
+                                                                   "name":  "get_weather",
+                                                                   "response":  {
+                                                                                    "city":  "Beijing",
+                                                                                    "source":  "local-demo-tool",
+                                                                                    "temperature":  "23°C",
+                                                                                    "weather":  "晴，微风，适合学习 Agent 框架"
+                                                                                }
+                                                               }
+                                      }
+                                  ]
+                    }
+    },
+    {
+        "id":  "722eafee-5ac8-4af4-913b-cef43b323ea5",
+        "invocationId":  "e-ef978985-df92-4616-b862-a4e5f4cc9424",
+        "author":  "qwen_weather_time_agent",
+        "groundingMetadata":  null,
+        "usageMetadata":  null,
+        "finishReason":  "stop",
+        "modelVersion":  "qwen_qwen3.5-397b-a17b",
+        "actions":  {
+                        "stateDelta":  {
+
+                                       },
+                        "artifactDelta":  {
+
+                                          }
+                    },
+        "content":  {
+                        "role":  "model",
+                        "parts":  [
+                                      {
+                                          "text":  "\n\n根据查询结果，北京目前的天气情况如下：\n\n- **温度**：23°C\n- **天气状况**：晴朗\n- **风力**：微风\n- **总体评价**：适合学习 Agent 框架\n\n今天北京的天气很不错，温度适宜，晴空万里，微风轻拂，是个外出或学习的好天气！"
+                                      }
+                                  ]
+                    }
+    }
+]

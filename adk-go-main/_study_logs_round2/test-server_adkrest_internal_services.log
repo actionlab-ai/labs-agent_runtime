@@ -1,0 +1,248 @@
+﻿=== RUN   TestNodeName
+=== RUN   TestNodeName/agent
+=== RUN   TestNodeName/tool
+=== RUN   TestNodeName/unknown
+--- PASS: TestNodeName (0.00s)
+    --- PASS: TestNodeName/agent (0.00s)
+    --- PASS: TestNodeName/tool (0.00s)
+    --- PASS: TestNodeName/unknown (0.00s)
+=== RUN   TestNodeCaption
+=== RUN   TestNodeCaption/llm_agent
+=== RUN   TestNodeCaption/sequential_agent
+=== RUN   TestNodeCaption/loop_agent
+=== RUN   TestNodeCaption/parallel_agent
+=== RUN   TestNodeCaption/tool
+=== RUN   TestNodeCaption/unknown
+--- PASS: TestNodeCaption (0.00s)
+    --- PASS: TestNodeCaption/llm_agent (0.00s)
+    --- PASS: TestNodeCaption/sequential_agent (0.00s)
+    --- PASS: TestNodeCaption/loop_agent (0.00s)
+    --- PASS: TestNodeCaption/parallel_agent (0.00s)
+    --- PASS: TestNodeCaption/tool (0.00s)
+    --- PASS: TestNodeCaption/unknown (0.00s)
+=== RUN   TestNodeShape
+=== RUN   TestNodeShape/agent
+=== RUN   TestNodeShape/tool
+=== RUN   TestNodeShape/unknown
+--- PASS: TestNodeShape (0.00s)
+    --- PASS: TestNodeShape/agent (0.00s)
+    --- PASS: TestNodeShape/tool (0.00s)
+    --- PASS: TestNodeShape/unknown (0.00s)
+=== RUN   TestShouldBuildAgentCluster
+=== RUN   TestShouldBuildAgentCluster/llm_agent
+=== RUN   TestShouldBuildAgentCluster/sequential_agent
+=== RUN   TestShouldBuildAgentCluster/loop_agent
+=== RUN   TestShouldBuildAgentCluster/parallel_agent
+=== RUN   TestShouldBuildAgentCluster/tool
+=== RUN   TestShouldBuildAgentCluster/unknown
+--- PASS: TestShouldBuildAgentCluster (0.00s)
+    --- PASS: TestShouldBuildAgentCluster/llm_agent (0.00s)
+    --- PASS: TestShouldBuildAgentCluster/sequential_agent (0.00s)
+    --- PASS: TestShouldBuildAgentCluster/loop_agent (0.00s)
+    --- PASS: TestShouldBuildAgentCluster/parallel_agent (0.00s)
+    --- PASS: TestShouldBuildAgentCluster/tool (0.00s)
+    --- PASS: TestShouldBuildAgentCluster/unknown (0.00s)
+=== RUN   TestHighlighted
+=== RUN   TestHighlighted/no_highlight
+=== RUN   TestHighlighted/node_in_pair
+=== RUN   TestHighlighted/node_not_in_pair
+=== RUN   TestHighlighted/multiple_pairs
+--- PASS: TestHighlighted (0.00s)
+    --- PASS: TestHighlighted/no_highlight (0.00s)
+    --- PASS: TestHighlighted/node_in_pair (0.00s)
+    --- PASS: TestHighlighted/node_not_in_pair (0.00s)
+    --- PASS: TestHighlighted/multiple_pairs (0.00s)
+=== RUN   TestEdgeHighlighted
+=== RUN   TestEdgeHighlighted/no_highlight_pairs
+=== RUN   TestEdgeHighlighted/matching_forward
+=== RUN   TestEdgeHighlighted/matching_backward
+=== RUN   TestEdgeHighlighted/no_match
+=== RUN   TestEdgeHighlighted/partial_match
+--- PASS: TestEdgeHighlighted (0.00s)
+    --- PASS: TestEdgeHighlighted/no_highlight_pairs (0.00s)
+    --- PASS: TestEdgeHighlighted/matching_forward (0.00s)
+    --- PASS: TestEdgeHighlighted/matching_backward (0.00s)
+    --- PASS: TestEdgeHighlighted/no_match (0.00s)
+    --- PASS: TestEdgeHighlighted/partial_match (0.00s)
+=== RUN   TestDrawNode
+=== RUN   TestDrawNode/draw_agent_node
+=== RUN   TestDrawNode/draw_agent_node_highlighted
+=== RUN   TestDrawNode/draw_tool_node
+--- PASS: TestDrawNode (0.00s)
+    --- PASS: TestDrawNode/draw_agent_node (0.00s)
+    --- PASS: TestDrawNode/draw_agent_node_highlighted (0.00s)
+    --- PASS: TestDrawNode/draw_tool_node (0.00s)
+=== RUN   TestDrawClusterNode
+--- PASS: TestDrawClusterNode (0.00s)
+=== RUN   TestDrawEdge
+=== RUN   TestDrawEdge/draw_unhighlighted_edge
+=== RUN   TestDrawEdge/draw_highlighted_edge
+=== RUN   TestDrawEdge/draw_highlighted_backward_edge
+--- PASS: TestDrawEdge (0.00s)
+    --- PASS: TestDrawEdge/draw_unhighlighted_edge (0.00s)
+    --- PASS: TestDrawEdge/draw_highlighted_edge (0.00s)
+    --- PASS: TestDrawEdge/draw_highlighted_backward_edge (0.00s)
+=== RUN   TestDrawCluster
+=== RUN   TestDrawCluster/sequential_agent_cluster
+=== RUN   TestDrawCluster/parallel_agent_cluster
+=== RUN   TestDrawCluster/loop_agent_cluster
+--- PASS: TestDrawCluster (0.00s)
+    --- PASS: TestDrawCluster/sequential_agent_cluster (0.00s)
+    --- PASS: TestDrawCluster/parallel_agent_cluster (0.00s)
+    --- PASS: TestDrawCluster/loop_agent_cluster (0.00s)
+=== RUN   TestBuildGraph
+--- PASS: TestBuildGraph (0.00s)
+=== RUN   TestDebugTelemetryGetSpansBySessionID
+=== RUN   TestDebugTelemetryGetSpansBySessionID/root_span_with_conversation_id
+=== RUN   TestDebugTelemetryGetSpansBySessionID/child_span_with_conversation_id
+    debugtelemetry_test.go:237: GetSpansBySessionID() mismatch (-want +got):
+        聽聽[]services.DebugSpan{
+        聽聽	{
+        -聽		Name: "root",
+        +聽		Name: "grandchild",
+        聽聽		... // 5 ignored fields
+        -聽		Attributes: map[string]string{},
+        +聽		Attributes: map[string]string{"gen_ai.conversation.id": "test-session-id"},
+        聽聽		Logs:       nil,
+        聽聽	},
+        聽聽	{
+        -聽		Name: "child",
+        +聽		Name: "child-2",
+        聽聽		... // 5 ignored and 2 identical fields
+        聽聽	},
+        聽聽	{
+        -聽		Name: "child-2",
+        +聽		Name: "child",
+        聽聽		... // 5 ignored and 2 identical fields
+        聽聽	},
+        聽聽	{
+        -聽		Name: "grandchild",
+        +聽		Name: "root",
+        聽聽		... // 5 ignored fields
+        -聽		Attributes: map[string]string{"gen_ai.conversation.id": "test-session-id"},
+        +聽		Attributes: map[string]string{},
+        聽聽		Logs:       nil,
+        聽聽	},
+        聽聽}
+=== RUN   TestDebugTelemetryGetSpansBySessionID/multiple_traces_with_same_session_id
+    debugtelemetry_test.go:237: GetSpansBySessionID() mismatch (-want +got):
+        聽聽[]services.DebugSpan{
+        -聽	{
+        -聽		Name:       "root-1",
+        -聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-1"},
+        -聽	},
+        聽聽	{Name: "child-1", Attributes: {}},
+        +聽	{
+        +聽		Name:         "root-1",
+        +聽		StartTime:    1778720381681175600,
+        +聽		EndTime:      1778720381681175600,
+        +聽		SpanID:       "328c9150f0ddb6bc",
+        +聽		TraceID:      "f9fa1d46fa2f86473e6041590dbc9793",
+        +聽		ParentSpanID: "0000000000000000",
+        +聽		Attributes:   map[string]string{"gen_ai.conversation.id": "session-1"},
+        +聽	},
+        +聽	{
+        +聽		Name:         "child-2",
+        +聽		StartTime:    1778720381681175600,
+        +聽		EndTime:      1778720381681175600,
+        +聽		SpanID:       "7103b879939b3a23",
+        +聽		TraceID:      "ac17f9a313530bb3148540676a196e33",
+        +聽		ParentSpanID: "ea3438f3344db2bf",
+        +聽		Attributes:   map[string]string{"gen_ai.conversation.id": "session-1"},
+        +聽	},
+        聽聽	{Name: "root-2", Attributes: {}},
+        -聽	{
+        -聽		Name:       "child-2",
+        -聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-1"},
+        -聽	},
+        聽聽}
+=== RUN   TestDebugTelemetryGetSpansBySessionID/trace_with_spans_with_mixed_session_ids_session-1
+    debugtelemetry_test.go:237: GetSpansBySessionID() mismatch (-want +got):
+        聽聽[]services.DebugSpan{
+        聽聽	{
+        -聽		Name: "mixed-root",
+        +聽		Name: "mixed-child",
+        聽聽		... // 5 ignored fields
+        -聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-1"},
+        +聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-2"},
+        聽聽		Logs:       nil,
+        聽聽	},
+        聽聽	{
+        -聽		Name: "mixed-child",
+        +聽		Name: "mixed-root",
+        聽聽		... // 5 ignored fields
+        -聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-2"},
+        +聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-1"},
+        聽聽		Logs:       nil,
+        聽聽	},
+        聽聽}
+=== RUN   TestDebugTelemetryGetSpansBySessionID/trace_with_spans_with_mixed_session_ids_session-2
+    debugtelemetry_test.go:237: GetSpansBySessionID() mismatch (-want +got):
+        聽聽[]services.DebugSpan{
+        聽聽	{
+        -聽		Name: "mixed-root",
+        +聽		Name: "mixed-child",
+        聽聽		... // 5 ignored fields
+        -聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-1"},
+        +聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-2"},
+        聽聽		Logs:       nil,
+        聽聽	},
+        聽聽	{
+        -聽		Name: "mixed-child",
+        +聽		Name: "mixed-root",
+        聽聽		... // 5 ignored fields
+        -聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-2"},
+        +聽		Attributes: map[string]string{"gen_ai.conversation.id": "session-1"},
+        聽聽		Logs:       nil,
+        聽聽	},
+        聽聽}
+=== RUN   TestDebugTelemetryGetSpansBySessionID/no_matching_session_id
+=== RUN   TestDebugTelemetryGetSpansBySessionID/log_without_span
+--- FAIL: TestDebugTelemetryGetSpansBySessionID (0.01s)
+    --- PASS: TestDebugTelemetryGetSpansBySessionID/root_span_with_conversation_id (0.01s)
+    --- FAIL: TestDebugTelemetryGetSpansBySessionID/child_span_with_conversation_id (0.00s)
+    --- FAIL: TestDebugTelemetryGetSpansBySessionID/multiple_traces_with_same_session_id (0.00s)
+    --- FAIL: TestDebugTelemetryGetSpansBySessionID/trace_with_spans_with_mixed_session_ids_session-1 (0.00s)
+    --- FAIL: TestDebugTelemetryGetSpansBySessionID/trace_with_spans_with_mixed_session_ids_session-2 (0.00s)
+    --- PASS: TestDebugTelemetryGetSpansBySessionID/no_matching_session_id (0.00s)
+    --- PASS: TestDebugTelemetryGetSpansBySessionID/log_without_span (0.00s)
+=== RUN   TestDebugTelemetryGetSpansByEventID
+=== RUN   TestDebugTelemetryGetSpansByEventID/single_span_and_log
+=== RUN   TestDebugTelemetryGetSpansByEventID/multiple_spans
+    debugtelemetry_test.go:374: GetSpansByEventID() mismatch (-want +got):
+        聽聽[]services.DebugSpan{
+        聽聽	{
+        -聽		Name: "root-1",
+        +聽		Name: "root-2",
+        聽聽		... // 5 ignored fields
+        聽聽		Attributes: map[string]string{
+        聽聽			"gcp.vertex.agent.event_id": "event-1",
+        -聽			"genai.operation.name":      "generate_content",
+        +聽			"genai.operation.name":      "execute_tool",
+        聽聽		},
+        聽聽		Logs: nil,
+        聽聽	},
+        聽聽	{
+        -聽		Name: "root-2",
+        +聽		Name: "root-1",
+        聽聽		... // 5 ignored fields
+        聽聽		Attributes: map[string]string{
+        聽聽			"gcp.vertex.agent.event_id": "event-1",
+        -聽			"genai.operation.name":      "execute_tool",
+        +聽			"genai.operation.name":      "generate_content",
+        聽聽		},
+        聽聽		Logs: nil,
+        聽聽	},
+        聽聽}
+=== RUN   TestDebugTelemetryGetSpansByEventID/no_matching_span
+=== RUN   TestDebugTelemetryGetSpansByEventID/log_without_span
+--- FAIL: TestDebugTelemetryGetSpansByEventID (0.00s)
+    --- PASS: TestDebugTelemetryGetSpansByEventID/single_span_and_log (0.00s)
+    --- FAIL: TestDebugTelemetryGetSpansByEventID/multiple_spans (0.00s)
+    --- PASS: TestDebugTelemetryGetSpansByEventID/no_matching_span (0.00s)
+    --- PASS: TestDebugTelemetryGetSpansByEventID/log_without_span (0.00s)
+=== RUN   TestDebugTelemetryLRU
+--- PASS: TestDebugTelemetryLRU (0.00s)
+FAIL
+FAIL	google.golang.org/adk/server/adkrest/internal/services	0.308s
+FAIL

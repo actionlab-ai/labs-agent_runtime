@@ -1,0 +1,32 @@
+{
+  "error": "",
+  "response": {
+    "Content": {
+      "parts": [
+        {
+          "functionCall": {
+            "id": "chatcmpl-tool-95d14b34bd56a603",
+            "args": {
+              "city": "Beijing"
+            },
+            "name": "get_weather"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    "CitationMetadata": null,
+    "GroundingMetadata": null,
+    "UsageMetadata": null,
+    "CustomMetadata": null,
+    "LogprobsResult": null,
+    "ModelVersion": "qwen_qwen3.5-397b-a17b",
+    "Partial": false,
+    "TurnComplete": false,
+    "Interrupted": false,
+    "ErrorCode": "",
+    "ErrorMessage": "",
+    "FinishReason": "tool_calls",
+    "AvgLogprobs": 0
+  }
+}

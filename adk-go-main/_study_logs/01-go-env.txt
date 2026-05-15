@@ -1,0 +1,6 @@
+go1.26.2
+auto
+C:\Users\yuanyp8\go
+C:\Users\yuanyp8\go\pkg\mod
+windows
+amd64

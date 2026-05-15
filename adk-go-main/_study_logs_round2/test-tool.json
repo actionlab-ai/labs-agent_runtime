@@ -1,0 +1,64 @@
+﻿{"Time":"2026-05-14T08:59:27.4469104+08:00","Action":"start","Package":"google.golang.org/adk/tool"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestTypes"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes","Output":"=== RUN   TestTypes\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestTypes/FunctionTool"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/FunctionTool","Output":"=== RUN   TestTypes/FunctionTool\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/FunctionTool","Output":"--- PASS: TestTypes/FunctionTool (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestTypes/FunctionTool","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestTypes/geminitool"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/geminitool","Output":"=== RUN   TestTypes/geminitool\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/geminitool","Output":"--- PASS: TestTypes/geminitool (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestTypes/geminitool","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestTypes/geminitool.GoogleSearch{}"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/geminitool.GoogleSearch{}","Output":"=== RUN   TestTypes/geminitool.GoogleSearch{}\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/geminitool.GoogleSearch{}","Output":"--- PASS: TestTypes/geminitool.GoogleSearch{} (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestTypes/geminitool.GoogleSearch{}","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestTypes/LoadArtifactsTool"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/LoadArtifactsTool","Output":"=== RUN   TestTypes/LoadArtifactsTool\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/LoadArtifactsTool","Output":"--- PASS: TestTypes/LoadArtifactsTool (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestTypes/LoadArtifactsTool","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestTypes/AgentTool"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/AgentTool","Output":"=== RUN   TestTypes/AgentTool\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/AgentTool","Output":"--- PASS: TestTypes/AgentTool (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestTypes/AgentTool","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestTypes/LoadArtifactsTool#01"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/LoadArtifactsTool#01","Output":"=== RUN   TestTypes/LoadArtifactsTool#01\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes/LoadArtifactsTool#01","Output":"--- PASS: TestTypes/LoadArtifactsTool#01 (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestTypes/LoadArtifactsTool#01","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestTypes","Output":"--- PASS: TestTypes (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestTypes","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation","Output":"=== RUN   TestWithConfirmation\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_no_confirmation_in_context"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_no_confirmation_in_context","Output":"=== RUN   TestWithConfirmation/confirmation_required,_no_confirmation_in_context\n"}
+{"Time":"2026-05-14T08:59:27.9776577+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_no_confirmation_in_context","Output":"--- PASS: TestWithConfirmation/confirmation_required,_no_confirmation_in_context (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_no_confirmation_in_context","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_confirmed_in_context"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_confirmed_in_context","Output":"=== RUN   TestWithConfirmation/confirmation_required,_confirmed_in_context\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_confirmed_in_context","Output":"--- PASS: TestWithConfirmation/confirmation_required,_confirmed_in_context (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_confirmed_in_context","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_rejected_in_context"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_rejected_in_context","Output":"=== RUN   TestWithConfirmation/confirmation_required,_rejected_in_context\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_rejected_in_context","Output":"--- PASS: TestWithConfirmation/confirmation_required,_rejected_in_context (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_required,_rejected_in_context","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_not_required"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_not_required","Output":"=== RUN   TestWithConfirmation/confirmation_not_required\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_not_required","Output":"--- PASS: TestWithConfirmation/confirmation_not_required (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_not_required","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_provider_requires_confirmation"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_provider_requires_confirmation","Output":"=== RUN   TestWithConfirmation/confirmation_provider_requires_confirmation\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_provider_requires_confirmation","Output":"--- PASS: TestWithConfirmation/confirmation_provider_requires_confirmation (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_provider_requires_confirmation","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9781955+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_provider_does_not_require_confirmation"}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_provider_does_not_require_confirmation","Output":"=== RUN   TestWithConfirmation/confirmation_provider_does_not_require_confirmation\n"}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_provider_does_not_require_confirmation","Output":"--- PASS: TestWithConfirmation/confirmation_provider_does_not_require_confirmation (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/confirmation_provider_does_not_require_confirmation","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"run","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/requireConfirmation=true_but_provider_returns_false"}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/requireConfirmation=true_but_provider_returns_false","Output":"=== RUN   TestWithConfirmation/requireConfirmation=true_but_provider_returns_false\n"}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/requireConfirmation=true_but_provider_returns_false","Output":"--- PASS: TestWithConfirmation/requireConfirmation=true_but_provider_returns_false (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation/requireConfirmation=true_but_provider_returns_false","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"output","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation","Output":"--- PASS: TestWithConfirmation (0.00s)\n"}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Test":"TestWithConfirmation","Elapsed":0}
+{"Time":"2026-05-14T08:59:27.9787274+08:00","Action":"output","Package":"google.golang.org/adk/tool","Output":"PASS\n"}
+{"Time":"2026-05-14T08:59:27.9818345+08:00","Action":"output","Package":"google.golang.org/adk/tool","Output":"ok  \tgoogle.golang.org/adk/tool\t0.533s\n"}
+{"Time":"2026-05-14T08:59:27.9818345+08:00","Action":"pass","Package":"google.golang.org/adk/tool","Elapsed":0.535}

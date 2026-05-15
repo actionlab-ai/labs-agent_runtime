@@ -1,0 +1,14 @@
+﻿=== RUN   TestNewLoopAgent
+=== RUN   TestNewLoopAgent/infinite_loop
+=== RUN   TestNewLoopAgent/loop_agent_with_max_iterations
+=== RUN   TestNewLoopAgent/loop_agent_with_max_iterations_and_2_sub_agents
+=== RUN   TestNewLoopAgent/loop_with_escalate_function_returns_sumarization
+=== RUN   TestNewLoopAgent/loop_with_escalate_function_returns_sumarization#01
+--- PASS: TestNewLoopAgent (0.00s)
+    --- PASS: TestNewLoopAgent/infinite_loop (0.00s)
+    --- PASS: TestNewLoopAgent/loop_agent_with_max_iterations (0.00s)
+    --- PASS: TestNewLoopAgent/loop_agent_with_max_iterations_and_2_sub_agents (0.00s)
+    --- PASS: TestNewLoopAgent/loop_with_escalate_function_returns_sumarization (0.00s)
+    --- PASS: TestNewLoopAgent/loop_with_escalate_function_returns_sumarization#01 (0.00s)
+PASS
+ok  	google.golang.org/adk/agent/workflowagents/loopagent	0.302s

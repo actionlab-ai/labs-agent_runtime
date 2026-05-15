@@ -1,0 +1,55 @@
+﻿=== RUN   Test_inMemoryService
+=== RUN   Test_inMemoryService/Create
+=== RUN   Test_inMemoryService/Create/full_key
+=== RUN   Test_inMemoryService/Create/generated_session_id
+=== RUN   Test_inMemoryService/Create/when_already_exists,_it_fails
+=== RUN   Test_inMemoryService/Get
+=== RUN   Test_inMemoryService/Get/ok
+=== RUN   Test_inMemoryService/Get/error_when_not_found
+=== RUN   Test_inMemoryService/Get/get_session_respects_user_id
+=== RUN   Test_inMemoryService/Get/with_config_filters
+=== RUN   Test_inMemoryService/List
+=== RUN   Test_inMemoryService/Delete
+=== RUN   Test_inMemoryService/AppendEvent
+=== RUN   Test_inMemoryService/AppendEvent/when_session_not_found_should_fail
+=== RUN   Test_inMemoryService/AppendEvent/ok
+=== RUN   Test_inMemoryService/AppendEvent/partial_events_are_not_persisted
+=== RUN   Test_inMemoryService/AppendEvent/with_bytes_content
+=== RUN   Test_inMemoryService/AppendEvent/with_existing_events
+=== RUN   Test_inMemoryService/AppendEvent/with_all_fields
+=== RUN   Test_inMemoryService/StateManagement
+=== RUN   Test_inMemoryService/StateManagement/app_state_is_shared
+=== RUN   Test_inMemoryService/StateManagement/user_state_is_user_specific
+=== RUN   Test_inMemoryService/StateManagement/session_state_is_not_shared
+=== RUN   Test_inMemoryService/StateManagement/temp_state_is_not_persisted
+--- PASS: Test_inMemoryService (0.00s)
+    --- PASS: Test_inMemoryService/Create (0.00s)
+        --- PASS: Test_inMemoryService/Create/full_key (0.00s)
+        --- PASS: Test_inMemoryService/Create/generated_session_id (0.00s)
+        --- PASS: Test_inMemoryService/Create/when_already_exists,_it_fails (0.00s)
+    --- PASS: Test_inMemoryService/Get (0.00s)
+        --- PASS: Test_inMemoryService/Get/ok (0.00s)
+        --- PASS: Test_inMemoryService/Get/error_when_not_found (0.00s)
+        --- PASS: Test_inMemoryService/Get/get_session_respects_user_id (0.00s)
+        --- PASS: Test_inMemoryService/Get/with_config_filters (0.00s)
+    --- PASS: Test_inMemoryService/List (0.00s)
+    --- PASS: Test_inMemoryService/Delete (0.00s)
+    --- PASS: Test_inMemoryService/AppendEvent (0.00s)
+        --- PASS: Test_inMemoryService/AppendEvent/when_session_not_found_should_fail (0.00s)
+        --- PASS: Test_inMemoryService/AppendEvent/ok (0.00s)
+        --- PASS: Test_inMemoryService/AppendEvent/partial_events_are_not_persisted (0.00s)
+        --- PASS: Test_inMemoryService/AppendEvent/with_bytes_content (0.00s)
+        --- PASS: Test_inMemoryService/AppendEvent/with_existing_events (0.00s)
+        --- PASS: Test_inMemoryService/AppendEvent/with_all_fields (0.00s)
+    --- PASS: Test_inMemoryService/StateManagement (0.00s)
+        --- PASS: Test_inMemoryService/StateManagement/app_state_is_shared (0.00s)
+        --- PASS: Test_inMemoryService/StateManagement/user_state_is_user_specific (0.00s)
+        --- PASS: Test_inMemoryService/StateManagement/session_state_is_not_shared (0.00s)
+        --- PASS: Test_inMemoryService/StateManagement/temp_state_is_not_persisted (0.00s)
+=== RUN   Test_inMemoryService_CreateConcurrentAccess
+--- PASS: Test_inMemoryService_CreateConcurrentAccess (0.00s)
+=== RUN   TestInMemorySession_AppendEvent_Deadlock
+    inmemory_test.go:114: AppendEvent did not deadlock
+--- PASS: TestInMemorySession_AppendEvent_Deadlock (0.00s)
+PASS
+ok  	google.golang.org/adk/session	0.294s

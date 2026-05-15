@@ -1,0 +1,13 @@
+﻿{
+    "userId":  "u1",
+    "newMessage":  {
+                       "role":  "user",
+                       "parts":  [
+                                     {
+                                         "text":  "北京天气怎么样？必须调用工具，然后用中文总结。"
+                                     }
+                                 ]
+                   },
+    "appName":  "qwen_weather_time_agent",
+    "sessionId":  "s1"
+}

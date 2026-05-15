@@ -1,0 +1,5994 @@
+﻿
+
+===== runner\runner.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package runner provides a runtime for ADK agents.
+package runner
+
+import (
+	"context"
+	"fmt"
+	"iter"
+	"log"
+	"time"
+
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/artifact"
+	"google.golang.org/adk/internal/agent/parentmap"
+	"google.golang.org/adk/internal/agent/runconfig"
+	artifactinternal "google.golang.org/adk/internal/artifact"
+	icontext "google.golang.org/adk/internal/context"
+	"google.golang.org/adk/internal/llminternal"
+	imemory "google.golang.org/adk/internal/memory"
+	"google.golang.org/adk/internal/plugininternal"
+	"google.golang.org/adk/internal/utils"
+	"google.golang.org/adk/memory"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/plugin"
+	"google.golang.org/adk/session"
+)
+
+// Config is used to create a [Runner].
+type Config struct {
+	AppName string
+	// Root agent which starts the execution.
+	Agent          agent.Agent
+	SessionService session.Service
+
+	// optional
+	ArtifactService artifact.Service
+	// optional
+	MemoryService memory.Service
+	// optional
+	PluginConfig PluginConfig
+	// optional
+	AutoCreateSession bool
+}
+
+type PluginConfig struct {
+	Plugins      []*plugin.Plugin
+	CloseTimeout time.Duration
+}
+
+type RunOption func(*runOptions)
+
+type runOptions struct {
+	stateDelta map[string]any
+}
+
+// WithStateDelta sets a state delta for the run invocation.
+func WithStateDelta(delta map[string]any) RunOption {
+	return func(o *runOptions) {
+		o.stateDelta = delta
+	}
+}
+
+// New creates a new [Runner].
+// 中文业务注释：New 只做运行时装配，不启动任何对话；这里会校验根 Agent/SessionService，构建 Agent 父子关系表，并初始化插件管理器。
+func New(cfg Config) (*Runner, error) {
+	if cfg.Agent == nil {
+		return nil, fmt.Errorf("root agent is required")
+	}
+
+	if cfg.SessionService == nil {
+		return nil, fmt.Errorf("session service is required")
+	}
+
+	parents, err := parentmap.New(cfg.Agent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create agent tree: %w", err)
+	}
+
+	pluginManager, err := plugininternal.NewPluginManager(plugininternal.PluginConfig{
+		Plugins:      cfg.PluginConfig.Plugins,
+		CloseTimeout: cfg.PluginConfig.CloseTimeout,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create plugin manager: %w", err)
+	}
+
+	return &Runner{
+		appName:           cfg.AppName,
+		rootAgent:         cfg.Agent,
+		sessionService:    cfg.SessionService,
+		artifactService:   cfg.ArtifactService,
+		memoryService:     cfg.MemoryService,
+		parents:           parents,
+		pluginManager:     pluginManager,
+		autoCreateSession: cfg.AutoCreateSession,
+	}, nil
+}
+
+// Runner manages the execution of the agent within a session, handling message
+// processing, event generation, and interaction with various services like
+// artifact storage, session management, and memory.
+type Runner struct {
+	appName         string
+	rootAgent       agent.Agent
+	sessionService  session.Service
+	artifactService artifact.Service
+	memoryService   memory.Service
+
+	parents           parentmap.Map
+	pluginManager     *plugininternal.PluginManager
+	autoCreateSession bool
+}
+
+// Run runs the agent for the given user input, yielding events from agents.
+// For each user message it finds the proper agent within an agent tree to
+// continue the conversation within the session.
+// 中文业务注释：Run 是一次用户请求的总入口。它返回事件迭代器，所以调用方可以边读边推给前端，而不是等待整轮完成。
+func (r *Runner) Run(ctx context.Context, userID, sessionID string, msg *genai.Content, cfg agent.RunConfig, opts ...RunOption) iter.Seq2[*session.Event, error] {
+	// TODO(hakim): we need to validate whether cfg is compatible with the Agent.
+	//   see adk-python/src/google/adk/runners.py Runner._new_invocation_context.
+	// TODO: setup tracer.
+	return func(yield func(*session.Event, error) bool) {
+		options := runOptions{}
+		for _, opt := range opts {
+			opt(&options)
+		}
+
+		// 中文业务注释：先恢复已有会话。Agent 的上下文、历史消息、状态都从 SessionService 来；如果开启 AutoCreateSession，找不到会话时会自动创建。
+		var storedSession session.Session
+		getResp, err := r.sessionService.Get(ctx, &session.GetRequest{
+			AppName:   r.appName,
+			UserID:    userID,
+			SessionID: sessionID,
+		})
+		if err != nil {
+			if !r.autoCreateSession {
+				yield(nil, err)
+				return
+			}
+			createResp, err := r.sessionService.Create(ctx, &session.CreateRequest{
+				AppName:   r.appName,
+				UserID:    userID,
+				SessionID: sessionID,
+			})
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			storedSession = createResp.Session
+		} else {
+			storedSession = getResp.Session
+		}
+
+		// 中文业务注释：根据历史事件决定本轮继续由哪个 Agent 接手。典型场景：上轮子 Agent 发起工具调用，本轮用户返回工具确认/函数响应，需要回到同一个子 Agent。
+		agentToRun, err := r.findAgentToRun(storedSession, msg)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
+		ctx = parentmap.ToContext(ctx, r.parents)
+		ctx = runconfig.ToContext(ctx, &runconfig.RunConfig{
+			StreamingMode: runconfig.StreamingMode(cfg.StreamingMode),
+		})
+		ctx = plugininternal.ToContext(ctx, r.pluginManager)
+
+		var artifacts agent.Artifacts
+		if r.artifactService != nil {
+			artifacts = &artifactinternal.Artifacts{
+				Service:   r.artifactService,
+				SessionID: storedSession.ID(),
+				AppName:   storedSession.AppName(),
+				UserID:    storedSession.UserID(),
+			}
+		}
+
+		var memoryImpl agent.Memory = nil
+		if r.memoryService != nil {
+			memoryImpl = &imemory.Memory{
+				Service:   r.memoryService,
+				SessionID: storedSession.ID(),
+				UserID:    storedSession.UserID(),
+				AppName:   storedSession.AppName(),
+			}
+		}
+
+		// 中文业务注释：组装 InvocationContext。后续 Agent、Tool、Plugin 都通过这个上下文拿到 Session/Artifact/Memory/用户输入等能力。
+		ctx := icontext.NewInvocationContext(ctx, icontext.InvocationContextParams{
+			Artifacts:   artifacts,
+			Memory:      memoryImpl,
+			Session:     storedSession,
+			Agent:       agentToRun,
+			UserContent: msg,
+			RunConfig:   &cfg,
+		})
+		// 中文业务注释：先把用户消息作为 Event 追加到 Session，再让 Agent 运行。这样模型构造上下文时能看到最新用户输入。
+		ctx, err = r.appendMessageToSession(ctx, storedSession, msg, cfg.SaveInputBlobsAsArtifacts, r.pluginManager, options.stateDelta)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
+		pluginManager := r.pluginManager
+		if pluginManager != nil {
+			// Defer the after run callbacks to perform global cleanup tasks or finalizing logs and metrics data.
+			// This does NOT emit any event.
+			defer pluginManager.RunAfterRunCallback(ctx)
+
+			earlyExitResult, err := pluginManager.RunBeforeRunCallback(ctx)
+			if earlyExitResult != nil || err != nil {
+				earlyExitEvent := session.NewEvent(ctx.InvocationID())
+				earlyExitEvent.Author = "user"
+				earlyExitEvent.LLMResponse = model.LLMResponse{
+					Content: msg,
+				}
+				if err := r.sessionService.AppendEvent(ctx, storedSession, earlyExitEvent); err != nil {
+					yield(nil, fmt.Errorf("failed to add event to session: %w", err))
+					return
+				}
+				yield(earlyExitEvent, err)
+				return
+			}
+		}
+
+		// 中文业务注释：开始消费 Agent 事件流。每个非 partial 事件都会落入 Session，partial 事件只用于前端实时展示。
+		for event, err := range agentToRun.Run(ctx) {
+			if err != nil {
+				if !yield(event, err) {
+					return
+				}
+				continue
+			}
+
+			if pluginManager != nil {
+				modifiedEvent, err := pluginManager.RunOnEventCallback(ctx, event)
+				if err != nil {
+					if !yield(nil, err) {
+						return
+					}
+					continue
+				}
+				if modifiedEvent != nil {
+					event = modifiedEvent
+				}
+			}
+
+			// only commit non-partial event to a session service
+			if !event.LLMResponse.Partial {
+				if err := r.sessionService.AppendEvent(ctx, storedSession, event); err != nil {
+					yield(nil, fmt.Errorf("failed to add event to session: %w", err))
+					return
+				}
+			}
+
+			if !yield(event, nil) {
+				return
+			}
+		}
+	}
+}
+
+// 中文业务注释：把用户输入转换成 session.Event。这里也处理输入附件：如果配置了保存 InlineData，会先写入 Artifact，再用文本占位符替换原始二进制。
+func (r *Runner) appendMessageToSession(ctx agent.InvocationContext, storedSession session.Session, msg *genai.Content, saveInputBlobsAsArtifacts bool, pluginManager *plugininternal.PluginManager, stateDelta map[string]any) (agent.InvocationContext, error) {
+	if msg == nil {
+		return ctx, nil
+	}
+	if pluginManager != nil {
+		modifiedMsg, err := pluginManager.RunOnUserMessageCallback(ctx, msg)
+		if err != nil {
+			return ctx, fmt.Errorf("error running on run user message callback : %w", err)
+		}
+		if modifiedMsg != nil {
+			msg = modifiedMsg
+			// update ctx user message
+			ctx = icontext.NewInvocationContext(ctx, icontext.InvocationContextParams{
+				Artifacts:    ctx.Artifacts(),
+				Memory:       ctx.Memory(),
+				Session:      ctx.Session(),
+				Agent:        ctx.Agent(),
+				UserContent:  msg,
+				RunConfig:    ctx.RunConfig(),
+				InvocationID: ctx.InvocationID(),
+			})
+		}
+	}
+
+	artifactsService := ctx.Artifacts()
+	if artifactsService != nil && saveInputBlobsAsArtifacts {
+		for i, part := range msg.Parts {
+			if part.InlineData == nil {
+				continue
+			}
+			fileName := fmt.Sprintf("artifact_%s_%d", ctx.InvocationID(), i)
+			if _, err := artifactsService.Save(ctx, fileName, part); err != nil {
+				return ctx, fmt.Errorf("failed to save artifact %s: %w", fileName, err)
+			}
+			// Replace the part with a text placeholder
+			msg.Parts[i] = &genai.Part{
+				Text: fmt.Sprintf("Uploaded file: %s. It has been saved to the artifacts", fileName),
+			}
+		}
+	}
+
+	event := session.NewEvent(ctx.InvocationID())
+
+	event.Author = "user"
+	event.LLMResponse = model.LLMResponse{
+		Content: msg,
+	}
+	if stateDelta != nil {
+		event.Actions.StateDelta = stateDelta
+	}
+
+	if err := r.sessionService.AppendEvent(ctx, storedSession, event); err != nil {
+		return ctx, fmt.Errorf("failed to append event to sessionService: %w", err)
+	}
+	return ctx, nil
+}
+
+// findAgentToRun returns the agent that should handle the next request based on
+// session history.
+// 中文业务注释：Agent 选择策略。优先处理“用户返回的函数响应/确认”对应的原始 Agent；否则回看最近事件，找可继续接手的子 Agent；最后退回根 Agent。
+func (r *Runner) findAgentToRun(session session.Session, msg *genai.Content) (agent.Agent, error) {
+	if event := handleUserFunctionCallResponse(session.Events(), msg); event != nil {
+		subAgent := r.rootAgent.FindAgent(event.Author)
+		if subAgent != nil {
+			return subAgent, nil
+		}
+		log.Printf("Function call from an unknown agent: %s, event id: %s", event.Author, event.ID)
+	}
+
+	events := session.Events()
+	for i := events.Len() - 1; i >= 0; i-- {
+		event := events.At(i)
+
+		if event.Author == "user" {
+			continue
+		}
+
+		subAgent := r.rootAgent.FindAgent(event.Author)
+		// Agent not found, continue looking for the other event.
+		if subAgent == nil {
+			log.Printf("Event from an unknown agent: %s, event id: %s", event.Author, event.ID)
+			continue
+		}
+
+		if r.isTransferableAcrossAgentTree(subAgent) {
+			return subAgent, nil
+		}
+	}
+
+	// Falls back to root agent if no suitable agents are found in the session.
+	return r.rootAgent, nil
+}
+
+// handleUserFunctionCallResponse finds the function call event that matches the function response id
+// delivered by the user in the latest event.
+func handleUserFunctionCallResponse(events session.Events, msg *genai.Content) *session.Event {
+	if events.Len() == 0 {
+		return nil
+	}
+
+	functionResponses := utils.FunctionResponses(msg)
+	if len(functionResponses) == 0 {
+		return nil
+	}
+
+	// This assumes that even if user provides multiple function responses, all the function calls
+	// were made by the same agent. Otherwise it would be impossible to rearrange session events
+	// such that every function response has a corresponding call filtering by author.
+	callID := functionResponses[0].ID
+	for i := events.Len() - 1; i >= 0; i-- {
+		event := events.At(i)
+		for _, part := range utils.FunctionCalls(event.Content) {
+			if part.ID == callID {
+				return event
+			}
+		}
+	}
+	return nil
+}
+
+// checks if the agent and its parent chain allow transfer up the tree.
+func (r *Runner) isTransferableAcrossAgentTree(agentToRun agent.Agent) bool {
+	for curAgent := agentToRun; curAgent != nil; curAgent = r.parents[curAgent.Name()] {
+		llmAgent, ok := curAgent.(llminternal.Agent)
+		if !ok {
+			return false
+		}
+
+		if llminternal.Reveal(llmAgent).DisallowTransferToParent {
+			return false
+		}
+	}
+
+	return true
+}
+
+
+===== agent\agent.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package agent
+
+import (
+	"context"
+	"fmt"
+	"iter"
+
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/artifact"
+	agentinternal "google.golang.org/adk/internal/agent"
+	"google.golang.org/adk/internal/plugininternal/plugincontext"
+	"google.golang.org/adk/internal/telemetry"
+	"google.golang.org/adk/memory"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/session"
+)
+
+// Agent is the base interface which all agents must implement.
+//
+// Agents are created with ADK constructors to ensure correct
+// init & configuration.
+// The constructors are available in this package and its subpackages.
+// For example: llmagent.New, workflow agents, remote agent or
+// agent.New.
+// NOTE: in future releases we will allow just implementing this interface.
+// For now agent.New is a correct solution to create custom agents.
+type Agent interface {
+	Name() string
+	Description() string
+	Run(InvocationContext) iter.Seq2[*session.Event, error]
+	SubAgents() []Agent
+	FindAgent(name string) Agent
+	FindSubAgent(name string) Agent
+
+	internal() *agent
+}
+
+// New creates an Agent with a custom logic defined by Run function.
+// 中文业务注释：基础 Agent 构造器。自定义 Agent 只需要提供 Run 函数，就能接入 Runner/Session/Plugin/Workflow 体系。
+func New(cfg Config) (Agent, error) {
+	subAgentSet := make(map[Agent]bool)
+	for _, subAgent := range cfg.SubAgents {
+		if _, ok := subAgentSet[subAgent]; ok {
+			return nil, fmt.Errorf("error creating agent: subagent %q appears multiple times in subAgents", subAgent.Name())
+		}
+		subAgentSet[subAgent] = true
+	}
+	return &agent{
+		name:                 cfg.Name,
+		description:          cfg.Description,
+		subAgents:            cfg.SubAgents,
+		beforeAgentCallbacks: cfg.BeforeAgentCallbacks,
+		run:                  cfg.Run,
+		afterAgentCallbacks:  cfg.AfterAgentCallbacks,
+		State: agentinternal.State{
+			AgentType: agentinternal.TypeCustomAgent,
+		},
+	}, nil
+}
+
+// Config is the configuration for creating a new Agent.
+type Config struct {
+	// Name must be a non-empty string, unique within the agent tree.
+	// Agent name cannot be "user", since it's reserved for end-user's input.
+	Name string
+	// Description of the agent's capability.
+	//
+	// LLM uses this to determine whether to delegate control to the agent.
+	// One-line description is enough and preferred.
+	Description string
+	// SubAgents are the child agents that this agent can delegate tasks to.
+	// ADK will automatically set a parent of each sub-agent to this agent to
+	// allow agent transferring across the tree.
+	SubAgents []Agent
+
+	// BeforeAgentCallbacks is a list of callbacks that are called sequentially
+	// before the agent starts its run.
+	//
+	// If any callback returns non-nil content or error, then the agent run and
+	// the remaining callbacks will be skipped, and a new event will be created
+	// from the content or error of that callback.
+	BeforeAgentCallbacks []BeforeAgentCallback
+	// Run is the function that defines the agent's behavior.
+	Run func(InvocationContext) iter.Seq2[*session.Event, error]
+	// AfterAgentCallbacks is a list of callbacks that are called sequentially
+	// after the agent has completed its run.
+	//
+	// If any callback returns non-nil content or error, then a new event will be
+	// created from the content or error of that callback and the remaining
+	// callbacks will be skipped.
+	AfterAgentCallbacks []AfterAgentCallback
+}
+
+// Artifacts interface provides methods to work with artifacts of the current
+// session.
+type Artifacts interface {
+	Save(ctx context.Context, name string, data *genai.Part) (*artifact.SaveResponse, error)
+	List(context.Context) (*artifact.ListResponse, error)
+	Load(ctx context.Context, name string) (*artifact.LoadResponse, error)
+	LoadVersion(ctx context.Context, name string, version int) (*artifact.LoadResponse, error)
+}
+
+// Memory interface provides methods to access agent memory across the
+// sessions of the current user_id.
+type Memory interface {
+	AddSessionToMemory(context.Context, session.Session) error
+	SearchMemory(ctx context.Context, query string) (*memory.SearchResponse, error)
+}
+
+// BeforeAgentCallback is a function that is called before the agent starts
+// its run.
+// If it returns non-nil content or error, the agent run will be skipped and a
+// new event will be created.
+type BeforeAgentCallback func(CallbackContext) (*genai.Content, error)
+
+// AfterAgentCallback is a function that is called after the agent has completed
+// its run.
+// If it returns non-nil content or error, a new event will be created.
+//
+// The callback will be skipped also if EndInvocation was called before or
+// BeforeAgentCallbacks returned non-nil results.
+type AfterAgentCallback func(CallbackContext) (*genai.Content, error)
+
+type agent struct {
+	agentinternal.State
+
+	name, description string
+	subAgents         []Agent
+
+	beforeAgentCallbacks []BeforeAgentCallback
+	run                  func(InvocationContext) iter.Seq2[*session.Event, error]
+	afterAgentCallbacks  []AfterAgentCallback
+}
+
+func (a *agent) Name() string {
+	return a.name
+}
+
+func (a *agent) Description() string {
+	return a.description
+}
+
+func (a *agent) SubAgents() []Agent {
+	return a.subAgents
+}
+
+// 中文业务注释：所有 Agent 的统一执行外壳。它负责开启遥测、构造当前 Agent 的上下文、执行 before/after 回调，并给事件补 Author。
+func (a *agent) Run(ctx InvocationContext) iter.Seq2[*session.Event, error] {
+	return func(yield func(*session.Event, error) bool) {
+		spanCtx, span := telemetry.StartInvokeAgentSpan(ctx, a, ctx.Session().ID(), ctx.InvocationID())
+		yield, endSpan := telemetry.WrapYield(span, yield, func(span trace.Span, event *session.Event, err error) {
+			telemetry.TraceAgentResult(span, telemetry.TraceAgentResultParams{
+				ResponseEvent: event,
+				Error:         err,
+			})
+		})
+		defer endSpan()
+		// TODO: verify&update the setup here. Should we branch etc.
+		ctx := &invocationContext{
+			Context:   ctx.WithContext(spanCtx),
+			agent:     a,
+			artifacts: ctx.Artifacts(),
+			memory:    ctx.Memory(),
+			session:   ctx.Session(),
+
+			invocationID:  ctx.InvocationID(),
+			branch:        ctx.Branch(),
+			userContent:   ctx.UserContent(),
+			runConfig:     ctx.RunConfig(),
+			endInvocation: ctx.Ended(),
+		}
+		event, err := runBeforeAgentCallbacks(ctx)
+		if event != nil || err != nil {
+			if !yield(event, err) {
+				return
+			}
+		}
+
+		if ctx.Ended() {
+			return
+		}
+
+		// 中文业务注释：进入具体 Agent 逻辑。对 LLMAgent 来说这里会进入 internal/llminternal.Flow；对工作流 Agent 来说会调度子 Agent。
+		for event, err := range a.run(ctx) {
+			if event != nil && event.Author == "" {
+				event.Author = getAuthorForEvent(ctx, event)
+			}
+			if !yield(event, err) {
+				return
+			}
+		}
+
+		if ctx.Ended() {
+			return
+		}
+
+		event, err = runAfterAgentCallbacks(ctx)
+		if event != nil || err != nil {
+			yield(event, err)
+		}
+	}
+}
+
+func (a *agent) internal() *agent {
+	return a
+}
+
+func (a *agent) FindAgent(name string) Agent {
+	if a.Name() == name {
+		return a
+	}
+	return a.FindSubAgent(name)
+}
+
+func (a *agent) FindSubAgent(name string) Agent {
+	for _, subAgent := range a.SubAgents() {
+		if result := subAgent.FindAgent(name); result != nil {
+			return result
+		}
+	}
+	return nil
+}
+
+func getAuthorForEvent(ctx InvocationContext, event *session.Event) string {
+	if event.LLMResponse.Content != nil && event.LLMResponse.Content.Role == genai.RoleUser {
+		return genai.RoleUser
+	}
+
+	return ctx.Agent().Name()
+}
+
+// runBeforeAgentCallbacks checks if any beforeAgentCallback returns non-nil content
+// then it skips agent run and returns callback result.
+func runBeforeAgentCallbacks(ctx InvocationContext) (*session.Event, error) {
+	agent := ctx.Agent()
+	pluginManager := pluginManagerFromContext(ctx)
+
+	callbackCtx := &callbackContext{
+		Context:           ctx,
+		invocationContext: ctx,
+		actions:           &session.EventActions{StateDelta: make(map[string]any), ArtifactDelta: make(map[string]int64)},
+	}
+
+	if pluginManager != nil {
+		content, err := pluginManager.RunBeforeAgentCallback(callbackCtx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run plugin before agent callback: %w", err)
+		}
+		if content != nil {
+			event := session.NewEvent(ctx.InvocationID())
+			event.LLMResponse = model.LLMResponse{
+				Content: content,
+			}
+			event.Author = agent.Name()
+			event.Branch = ctx.Branch()
+			event.Actions = *callbackCtx.actions
+			ctx.EndInvocation()
+			return event, nil
+		}
+	}
+
+	for _, callback := range ctx.Agent().internal().beforeAgentCallbacks {
+		content, err := callback(callbackCtx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run before agent callback: %w", err)
+		}
+		if content == nil {
+			continue
+		}
+
+		event := session.NewEvent(ctx.InvocationID())
+		event.LLMResponse = model.LLMResponse{
+			Content: content,
+		}
+		event.Author = agent.Name()
+		event.Branch = ctx.Branch()
+		event.Actions = *callbackCtx.actions
+		ctx.EndInvocation()
+		return event, nil
+	}
+
+	// check if has delta create event with it
+	if len(callbackCtx.actions.StateDelta) > 0 {
+		event := session.NewEvent(ctx.InvocationID())
+		event.Author = agent.Name()
+		event.Branch = ctx.Branch()
+		event.Actions = *callbackCtx.actions
+		return event, nil
+	}
+
+	return nil, nil
+}
+
+// runAfterAgentCallbacks checks if any afterAgentCallback returns non-nil content or a state modification
+// then it create a new event with the new content and state delta.
+func runAfterAgentCallbacks(ctx InvocationContext) (*session.Event, error) {
+	agent := ctx.Agent()
+	pluginManager := pluginManagerFromContext(ctx)
+
+	callbackCtx := &callbackContext{
+		Context:           ctx,
+		invocationContext: ctx,
+		actions:           &session.EventActions{StateDelta: make(map[string]any), ArtifactDelta: make(map[string]int64)},
+	}
+
+	if pluginManager != nil {
+		content, err := pluginManager.RunAfterAgentCallback(callbackCtx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run plugin after agent callback: %w", err)
+		}
+		if content != nil {
+			event := session.NewEvent(ctx.InvocationID())
+			event.LLMResponse = model.LLMResponse{
+				Content: content,
+			}
+			event.Author = agent.Name()
+			event.Branch = ctx.Branch()
+			event.Actions = *callbackCtx.actions
+			return event, nil
+		}
+	}
+
+	for _, callback := range agent.internal().afterAgentCallbacks {
+		newContent, err := callback(callbackCtx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run after agent callback: %w", err)
+		}
+		if newContent == nil {
+			continue
+		}
+
+		event := session.NewEvent(ctx.InvocationID())
+		event.LLMResponse = model.LLMResponse{
+			Content: newContent,
+		}
+		event.Author = agent.Name()
+		event.Branch = ctx.Branch()
+		event.Actions = *callbackCtx.actions
+		// TODO set context invocation ended
+		// ctx.invocationEnded = true
+		return event, nil
+	}
+
+	// check if has delta create event with it
+	if len(callbackCtx.actions.StateDelta) > 0 {
+		event := session.NewEvent(ctx.InvocationID())
+		event.Author = agent.Name()
+		event.Branch = ctx.Branch()
+		event.Actions = *callbackCtx.actions
+		return event, nil
+	}
+	return nil, nil
+}
+
+// TODO: unify with internal/context.callbackContext
+
+type callbackContext struct {
+	context.Context
+	invocationContext InvocationContext
+	actions           *session.EventActions
+}
+
+func (c *callbackContext) AgentName() string {
+	return c.invocationContext.Agent().Name()
+}
+
+func (c *callbackContext) ReadonlyState() session.ReadonlyState {
+	return c.invocationContext.Session().State()
+}
+
+func (c *callbackContext) State() session.State {
+	return &callbackContextState{ctx: c}
+}
+
+func (c *callbackContext) Artifacts() Artifacts {
+	return c.invocationContext.Artifacts()
+}
+
+func (c *callbackContext) InvocationID() string {
+	return c.invocationContext.InvocationID()
+}
+
+func (c *callbackContext) UserContent() *genai.Content {
+	return c.invocationContext.UserContent()
+}
+
+// AppName implements CallbackContext.
+func (c *callbackContext) AppName() string {
+	return c.invocationContext.Session().AppName()
+}
+
+// Branch implements CallbackContext.
+func (c *callbackContext) Branch() string {
+	return c.invocationContext.Branch()
+}
+
+// SessionID implements CallbackContext.
+func (c *callbackContext) SessionID() string {
+	return c.invocationContext.Session().ID()
+}
+
+// UserID implements CallbackContext.
+func (c *callbackContext) UserID() string {
+	return c.invocationContext.Session().UserID()
+}
+
+var _ CallbackContext = (*callbackContext)(nil)
+
+type callbackContextState struct {
+	ctx *callbackContext
+}
+
+func (c *callbackContextState) Get(key string) (any, error) {
+	if c.ctx.actions != nil && c.ctx.actions.StateDelta != nil {
+		if val, ok := c.ctx.actions.StateDelta[key]; ok {
+			return val, nil
+		}
+	}
+	return c.ctx.invocationContext.Session().State().Get(key)
+}
+
+func (c *callbackContextState) Set(key string, val any) error {
+	if c.ctx.actions != nil && c.ctx.actions.StateDelta != nil {
+		c.ctx.actions.StateDelta[key] = val
+	}
+	return c.ctx.invocationContext.Session().State().Set(key, val)
+}
+
+func (c *callbackContextState) All() iter.Seq2[string, any] {
+	return c.ctx.invocationContext.Session().State().All()
+}
+
+type invocationContext struct {
+	context.Context
+
+	agent     Agent
+	artifacts Artifacts
+	memory    Memory
+	session   session.Session
+
+	invocationID  string
+	branch        string
+	userContent   *genai.Content
+	runConfig     *RunConfig
+	endInvocation bool
+}
+
+func (c *invocationContext) Agent() Agent {
+	return c.agent
+}
+
+func (c *invocationContext) Artifacts() Artifacts {
+	return c.artifacts
+}
+
+func (c *invocationContext) Memory() Memory {
+	return c.memory
+}
+
+func (c *invocationContext) Session() session.Session {
+	return c.session
+}
+
+func (c *invocationContext) InvocationID() string {
+	return c.invocationID
+}
+
+func (c *invocationContext) Branch() string {
+	return c.branch
+}
+
+func (c *invocationContext) UserContent() *genai.Content {
+	return c.userContent
+}
+
+func (c *invocationContext) RunConfig() *RunConfig {
+	return c.runConfig
+}
+
+func (c *invocationContext) EndInvocation() {
+	c.endInvocation = true
+}
+
+func (c *invocationContext) Ended() bool {
+	return c.endInvocation
+}
+
+func (c *invocationContext) WithContext(ctx context.Context) InvocationContext {
+	newCtx := *c
+	newCtx.Context = ctx
+	return &newCtx
+}
+
+func pluginManagerFromContext(ctx context.Context) pluginManager {
+	a := ctx.Value(plugincontext.PluginManagerCtxKey)
+	m, ok := a.(pluginManager)
+	if !ok {
+		return nil
+	}
+	return m
+}
+
+type pluginManager interface {
+	RunBeforeAgentCallback(cctx CallbackContext) (*genai.Content, error)
+	RunAfterAgentCallback(cctx CallbackContext) (*genai.Content, error)
+}
+
+var _ InvocationContext = (*invocationContext)(nil)
+
+
+===== agent\context.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package agent
+
+import (
+	"context"
+
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/session"
+)
+
+/*
+InvocationContext represents the context of an agent invocation.
+
+An invocation:
+ 1. Starts with a user message and ends with a final response.
+ 2. Can contain one or multiple agent calls.
+ 3. Is handled by runner.Run().
+
+An invocation runs an agent until it does not request to transfer to another
+agent.
+
+An agent call:
+ 1. Is handled by agent.Run().
+ 2. Ends when agent.Run() ends.
+
+An agent call can contain one or multiple steps.
+For example, LLM agent runs steps in a loop until:
+ 1. A final response is generated.
+ 2. The agent transfers to another agent.
+ 3. EndInvocation() was called by the invocation context.
+
+A step:
+ 1. Calls the LLM only once and yields its response.
+ 2. Calls the tools and yields their responses if requested.
+
+The summarization of the function response is considered another step, since
+it is another LLM call.
+A step ends when it's done calling LLM and tools, or if the EndInvocation() was
+called by invocation context at any time.
+
+	┌─────────────────────── invocation ──────────────────────────┐
+	┌──────────── llm_agent_call_1 ────────────┐ ┌─ agent_call_2 ─┐
+	┌──── step_1 ────────┐ ┌───── step_2 ──────┐
+	[call_llm] [call_tool] [call_llm] [transfer]
+*/
+type InvocationContext interface {
+	context.Context
+
+	// Agent of this invocation context.
+	Agent() Agent
+
+	// Artifacts of the current session.
+	Artifacts() Artifacts
+
+	// Memory is scoped to sessions of the current user_id.
+	Memory() Memory
+
+	// Session of the current invocation context.
+	Session() session.Session
+
+	InvocationID() string
+
+	// Branch of the invocation context.
+	// The format is like agent_1.agent_2.agent_3, where agent_1 is the parent
+	// of agent_2, and agent_2 is the parent of agent_3.
+	//
+	// Branch is used when multiple sub-agents shouldn't see their peer agents'
+	// conversation history.
+	//
+	// Applicable to parallel agent because its sub-agents run concurrently.
+	Branch() string
+
+	// UserContent that started this invocation.
+	UserContent() *genai.Content
+
+	// RunConfig stores the runtime configuration used during this invocation.
+	RunConfig() *RunConfig
+
+	// EndInvocation ends the current invocation. This stops any planned agent
+	// calls.
+	EndInvocation()
+	// Ended returns whether the invocation has ended.
+	Ended() bool
+
+	// WithContext returns a new instance of the context with overridden embedded context.
+	// NOTE: This is a temporary solution and will be removed later. The proper solution
+	// we plan is to stop embedding go context in adk context types and split it.
+	WithContext(ctx context.Context) InvocationContext
+}
+
+// ReadonlyContext provides read-only access to invocation context data.
+type ReadonlyContext interface {
+	context.Context
+
+	// UserContent that started this invocation.
+	UserContent() *genai.Content
+	InvocationID() string
+	AgentName() string
+	ReadonlyState() session.ReadonlyState
+
+	UserID() string
+	AppName() string
+	SessionID() string
+	// Branch of the current invocation.
+	Branch() string
+}
+
+// CallbackContext is passed to user callbacks during agent execution.
+type CallbackContext interface {
+	ReadonlyContext
+
+	Artifacts() Artifacts
+	State() session.State
+}
+
+
+===== agent\loader.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package agent
+
+import (
+	"fmt"
+)
+
+// Loader allows to load a particular agent by name and get the root agent
+type Loader interface {
+	// ListAgents returns a list of names of all agents
+	ListAgents() []string
+	// LoadAgent returns an agent by its name. Returns error if there is no agent with such a name.
+	LoadAgent(name string) (Agent, error)
+	// RootAgent returns the root agent
+	RootAgent() Agent
+}
+
+// multiLoader should be used when you have multiple agents
+type multiLoader struct {
+	agentMap map[string]Agent
+	root     Agent
+}
+
+// singleLoader should be used when you have only one agent
+type singleLoader struct {
+	root Agent
+}
+
+// NewSingleLoader returns a loader with only one agent, which becomes the root agent
+func NewSingleLoader(a Agent) Loader {
+	return &singleLoader{root: a}
+}
+
+// singleAgentLoader implements AgentLoader. Returns root agent's name
+func (s *singleLoader) ListAgents() []string {
+	return []string{s.root.Name()}
+}
+
+// singleAgentLoader implements AgentLoader. Returns root for empty name and for root.Name(), error otherwise.
+func (s *singleLoader) LoadAgent(name string) (Agent, error) {
+	if name == "" {
+		return s.root, nil
+	}
+	if name == s.root.Name() {
+		return s.root, nil
+	}
+	return nil, fmt.Errorf("cannot load agent '%s' - provide an empty string or use '%s'", name, s.root.Name())
+}
+
+// singleAgentLoader implements AgentLoader. Returns the root agent.
+func (s *singleLoader) RootAgent() Agent {
+	return s.root
+}
+
+// NewMultiLoader returns a new AgentLoader with the given root Agent and other agents.
+// Returns an error if more than one agent (including root) shares the same name
+func NewMultiLoader(root Agent, agents ...Agent) (Loader, error) {
+	m := make(map[string]Agent)
+	m[root.Name()] = root
+	for _, a := range agents {
+		if _, ok := m[a.Name()]; ok {
+			// duplicate name
+			return nil, fmt.Errorf("duplicate agent name: %s", a.Name())
+		}
+		m[a.Name()] = a
+	}
+	return &multiLoader{
+		agentMap: m,
+		root:     root,
+	}, nil
+}
+
+// multiAgentLoader implements AgentLoader. Returns the list of all agents' names (including root agent)
+func (m *multiLoader) ListAgents() []string {
+	agents := make([]string, 0, len(m.agentMap))
+	for name := range m.agentMap {
+		agents = append(agents, name)
+	}
+	return agents
+}
+
+// multiAgentLoader implements LoadAgent. Returns an agent with given name or error if no such an agent is found
+func (m *multiLoader) LoadAgent(name string) (Agent, error) {
+	agent, ok := m.agentMap[name]
+	if !ok {
+		return nil, fmt.Errorf("agent %s not found. Please specify one of those: %v", name, m.ListAgents())
+	}
+	return agent, nil
+}
+
+// multiAgentLoader implements LoadAgent.
+func (m *multiLoader) RootAgent() Agent {
+	return m.root
+}
+
+
+===== agent\llmagent\llmagent.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package llmagent
+
+import (
+	"fmt"
+	"iter"
+	"strings"
+
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/agent"
+	agentinternal "google.golang.org/adk/internal/agent"
+	icontext "google.golang.org/adk/internal/context"
+	"google.golang.org/adk/internal/llminternal"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/session"
+	"google.golang.org/adk/tool"
+)
+
+// New is a constructor for LLMAgent.
+func New(cfg Config) (agent.Agent, error) {
+	beforeModelCallbacks := make([]llminternal.BeforeModelCallback, 0, len(cfg.BeforeModelCallbacks))
+	for _, c := range cfg.BeforeModelCallbacks {
+		beforeModelCallbacks = append(beforeModelCallbacks, llminternal.BeforeModelCallback(c))
+	}
+
+	afterModelCallbacks := make([]llminternal.AfterModelCallback, 0, len(cfg.AfterModelCallbacks))
+	for _, c := range cfg.AfterModelCallbacks {
+		afterModelCallbacks = append(afterModelCallbacks, llminternal.AfterModelCallback(c))
+	}
+
+	onModelErrorCallbacks := make([]llminternal.OnModelErrorCallback, 0, len(cfg.OnModelErrorCallbacks))
+	for _, c := range cfg.OnModelErrorCallbacks {
+		onModelErrorCallbacks = append(onModelErrorCallbacks, llminternal.OnModelErrorCallback(c))
+	}
+
+	beforeToolCallbacks := make([]llminternal.BeforeToolCallback, 0, len(cfg.BeforeToolCallbacks))
+	for _, c := range cfg.BeforeToolCallbacks {
+		beforeToolCallbacks = append(beforeToolCallbacks, llminternal.BeforeToolCallback(c))
+	}
+
+	afterToolCallbacks := make([]llminternal.AfterToolCallback, 0, len(cfg.AfterToolCallbacks))
+	for _, c := range cfg.AfterToolCallbacks {
+		afterToolCallbacks = append(afterToolCallbacks, llminternal.AfterToolCallback(c))
+	}
+
+	onToolErrorCallback := make([]llminternal.OnToolErrorCallback, 0, len(cfg.OnToolErrorCallbacks))
+	for _, c := range cfg.OnToolErrorCallbacks {
+		onToolErrorCallback = append(onToolErrorCallback, llminternal.OnToolErrorCallback(c))
+	}
+
+	a := &llmAgent{
+		model:                 cfg.Model,
+		beforeModelCallbacks:  beforeModelCallbacks,
+		afterModelCallbacks:   afterModelCallbacks,
+		onModelErrorCallbacks: onModelErrorCallbacks,
+		beforeToolCallbacks:   beforeToolCallbacks,
+		afterToolCallbacks:    afterToolCallbacks,
+		onToolErrorCallbacks:  onToolErrorCallback,
+		instruction:           cfg.Instruction,
+		inputSchema:           cfg.InputSchema,
+		outputSchema:          cfg.OutputSchema,
+
+		State: llminternal.State{
+			Model:                    cfg.Model,
+			GenerateContentConfig:    cfg.GenerateContentConfig,
+			Tools:                    cfg.Tools,
+			Toolsets:                 cfg.Toolsets,
+			DisallowTransferToParent: cfg.DisallowTransferToParent,
+			DisallowTransferToPeers:  cfg.DisallowTransferToPeers,
+			InputSchema:              cfg.InputSchema,
+			OutputSchema:             cfg.OutputSchema,
+			// TODO: internal type for includeContents
+			IncludeContents:           string(cfg.IncludeContents),
+			Instruction:               cfg.Instruction,
+			InstructionProvider:       llminternal.InstructionProvider(cfg.InstructionProvider),
+			GlobalInstruction:         cfg.GlobalInstruction,
+			GlobalInstructionProvider: llminternal.InstructionProvider(cfg.GlobalInstructionProvider),
+			OutputKey:                 cfg.OutputKey,
+		},
+	}
+
+	baseAgent, err := agent.New(agent.Config{
+		Name:                 cfg.Name,
+		Description:          cfg.Description,
+		SubAgents:            cfg.SubAgents,
+		BeforeAgentCallbacks: cfg.BeforeAgentCallbacks,
+		Run:                  a.run,
+		AfterAgentCallbacks:  cfg.AfterAgentCallbacks,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create agent: %w", err)
+	}
+
+	// TODO: remove this in favor of the state reveal below.
+	a.Agent = baseAgent
+	a.AgentType = agentinternal.TypeLLMAgent
+	a.Config = cfg
+
+	// TODO: temporary hack to set the LLMAgent type field correctly. Currently, beforeAgentCallback for LLMAgent only
+	// sees basic *agent.agent type: http://google3/third_party/golang/adk/agent/agent.go;l=177-201;rcl=869633263
+	// So in BeforeAgentCallback, we cannot access llmAgent.State fields.
+	// We should remote llminternal.State in favor of agentinternal.State.
+
+	internalAgent, ok := baseAgent.(agentinternal.Agent)
+	if !ok {
+		return nil, fmt.Errorf("internal error: failed to convert to internal agent")
+	}
+	state := agentinternal.Reveal(internalAgent)
+	state.AgentType = agentinternal.TypeLLMAgent
+	state.Config = cfg
+
+	return a, nil
+}
+
+// Config of the LLMAgent.
+type Config struct {
+	// Name must be a non-empty string, unique within the agent tree.
+	// Agent name cannot be "user", since it's reserved for end-user's input.
+	Name string
+	// Description of the agent's capability.
+	//
+	// LLM uses this to determine whether to delegate control to the agent.
+	// One-line description is enough and preferred.
+	Description string
+	// SubAgents are the child agents that this agent can delegate tasks to.
+	// ADK will automatically set a parent of each sub-agent to this agent to
+	// allow agent transferring across the tree.
+	SubAgents []agent.Agent
+
+	// BeforeAgentCallbacks is a list of callbacks that are called sequentially
+	// before the agent starts its run.
+	//
+	// If any callback returns non-nil content or error, then the agent run and
+	// the remaining callbacks will be skipped, and a new event will be created
+	// from the content or error of that callback.
+	BeforeAgentCallbacks []agent.BeforeAgentCallback
+	// AfterAgentCallbacks is a list of callbacks that are called sequentially
+	// after the agent has completed its run.
+	//
+	// If any callback returns non-nil content or error, then a new event will be
+	// created from the content or error of that callback and the remaining
+	// callbacks will be skipped.
+	AfterAgentCallbacks []agent.AfterAgentCallback
+
+	// GenerateContentConfig is for the additional content generation
+	// configuration.
+	//
+	// NOTE: not all fields are usable, e.g. tools must be configured via
+	// `tools`.
+	//
+	// For example: use this config to adjust model temperature, configure
+	// safety settings, etc.
+	GenerateContentConfig *genai.GenerateContentConfig
+
+	// BeforeModelCallbacks will be called in the order they are provided until
+	// there's a callback that returns a non-nil LLMResponse or error. Then
+	// actual LLM call is skipped, and the returned response/error is used.
+	//
+	// This provides an opportunity to inspect, log, or modify the `LLMRequest`
+	// object. It can also be used to implement caching by returning a cached
+	// `LLMResponse`, which would skip the actual model call.
+	BeforeModelCallbacks []BeforeModelCallback
+	// Model that is used by the agent.
+	Model model.LLM
+	// AfterModelCallbacks will be called in the order they are provided until
+	// there's a callback that returns a non-nil LLMResponse or error. Then
+	// actual LLM response is replaced with the returned response/error.
+	//
+	// This is the ideal place to log model responses, collect metrics on token
+	// usage, or perform post-processing on the raw `LLMResponse`.
+	AfterModelCallbacks []AfterModelCallback
+
+	OnModelErrorCallbacks []OnModelErrorCallback
+
+	// Instruction is set for the LLM model guiding the agent's behavior.
+	//
+	// The string is treated as a template:
+	//  - There can be placeholders like {key_name} that will be resolved by ADK
+	//    at runtime using session state and context.
+	//  - key_name must match "^[a-zA-Z_][a-zA-Z0-9_]*$", otherwise it will be
+	//    treated as a literal.
+	//  - {artifact.key_name} can be used to insert the text content of the
+	//    artifact named key_name.
+	//
+	// If the state variable or artifact does not exist, the agent will raise an
+	// error. If you want to ignore the error, you can append a ? to the
+	// variable name as in {var?} to make it optional.
+	//
+	// If templating logic for {} chars is not desired, then InstructionProvider
+	// should be used.
+	Instruction string
+	// InstructionProvider allows to create instructions dynamically based on
+	// the agent context.
+	//
+	// It takes over the Instruction field if both are set.
+	//
+	// InstructionProvider does not automatically substitute values to {} and
+	// treats them as just a raw char.
+	// If you need to inject session state variables, use
+	// util/instructionutil.InjectSessionState helper.
+	InstructionProvider InstructionProvider
+
+	// GlobalInstruction is the instruction for all agents in the entire
+	// agent tree.
+	//
+	// The string is treated as a template:
+	//  - There can be placeholders like {key_name} that will be resolved by ADK
+	//    at runtime using session state and context.
+	//  - key_name must match "^[a-zA-Z_][a-zA-Z0-9_]*$", otherwise it will be
+	//    treated as a literal.
+	//  - {artifact.key_name} can be used to insert the text content of the
+	//    artifact named key_name.
+	//
+	// If the state variable or artifact does not exist, the agent will raise an
+	// error. If you want to ignore the error, you can append a ? to the
+	// variable name as in {var?} to make it optional.
+	//
+	// ONLY the GlobalInstruction in the root agent will take effect.
+	//
+	// For example: GlobalInstruction can make all agents have a stable identity
+	// or personality.
+	GlobalInstruction string
+	// GlobalInstructionProvider allows to create global instructions
+	// dynamically based on the agent context.
+	//
+	// It takes over the GlobalInstruction field if both are set.
+	GlobalInstructionProvider InstructionProvider
+
+	// DisallowTransferToParent prevents transferring to parent agent if LLM
+	// decides to.
+	DisallowTransferToParent bool
+	// DisallowTransferToPeers prevents transferring to peer agents.
+	DisallowTransferToPeers bool
+
+	// Whether to include contents (conversation history) in the model request.
+	IncludeContents IncludeContents
+
+	// TODO(ngeorgy): consider to switch to jsonschema for input and output schema.
+	// The input schema when agent is used as a tool.
+	InputSchema *genai.Schema
+	// The output schema when agent replies.
+	//
+	// NOTE: when this is set, agent can only reply and cannot use any tools,
+	// such as function tools, RAGs, agent transfer, etc.
+	OutputSchema *genai.Schema
+
+	// Callbacks are executed in the order they are provided.
+	// If a callback returns result/error, then the execution of the callback
+	// list stops AND the actual tool call is skipped.
+	BeforeToolCallbacks []BeforeToolCallback
+	// Tools available to the agent.
+	Tools []tool.Tool
+	// Callbacks are executed in the order they are provided.
+	// If a callback returns result/error, then the execution of the callback
+	// list stops and this result/error is returned instead.
+	AfterToolCallbacks []AfterToolCallback
+	// Toolsets will be used by llmagent to extract tools and pass to the
+	// underlying LLM.
+	Toolsets []tool.Toolset
+
+	OnToolErrorCallbacks []OnToolErrorCallback
+
+	// OutputKey is an optional parameter to specify the key in session state for the agent output.
+	//
+	// Typical uses cases are:
+	// - Extracts agent reply for later use, such as in tools, callbacks, etc.
+	// - Connects agents to coordinate with each other.
+	OutputKey string
+}
+
+// BeforeModelCallback that is called before sending a request to the model.
+//
+// If it returns non-nil LLMResponse or error, the actual model call is skipped
+// and the returned response/error is used.
+type BeforeModelCallback func(ctx agent.CallbackContext, llmRequest *model.LLMRequest) (*model.LLMResponse, error)
+
+// AfterModelCallback that is called after receiving a response from the model.
+//
+// If it returns non-nil LLMResponse or error, the actual model response/error
+// is replaced with the returned response/error.
+type AfterModelCallback func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error)
+
+// OnModelErrorCallback that is called when receiving an error response from the llm model.
+//
+// If it returns non-nil LLMResponse or error, the actual model response/error
+// is replaced with the returned response/error.
+type OnModelErrorCallback func(ctx agent.CallbackContext, llmRequest *model.LLMRequest, llmResponseError error) (*model.LLMResponse, error)
+
+// BeforeToolCallback is executed before a tool's Run method.
+//
+// Callbacks are executed in the order they are provided.
+// If a callback returns a non-nil result or an error:
+// - execution of remaining callbacks stops
+// - the actual tool call is skipped
+// - the returned result is used as the tool result
+//
+// To modify tool arguments and still run the tool,
+// update args in place and return (nil, nil).
+type BeforeToolCallback func(ctx tool.Context, tool tool.Tool, args map[string]any) (map[string]any, error)
+
+// AfterToolCallback is a function type executed after a tool's Run method has completed,
+// regardless of whether the tool returned a result or an error.
+//
+// Callbacks are executed in the order they are provided.
+// If a callback returns a non-nil result or an error:
+//   - execution of remaining callbacks stops
+//   - the returned result and/or error is used as the final tool output
+type AfterToolCallback func(ctx tool.Context, tool tool.Tool, args, result map[string]any, err error) (map[string]any, error)
+
+// OnToolErrorCallback that is called when receiving an error response from tool execution.
+//
+// If it returns non-nil LLMResponse or error, the actual model response/error
+// is replaced with the returned response/error.
+type OnToolErrorCallback func(ctx tool.Context, tool tool.Tool, args map[string]any, err error) (map[string]any, error)
+
+// IncludeContents controls what parts of prior conversation history is received by llmagent.
+type IncludeContents string
+
+const (
+	// IncludeContentsNone makes the llmagent operate solely on its current turn (latest user input + any following agent events).
+	IncludeContentsNone IncludeContents = "none"
+	// IncludeContentsDefault is enabled by default. The llmagent receives the relevant conversation history.
+	IncludeContentsDefault IncludeContents = "default"
+)
+
+type llmAgent struct {
+	agent.Agent
+	llminternal.State
+	agentState
+
+	beforeModelCallbacks  []llminternal.BeforeModelCallback
+	model                 model.LLM
+	afterModelCallbacks   []llminternal.AfterModelCallback
+	instruction           string
+	onModelErrorCallbacks []llminternal.OnModelErrorCallback
+
+	beforeToolCallbacks  []llminternal.BeforeToolCallback
+	afterToolCallbacks   []llminternal.AfterToolCallback
+	onToolErrorCallbacks []llminternal.OnToolErrorCallback
+
+	inputSchema  *genai.Schema
+	outputSchema *genai.Schema
+}
+
+type agentState = agentinternal.State
+
+func (a *llmAgent) run(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+	// TODO: branch context?
+	ctx = icontext.NewInvocationContext(ctx, icontext.InvocationContextParams{
+		Artifacts:    ctx.Artifacts(),
+		Memory:       ctx.Memory(),
+		Session:      ctx.Session(),
+		Branch:       ctx.Branch(),
+		Agent:        a,
+		UserContent:  ctx.UserContent(),
+		RunConfig:    ctx.RunConfig(),
+		InvocationID: ctx.InvocationID(),
+	})
+
+	f := &llminternal.Flow{
+		Model:                 a.model,
+		RequestProcessors:     llminternal.DefaultRequestProcessors,
+		ResponseProcessors:    llminternal.DefaultResponseProcessors,
+		BeforeModelCallbacks:  a.beforeModelCallbacks,
+		AfterModelCallbacks:   a.afterModelCallbacks,
+		OnModelErrorCallbacks: a.onModelErrorCallbacks,
+		BeforeToolCallbacks:   a.beforeToolCallbacks,
+		AfterToolCallbacks:    a.afterToolCallbacks,
+		OnToolErrorCallbacks:  a.onToolErrorCallbacks,
+	}
+
+	return func(yield func(*session.Event, error) bool) {
+		for ev, err := range f.Run(ctx) {
+			a.maybeSaveOutputToState(ev)
+			if !yield(ev, err) {
+				return
+			}
+		}
+	}
+}
+
+// maybeSaveOutputToState saves the model output to state if needed. skip if the event
+// was authored by some other agent (e.g. current agent transferred to another agent)
+func (a *llmAgent) maybeSaveOutputToState(event *session.Event) {
+	if event == nil {
+		return
+	}
+	if event.Author != a.Name() {
+		// TODO: log "Skipping output save for agent %s: event authored by %s"
+		return
+	}
+	if a.OutputKey != "" && !event.Partial && event.Content != nil && len(event.Content.Parts) > 0 {
+		var sb strings.Builder
+		for _, part := range event.Content.Parts {
+			if part.Text != "" && !part.Thought {
+				sb.WriteString(part.Text)
+			}
+		}
+		result := sb.String()
+
+		// TODO: add output schema validation and unmarshalling
+		if a.OutputSchema != nil {
+			// If the result from the final chunk is just whitespace or empty,
+			// it means this is an empty final chunk of a stream.
+			// Do not attempt to parse it as JSON.
+			if strings.TrimSpace(result) == "" {
+				return
+			}
+		}
+
+		if event.Actions.StateDelta == nil {
+			event.Actions.StateDelta = make(map[string]any)
+		}
+
+		event.Actions.StateDelta[a.OutputKey] = result
+	}
+}
+
+// FindAgent finds a sub-agent by name.
+func (a *llmAgent) FindAgent(name string) agent.Agent {
+	if a.Name() == name {
+		return a
+	}
+	return a.Agent.FindSubAgent(name)
+}
+
+// InstructionProvider allows to create instructions dynamically. It is called
+// on each agent invocation.
+//
+// NOTE: when InstructionProvider is used, ADK will NOT inject session state
+// placeholders into the instruction. You can use
+// util/instructionutil.InjectSessionState() helper if this functionality is needed.
+type InstructionProvider func(ctx agent.ReadonlyContext) (string, error)
+
+
+===== internal\llminternal\base_flow.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package llminternal
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"iter"
+	"maps"
+	"slices"
+	"strings"
+	"sync"
+
+	"github.com/google/uuid"
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/internal/agent/parentmap"
+	"google.golang.org/adk/internal/agent/runconfig"
+	icontext "google.golang.org/adk/internal/context"
+	"google.golang.org/adk/internal/llminternal/googlellm"
+	"google.golang.org/adk/internal/plugininternal/plugincontext"
+	"google.golang.org/adk/internal/telemetry"
+	"google.golang.org/adk/internal/toolinternal"
+	"google.golang.org/adk/internal/utils"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/session"
+	"google.golang.org/adk/tool"
+	"google.golang.org/adk/tool/toolconfirmation"
+)
+
+var ErrModelNotConfigured = errors.New("model not configured; ensure Model is set in llmagent.Config")
+
+type BeforeModelCallback func(ctx agent.CallbackContext, llmRequest *model.LLMRequest) (*model.LLMResponse, error)
+
+type AfterModelCallback func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error)
+
+type OnModelErrorCallback func(ctx agent.CallbackContext, llmRequest *model.LLMRequest, llmResponseError error) (*model.LLMResponse, error)
+
+type BeforeToolCallback func(ctx tool.Context, tool tool.Tool, args map[string]any) (map[string]any, error)
+
+type AfterToolCallback func(ctx tool.Context, tool tool.Tool, args, result map[string]any, err error) (map[string]any, error)
+
+type OnToolErrorCallback func(ctx tool.Context, tool tool.Tool, args map[string]any, err error) (map[string]any, error)
+
+type Flow struct {
+	Model model.LLM
+
+	Tools                 []tool.Tool
+	RequestProcessors     []func(ctx agent.InvocationContext, req *model.LLMRequest, f *Flow) iter.Seq2[*session.Event, error]
+	ResponseProcessors    []func(ctx agent.InvocationContext, req *model.LLMRequest, resp *model.LLMResponse) error
+	BeforeModelCallbacks  []BeforeModelCallback
+	AfterModelCallbacks   []AfterModelCallback
+	OnModelErrorCallbacks []OnModelErrorCallback
+	BeforeToolCallbacks   []BeforeToolCallback
+	AfterToolCallbacks    []AfterToolCallback
+	OnToolErrorCallbacks  []OnToolErrorCallback
+}
+
+var (
+	DefaultRequestProcessors = []func(ctx agent.InvocationContext, req *model.LLMRequest, f *Flow) iter.Seq2[*session.Event, error]{
+		basicRequestProcessor,
+		toolProcessor,
+		authPreprocessor,
+		RequestConfirmationRequestProcessor,
+		instructionsRequestProcessor,
+		identityRequestProcessor,
+		ContentsRequestProcessor,
+		// Some implementations of NL Planning mark planning contents as thoughts in the post processor.
+		// Since these need to be unmarked, NL Planning should be after contentsRequestProcessor.
+		nlPlanningRequestProcessor,
+		// Code execution should be after contentsRequestProcessor as it mutates the contents
+		// to optimize data files.
+		codeExecutionRequestProcessor,
+		outputSchemaRequestProcessor,
+		AgentTransferRequestProcessor,
+		removeDisplayNameIfExists,
+	}
+	DefaultResponseProcessors = []func(ctx agent.InvocationContext, req *model.LLMRequest, resp *model.LLMResponse) error{
+		nlPlanningResponseProcessor,
+		codeExecutionResponseProcessor,
+	}
+)
+
+// 中文业务注释：Flow.Run 是 LLM Agent 的循环引擎。它会反复执行 runOneStep，直到出现最终回复、转交、错误或上下文结束。
+func (f *Flow) Run(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+	return func(yield func(*session.Event, error) bool) {
+		for {
+			var lastEvent *session.Event
+			for ev, err := range f.runOneStep(ctx) {
+				if err != nil {
+					yield(nil, err)
+					return
+				}
+				// forward the event first.
+				if !yield(ev, nil) {
+					return
+				}
+				lastEvent = ev
+			}
+			if lastEvent == nil || lastEvent.IsFinalResponse() {
+				return
+			}
+			if lastEvent.LLMResponse.Partial {
+				// We may have reached max token limit during streaming mode.
+				// TODO: handle Partial response in model level. CL 781377328
+				yield(nil, fmt.Errorf("TODO: last event is not final"))
+				return
+			}
+		}
+	}
+}
+
+// 中文业务注释：runOneStep 表示一次“模型步”：加工请求 -> 调模型 -> 产出模型事件 -> 如有工具调用则执行工具并产出工具响应事件。
+func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+	return func(yield func(*session.Event, error) bool) {
+		if f.Model == nil {
+			yield(nil, fmt.Errorf("agent %q: %w", ctx.Agent().Name(), ErrModelNotConfigured))
+			return
+		}
+
+		// 中文业务注释：先创建空的 LLMRequest，随后由 RequestProcessors 逐步填入指令、历史、工具声明、输出 Schema 等内容。
+		req := &model.LLMRequest{
+			Model: f.Model.Name(),
+		}
+
+		// Preprocess before calling the LLM.
+		// 中文业务注释：请求预处理流水线。这里是 Prompt/工具/历史上下文真正被拼入 LLMRequest 的地方。
+		for ev, err := range f.preprocess(ctx, req) {
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			if ev != nil {
+				if !yield(ev, nil) {
+					return
+				}
+			}
+		}
+		if ctx.Ended() {
+			return
+		}
+		// Create event to pass to callback state delta
+		stateDelta := make(map[string]any)
+		artifactDelta := make(map[string]int64)
+		// Calls the LLM.
+		// 中文业务注释：调用模型。callLLM 内部会执行插件/回调、记录遥测，并兼容流式与非流式响应。
+		for resp, err := range f.callLLM(ctx, req, stateDelta, artifactDelta) {
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			if err := f.postprocess(ctx, req, resp); err != nil {
+				yield(nil, err)
+				return
+			}
+			// Skip the model response event if there is no content and no error code.
+			// This is needed for the code executor to trigger another loop according to
+			// adk-python src/google/adk/flows/llm_flows/base_llm_flow.py BaseLlmFlow._postprocess_async.
+			if resp.Content == nil && resp.ErrorCode == "" && !resp.Interrupted {
+				continue
+			}
+
+			// TODO: temporarily convert
+			tools := make(map[string]tool.Tool)
+			for k, v := range req.Tools {
+				tool, ok := v.(tool.Tool)
+				if !ok {
+					if !yield(nil, fmt.Errorf("unexpected tool type %T for tool %v", v, k)) {
+						return
+					}
+				}
+				tools[k] = tool
+			}
+
+			// Build the event and yield.
+			modelResponseEvent := f.finalizeModelResponseEvent(ctx, resp, tools, stateDelta)
+			if !yield(modelResponseEvent, nil) {
+				return
+			}
+			// TODO: generate and yield an auth event if needed.
+
+			if resp.Partial {
+				continue
+			}
+			// Handle function calls.
+
+			// 中文业务注释：如果模型返回 function_call，这里会真正执行工具，并生成 function_response 事件给下一轮模型消费。
+			ev, err := f.handleFunctionCalls(ctx, tools, resp.LLMResponse, nil)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			if ev == nil {
+				// nothing to yield/process.
+				continue
+			}
+
+			toolConfirmationEvent := generateRequestConfirmationEvent(ctx, modelResponseEvent, ev)
+			if toolConfirmationEvent != nil {
+				if !yield(toolConfirmationEvent, nil) {
+					return
+				}
+			}
+
+			if !yield(ev, nil) {
+				return
+			}
+
+			// If the model response is structured, yield it as a final model response event.
+			outputSchemaResponse, err := retrieveStructuredModelResponse(ev)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			if outputSchemaResponse != "" {
+				if !yield(createFinalModelResponseEvent(ctx, outputSchemaResponse), nil) {
+					return
+				}
+			}
+			// Actually handle "transfer_to_agent" tool. The function call sets the ev.Actions.TransferToAgent field.
+			// We are following python's execution flow which is
+			//   BaseLlmFlow._postprocess_async
+			//    -> _postprocess_handle_function_calls_async
+			// TODO(hakim): figure out why this isn't handled by the runner.
+			if ev.Actions.TransferToAgent == "" {
+				return
+			}
+			nextAgent := f.agentToRun(ctx, ev.Actions.TransferToAgent)
+			if nextAgent == nil {
+				yield(nil, fmt.Errorf("failed to find agent: %s", ev.Actions.TransferToAgent))
+				return
+			}
+			for ev, err := range nextAgent.Run(ctx) {
+				if !yield(ev, err) || err != nil { // forward
+					return
+				}
+			}
+		}
+	}
+}
+
+// 中文业务注释：preprocess 是请求加工管线入口。不同 processor 按顺序修改同一个 LLMRequest。
+func (f *Flow) preprocess(ctx agent.InvocationContext, req *model.LLMRequest) iter.Seq2[*session.Event, error] {
+	return func(yield func(*session.Event, error) bool) {
+		// apply request processor functions to the request in the configured order.
+		for _, processor := range f.RequestProcessors {
+			for ev, err := range processor(ctx, req, f) {
+				if err != nil {
+					yield(nil, err)
+					return
+				}
+				if ev != nil {
+					yield(ev, nil)
+				}
+			}
+		}
+
+		if err := toolPreprocess(ctx, req, f.Tools); err != nil {
+			yield(nil, err)
+			return
+		}
+		if err := toolsetPreprocess(ctx, req); err != nil {
+			yield(nil, err)
+			return
+		}
+	}
+}
+
+// toolPreprocess runs tool preprocess on the given request
+// If a tool set is encountered, it's expanded recursively in DFS fashion.
+// TODO: check need/feasibility of running this concurrently.
+func toolPreprocess(ctx agent.InvocationContext, req *model.LLMRequest, tools []tool.Tool) error {
+	for _, t := range tools {
+		requestProcessor, ok := t.(toolinternal.RequestProcessor)
+		if !ok {
+			return fmt.Errorf("tool %q does not implement RequestProcessor() method", t.Name())
+		}
+		// TODO: how to prevent mutation on this?
+		toolCtx := toolinternal.NewToolContext(ctx, "", &session.EventActions{}, nil)
+		if err := requestProcessor.ProcessRequest(toolCtx, req); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func toolsetPreprocess(ctx agent.InvocationContext, req *model.LLMRequest) error {
+	llmAgent, ok := ctx.Agent().(Agent)
+	if !ok {
+		return nil
+	}
+	for _, toolset := range Reveal(llmAgent).Toolsets {
+		processor, ok := toolset.(toolinternal.RequestProcessor)
+		if !ok {
+			continue // Not all toolsets implement RequestProcessor.
+		}
+		toolCtx := toolinternal.NewToolContext(ctx, "", nil, nil)
+		if err := processor.ProcessRequest(toolCtx, req); err != nil {
+			return fmt.Errorf("process request by toolset %q: %w", toolset.Name(), err)
+		}
+	}
+	return nil
+}
+
+func newResponseWithEventID(resp *model.LLMResponse) *responseWithEventID {
+	return &responseWithEventID{resp, uuid.New().String()}
+}
+
+// 中文业务注释：callLLM 负责模型调用前后回调、错误恢复回调、插件拦截，以及把模型响应包装成带 eventID 的内部对象。
+func (f *Flow) callLLM(ctx agent.InvocationContext, req *model.LLMRequest, stateDelta map[string]any, artifactDelta map[string]int64) iter.Seq2[*responseWithEventID, error] {
+	return func(yield func(*responseWithEventID, error) bool) {
+		pluginManager := pluginManagerFromContext(ctx)
+		if pluginManager != nil {
+			cctx := icontext.NewCallbackContextWithDelta(ctx, stateDelta, artifactDelta)
+			callbackResponse, callbackErr := pluginManager.RunBeforeModelCallback(cctx, req)
+			if callbackResponse != nil || callbackErr != nil {
+				yield(newResponseWithEventID(callbackResponse), callbackErr)
+				return
+			}
+		}
+
+		for _, callback := range f.BeforeModelCallbacks {
+			cctx := icontext.NewCallbackContextWithDelta(ctx, stateDelta, artifactDelta)
+			callbackResponse, callbackErr := callback(cctx, req)
+
+			if callbackResponse != nil || callbackErr != nil {
+				yield(newResponseWithEventID(callbackResponse), callbackErr)
+				return
+			}
+		}
+
+		// TODO: Set _ADK_AGENT_NAME_LABEL_KEY in req.GenerateConfig.Labels
+		// to help with slicing the billing reports on a per-agent basis.
+
+		// TODO: RunLive mode when invocation_context.run_config.support_cfc is true.
+		useStream := runconfig.FromContext(ctx).StreamingMode == runconfig.StreamingModeSSE
+
+		for resp, err := range generateContent(ctx, f.Model, req, useStream) {
+			if err != nil {
+				cbResp, cbErr := f.runOnModelErrorCallbacks(ctx, req, stateDelta, artifactDelta, err)
+				if cbErr != nil {
+					yield(nil, cbErr)
+					return
+				}
+				if cbResp == nil {
+					yield(nil, err)
+					return
+				}
+				resp = &responseWithEventID{
+					LLMResponse: cbResp,
+					eventID:     resp.eventID,
+				}
+				err = cbErr
+			}
+			// Function call ID is optional in genai API and some models do not use the field.
+			// Set it in case after model callbacks use it.
+			utils.PopulateClientFunctionCallID(resp.Content)
+
+			callbackResp, callbackErr := f.runAfterModelCallbacks(ctx, resp.LLMResponse, stateDelta, artifactDelta, err)
+			// TODO: check if we should stop iterator on the first error from stream or continue yielding next results.
+			if callbackErr != nil {
+				yield(nil, callbackErr)
+				return
+			}
+
+			if callbackResp != nil {
+				resp := &responseWithEventID{
+					LLMResponse: callbackResp,
+					eventID:     resp.eventID,
+				}
+				if !yield(resp, nil) {
+					return
+				}
+				continue
+			}
+
+			// TODO: check if we should stop iterator on the first error from stream or continue yielding next results.
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if !yield(resp, nil) {
+				return
+			}
+		}
+	}
+}
+
+type responseWithEventID struct {
+	*model.LLMResponse
+	eventID string
+}
+
+// generateContent wraps the LLM call with tracing and logging.
+// The generate_content span should cover only calls to LLM. Plugins and callbacks should be outside of this span.
+// 中文业务注释：generateContent 是唯一真正调用底层 model.LLM 的地方，同时包裹 OpenTelemetry span 和请求/响应日志。
+func generateContent(ctx agent.InvocationContext, m model.LLM, req *model.LLMRequest, useStream bool) iter.Seq2[*responseWithEventID, error] {
+	return func(yield func(*responseWithEventID, error) bool) {
+		spanCtx, span := telemetry.StartGenerateContentSpan(ctx, telemetry.StartGenerateContentSpanParams{
+			ModelName:    m.Name(),
+			InvocationID: ctx.InvocationID(),
+		})
+		ctx = ctx.WithContext(spanCtx)
+		backend := googlellm.GetGoogleLLMVariant(m)
+		// Log request before calling the model.
+		telemetry.LogRequest(ctx, req, backend)
+
+		var lastResponse responseWithEventID
+		var lastErr error
+		spanEnded := false
+		endSpanAndTrackResult := func() {
+			if spanEnded {
+				// Return to avoid spamming the logs with "span already ended" errors.
+				return
+			}
+			telemetry.TraceGenerateContentResult(span, telemetry.TraceGenerateContentResultParams{
+				Response: lastResponse.LLMResponse,
+				EventID:  lastResponse.eventID,
+				Error:    lastErr,
+			})
+			span.End()
+			spanEnded = true
+		}
+		// Ensure that the span is ended in case of error or if none final responses are yielded before the yield returns false.
+		defer endSpanAndTrackResult()
+		for resp, err := range m.GenerateContent(ctx, req, useStream) {
+			response := newResponseWithEventID(resp)
+			lastResponse = *response
+			lastErr = err
+			// Complete the span immediately to avoid capturing the upstream yield processing time.
+			if err != nil {
+				endSpanAndTrackResult()
+			} else if !resp.Partial {
+				// Log only final responses.
+				telemetry.LogResponse(ctx, resp, backend)
+				endSpanAndTrackResult()
+			}
+			if !yield(response, err) {
+				return
+			}
+		}
+	}
+}
+
+func (f *Flow) runAfterModelCallbacks(ctx agent.InvocationContext, llmResp *model.LLMResponse, stateDelta map[string]any, artifactDelta map[string]int64, llmErr error) (*model.LLMResponse, error) {
+	pluginManager := pluginManagerFromContext(ctx)
+	if pluginManager != nil {
+		cctx := icontext.NewCallbackContextWithDelta(ctx, stateDelta, artifactDelta)
+		callbackResponse, callbackErr := pluginManager.RunAfterModelCallback(cctx, llmResp, llmErr)
+		if callbackResponse != nil || callbackErr != nil {
+			return callbackResponse, callbackErr
+		}
+	}
+
+	for _, callback := range f.AfterModelCallbacks {
+		cctx := icontext.NewCallbackContextWithDelta(ctx, stateDelta, artifactDelta)
+		callbackResponse, callbackErr := callback(cctx, llmResp, llmErr)
+
+		if callbackResponse != nil || callbackErr != nil {
+			return callbackResponse, callbackErr
+		}
+	}
+
+	return nil, nil
+}
+
+func (f *Flow) runOnModelErrorCallbacks(ctx agent.InvocationContext, llmReq *model.LLMRequest, stateDelta map[string]any, artifactDelta map[string]int64, llmErr error) (*model.LLMResponse, error) {
+	pluginManager := pluginManagerFromContext(ctx)
+	if pluginManager != nil {
+		cctx := icontext.NewCallbackContextWithDelta(ctx, stateDelta, artifactDelta)
+		callbackResponse, callbackErr := pluginManager.RunOnModelErrorCallback(cctx, llmReq, llmErr)
+		if callbackResponse != nil || callbackErr != nil {
+			return callbackResponse, callbackErr
+		}
+	}
+
+	for _, callback := range f.OnModelErrorCallbacks {
+		cctx := icontext.NewCallbackContextWithDelta(ctx, stateDelta, artifactDelta)
+		callbackResponse, callbackErr := callback(cctx, llmReq, llmErr)
+
+		if callbackResponse != nil || callbackErr != nil {
+			return callbackResponse, callbackErr
+		}
+	}
+
+	return nil, nil
+}
+
+func (f *Flow) postprocess(ctx agent.InvocationContext, req *model.LLMRequest, resp *responseWithEventID) error {
+	// apply response processor functions to the response in the configured order.
+	for _, processor := range f.ResponseProcessors {
+		if err := processor(ctx, req, resp.LLMResponse); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *Flow) agentToRun(ctx agent.InvocationContext, agentName string) agent.Agent {
+	// NOTE: in python, BaseLlmFlow._get_agent_to_run searches the entire agent
+	// tree from the root_agent when processing _postprocess_handle_function_calls_async.
+	// I think that is strange. In our version, we check the agents included in transferTarget.
+	parents := parentmap.FromContext(ctx)
+	agents := transferTargets(ctx.Agent(), parents[ctx.Agent().Name()])
+	for _, agent := range agents {
+		if agent.Name() == agentName {
+			return agent
+		}
+	}
+	return nil
+}
+
+// 中文业务注释：把模型原始响应转换成 Session Event。此处会补齐 function_call ID、设置 Author/Branch，并标记长任务工具调用。
+func (f *Flow) finalizeModelResponseEvent(ctx agent.InvocationContext, resp *responseWithEventID, tools map[string]tool.Tool, stateDelta map[string]any) *session.Event {
+	// FunctionCall & FunctionResponse matching algorithm assumes non-empty function call IDs
+	// but function call ID is optional in genai API and some models do not use the field.
+	// Generate function call ids. (see functions.populate_client_function_call_id in python SDK)
+	utils.PopulateClientFunctionCallID(resp.Content)
+
+	ev := session.NewEvent(ctx.InvocationID())
+	ev.ID = resp.eventID // TODO change NewEvent to accept event id
+	ev.Author = ctx.Agent().Name()
+	ev.Branch = ctx.Branch()
+	ev.LLMResponse = *resp.LLMResponse
+	ev.Actions.StateDelta = stateDelta
+
+	// Populate ev.LongRunningToolIDs
+	ev.LongRunningToolIDs = findLongRunningFunctionCallIDs(resp.Content, tools)
+
+	return ev
+}
+
+// findLongRunningFunctionCallIDs iterates over the FunctionCalls and
+// returns the callIDs of the long running functions
+func findLongRunningFunctionCallIDs(c *genai.Content, tools map[string]tool.Tool) []string {
+	set := make(map[string]struct{})
+	// Iterate over function calls.
+	for _, fc := range utils.FunctionCalls(c) {
+		if tool, ok := tools[fc.Name]; ok && fc.ID != "" && tool.IsLongRunning() {
+			// If the tool exists and is long-running, add its ID to the set.
+			set[fc.ID] = struct{}{}
+		}
+	}
+	// Transform the set (map keys) into a slice.
+	return slices.Collect(maps.Keys(set))
+}
+
+type fakeTool struct {
+	name string
+}
+
+func (f *fakeTool) Name() string      { return f.name }
+func (*fakeTool) Description() string { return "Tool not found" }
+func (*fakeTool) IsLongRunning() bool { return false }
+
+var _ tool.Tool = (*fakeTool)(nil)
+
+// newToolNotFoundError creates an error matching the specific Python format
+func newToolNotFoundError(toolName string, availableTools []string) error {
+	joinedTools := strings.Join(availableTools, ", ")
+
+	return fmt.Errorf(`tool '%s' not found.
+Available tools: %s
+
+Possible causes:
+  1. LLM hallucinated the function name - review agent instruction clarity
+  2. Tool not registered - verify agent.tools list
+  3. Name mismatch - check for typos
+
+Suggested fixes:
+  - Review agent instruction to ensure tool usage is clear
+  - Verify tool is included in agent.tools list
+  - Check for typos in function name`, toolName, joinedTools)
+}
+
+// handleFunctionCalls calls the functions and returns the function response event.
+//
+// TODO: accept filters to include/exclude function calls.
+// TODO: check feasibility of running tool.Run concurrently.
+// 中文业务注释：执行模型请求的所有工具调用。多个 function_call 会并发运行，最后合并为一个 function_response event，减少后续模型上下文碎片。
+func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.Tool, resp *model.LLMResponse, toolConfirmations map[string]*toolconfirmation.ToolConfirmation) (mergedEvent *session.Event, err error) {
+	fnCalls := utils.FunctionCalls(resp.Content)
+	toolNames := slices.Collect(maps.Keys(toolsDict))
+
+	// Merged span for parallel tool calls - create only if there is more than one tool call.
+	if len(fnCalls) > 1 {
+		mergedCtx, mergedToolCallSpan := telemetry.StartTrace(ctx, "execute_tool (merged)")
+		ctx = ctx.WithContext(mergedCtx)
+		defer func() {
+			telemetry.TraceMergedToolCallsResult(mergedToolCallSpan, mergedEvent, err)
+			mergedToolCallSpan.End()
+		}()
+	}
+
+	fnResponseEvents := make([]*session.Event, len(fnCalls))
+	var wg sync.WaitGroup
+
+	for i, fnCall := range fnCalls {
+		wg.Add(1)
+		go func(i int, fnCall *genai.FunctionCall) {
+			defer wg.Done()
+
+			sctx, span := telemetry.StartExecuteToolSpan(ctx, telemetry.StartExecuteToolSpanParams{
+				ToolName: fnCall.Name,
+				Args:     fnCall.Args,
+			})
+			defer span.End()
+			toolCallCtx := ctx.WithContext(sctx)
+			var confirmation *toolconfirmation.ToolConfirmation
+			if toolConfirmations != nil {
+				confirmation = toolConfirmations[fnCall.ID]
+			}
+			toolCtx := toolinternal.NewToolContext(toolCallCtx, fnCall.ID, &session.EventActions{StateDelta: make(map[string]any)}, confirmation)
+
+			var result map[string]any
+			curTool, found := toolsDict[fnCall.Name]
+			if !found {
+				err := newToolNotFoundError(fnCall.Name, toolNames)
+				result, err = f.runOnToolErrorCallbacks(toolCtx, &fakeTool{name: fnCall.Name}, fnCall.Args, err)
+				if err != nil {
+					result = map[string]any{"error": err.Error()}
+				}
+			} else if funcTool, ok := curTool.(toolinternal.FunctionTool); !ok {
+				err := newToolNotFoundError(fnCall.Name, toolNames)
+				result, err = f.runOnToolErrorCallbacks(toolCtx, &fakeTool{name: fnCall.Name}, fnCall.Args, err)
+				if err != nil {
+					result = map[string]any{"error": err.Error()}
+				}
+			} else {
+				result = f.callTool(toolCtx, funcTool, fnCall.Args)
+			}
+
+			// TODO: handle long-running tool.
+			ev := session.NewEvent(ctx.InvocationID())
+			ev.LLMResponse = model.LLMResponse{
+				Content: &genai.Content{
+					Role: "user",
+					Parts: []*genai.Part{
+						{
+							FunctionResponse: &genai.FunctionResponse{
+								ID:       fnCall.ID,
+								Name:     fnCall.Name,
+								Response: result,
+							},
+						},
+					},
+				},
+			}
+			ev.Author = ctx.Agent().Name()
+			ev.Branch = ctx.Branch()
+			ev.Actions = *toolCtx.Actions()
+
+			traceTool := curTool
+			if traceTool == nil {
+				traceTool = &fakeTool{name: fnCall.Name}
+			}
+			var toolErr error
+			resultErr := result["error"]
+			if resultErr != nil {
+				if err, ok := resultErr.(error); ok {
+					toolErr = err
+				} else if errStr, ok := resultErr.(string); ok {
+					toolErr = errors.New(errStr)
+				}
+			}
+			telemetry.TraceToolResult(span, telemetry.TraceToolResultParams{
+				Description:   traceTool.Description(),
+				ResponseEvent: ev,
+				Error:         toolErr,
+			})
+
+			fnResponseEvents[i] = ev
+		}(i, fnCall)
+	}
+	wg.Wait()
+	mergedEvent, err = mergeParallelFunctionResponseEvents(fnResponseEvents)
+	if err != nil {
+		return mergedEvent, err
+	}
+	return mergedEvent, nil
+}
+
+func (f *Flow) runOnToolErrorCallbacks(toolCtx tool.Context, tool tool.Tool, fArgs map[string]any, err error) (map[string]any, error) {
+	pluginManager := pluginManagerFromContext(toolCtx)
+	if pluginManager != nil {
+		result, err := pluginManager.RunOnToolErrorCallback(toolCtx, tool, fArgs, err)
+		if result != nil || err != nil {
+			return result, err
+		}
+	}
+	return f.invokeOnToolErrorCallbacks(toolCtx, tool, fArgs, err)
+}
+
+// 中文业务注释：单个工具的完整调用链：插件 beforeTool -> Agent beforeTool -> 真正 Run -> 错误回调 -> afterTool，最后统一返回 map。
+func (f *Flow) callTool(toolCtx tool.Context, tool toolinternal.FunctionTool, fArgs map[string]any) map[string]any {
+	var response map[string]any
+	var err error
+	pluginManager := pluginManagerFromContext(toolCtx)
+	if pluginManager != nil {
+		response, err = pluginManager.RunBeforeToolCallback(toolCtx, tool, fArgs)
+	}
+	if response == nil && err == nil {
+		response, err = f.invokeBeforeToolCallbacks(toolCtx, tool, fArgs)
+	}
+
+	if response == nil && err == nil {
+		response, err = tool.Run(toolCtx, fArgs)
+	}
+
+	var errorResponse map[string]any
+	var cbErr error
+	if err != nil && pluginManager != nil {
+		errorResponse, cbErr = pluginManager.RunOnToolErrorCallback(toolCtx, tool, fArgs, err)
+	}
+	if err != nil && errorResponse == nil && cbErr == nil {
+		errorResponse, cbErr = f.invokeOnToolErrorCallbacks(toolCtx, tool, fArgs, err)
+	}
+	if errorResponse != nil || cbErr != nil {
+		response = errorResponse
+		err = cbErr
+	}
+
+	var alteredResponse map[string]any
+	var alteredErr error
+	if pluginManager != nil {
+		alteredResponse, alteredErr = pluginManager.RunAfterToolCallback(toolCtx, tool, fArgs, response, err)
+	}
+	if alteredResponse == nil && alteredErr == nil {
+		alteredResponse, alteredErr = f.invokeAfterToolCallbacks(toolCtx, tool, fArgs, response, err)
+	}
+	if alteredResponse != nil || alteredErr != nil {
+		response = alteredResponse
+		err = alteredErr
+	}
+
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	return response
+}
+
+func (f *Flow) invokeBeforeToolCallbacks(toolCtx tool.Context, tool tool.Tool, fArgs map[string]any) (map[string]any, error) {
+	for _, callback := range f.BeforeToolCallbacks {
+		result, err := callback(toolCtx, tool, fArgs)
+		if err != nil {
+			return nil, err
+		}
+		// When a list of callbacks is provided, the callbacks will be called in the
+		// order they are listed while a callback returns nil.
+		if result != nil {
+			return result, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *Flow) invokeAfterToolCallbacks(toolCtx tool.Context, tool toolinternal.FunctionTool, fArgs, fResult map[string]any, fErr error) (map[string]any, error) {
+	for _, callback := range f.AfterToolCallbacks {
+		result, err := callback(toolCtx, tool, fArgs, fResult, fErr)
+		if err != nil {
+			return nil, err
+		}
+		// When a list of callbacks is provided, the callbacks will be called in the
+		// order they are listed while a callback returns nil.
+		if result != nil {
+			return result, nil
+		}
+	}
+	// If no callback returned a result/error, return the original result/error.
+	return fResult, fErr
+}
+
+func (f *Flow) invokeOnToolErrorCallbacks(toolCtx tool.Context, tool tool.Tool, fArgs map[string]any, fErr error) (map[string]any, error) {
+	for _, callback := range f.OnToolErrorCallbacks {
+		result, err := callback(toolCtx, tool, fArgs, fErr)
+		if err != nil {
+			return nil, err
+		}
+		// When a list of callbacks is provided, the callbacks will be called in the
+		// order they are listed while a callback returns nil.
+		if result != nil {
+			return result, nil
+		}
+	}
+	// If no callback returned a result/error, return the original result/error.
+	return nil, fErr
+}
+
+func mergeParallelFunctionResponseEvents(events []*session.Event) (*session.Event, error) {
+	switch len(events) {
+	case 0:
+		return nil, nil
+	case 1:
+		return events[0], nil
+	}
+	var parts []*genai.Part
+	var actions *session.EventActions
+	for _, ev := range events {
+		if ev == nil || ev.LLMResponse.Content == nil {
+			continue
+		}
+		parts = append(parts, ev.LLMResponse.Content.Parts...)
+		actions = mergeEventActions(actions, &ev.Actions)
+	}
+	// reuse events[0]
+	ev := events[0]
+	ev.LLMResponse = model.LLMResponse{
+		Content: &genai.Content{
+			Role:  "user",
+			Parts: parts,
+		},
+	}
+	ev.Actions = *actions
+	return ev, nil
+}
+
+func mergeEventActions(base, other *session.EventActions) *session.EventActions {
+	// flows/llm_flows/functions.py merge_parallel_function_response_events
+	if other == nil {
+		return base
+	}
+	if base == nil {
+		return other
+	}
+	if other.SkipSummarization {
+		base.SkipSummarization = true
+	}
+	if other.TransferToAgent != "" {
+		base.TransferToAgent = other.TransferToAgent
+	}
+	if other.Escalate {
+		base.Escalate = true
+	}
+	if other.StateDelta != nil {
+		base.StateDelta = deepMergeMap(base.StateDelta, other.StateDelta)
+	}
+	// TODO add similar logic for state
+	if other.RequestedToolConfirmations != nil {
+		if base.RequestedToolConfirmations == nil {
+			base.RequestedToolConfirmations = make(map[string]toolconfirmation.ToolConfirmation)
+		}
+		maps.Copy(base.RequestedToolConfirmations, other.RequestedToolConfirmations)
+	}
+	return base
+}
+
+func deepMergeMap(dst, src map[string]any) map[string]any {
+	if dst == nil {
+		dst = make(map[string]any)
+	}
+	for key, value := range src {
+		if srcMap, ok := value.(map[string]any); ok {
+			if dstMap, ok := dst[key].(map[string]any); ok {
+				dst[key] = deepMergeMap(dstMap, srcMap)
+				continue
+			}
+		}
+		dst[key] = value
+	}
+	return dst
+}
+
+func pluginManagerFromContext(ctx context.Context) pluginManager {
+	m, ok := ctx.Value(plugincontext.PluginManagerCtxKey).(pluginManager)
+	if !ok {
+		return nil
+	}
+	return m
+}
+
+type pluginManager interface {
+	RunBeforeModelCallback(cctx agent.CallbackContext, llmRequest *model.LLMRequest) (*model.LLMResponse, error)
+	RunAfterModelCallback(cctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error)
+	RunOnModelErrorCallback(ctx agent.CallbackContext, llmRequest *model.LLMRequest, llmResponseError error) (*model.LLMResponse, error)
+	RunBeforeToolCallback(ctx tool.Context, t tool.Tool, args map[string]any) (map[string]any, error)
+	RunAfterToolCallback(ctx tool.Context, t tool.Tool, args, result map[string]any, err error) (map[string]any, error)
+	RunOnToolErrorCallback(ctx tool.Context, t tool.Tool, args map[string]any, err error) (map[string]any, error)
+}
+
+
+===== internal\llminternal\contents_processor.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package llminternal
+
+import (
+	"encoding/json"
+	"fmt"
+	"iter"
+	"reflect"
+	"slices"
+	"sort"
+	"strings"
+
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/internal/utils"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/session"
+	"google.golang.org/adk/tool/toolconfirmation"
+)
+
+// ContentRequestProcessor populates the LLMRequest's Contents based on
+// the InvocationContext that includes the previous events.
+func ContentsRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest, f *Flow) iter.Seq2[*session.Event, error] {
+	return func(yield func(*session.Event, error) bool) {
+		// TODO: implement (adk-python src/google/adk/flows/llm_flows/contents.py) - extract function call results, etc.
+		llmAgent := asLLMAgent(ctx.Agent())
+		if llmAgent == nil {
+			// Do nothing.
+			return // In python, no error is yielded.
+		}
+		fn := buildContentsDefault // "" or "default".
+		if llmAgent.internal().IncludeContents == "none" {
+			// Include current turn context only (no conversation history)
+			fn = buildContentsCurrentTurnContextOnly
+		}
+		var events []*session.Event
+		if ctx.Session() != nil {
+			for e := range ctx.Session().Events().All() {
+				events = append(events, e)
+			}
+		}
+		contents, err := fn(ctx.Agent().Name(), ctx.Branch(), events)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+		req.Contents = append(req.Contents, contents...)
+	}
+}
+
+// buildContentsDefault returns the contents for the LLM request by applying
+// filtering, rearrangement, and content processing to the given events.
+func buildContentsDefault(agentName, invocationBranch string, events []*session.Event) ([]*genai.Content, error) {
+	// parse the events, leaving the contents and the function calls and responses from the current agent.
+	var filtered []*session.Event
+	for _, ev := range events {
+		content := utils.Content(ev)
+		// Skip events without content or generated neither by user nor
+		// by model.
+		// e.g. events purely for mutating session states.
+		if content == nil || content.Role == "" || len(content.Parts) == 0 {
+			// TODO: log a bad event with content but no Role is skipped
+			// Note: python checks here if content.Parts[0] is an empty string and skip if so.
+			// But unlike python that distinguishes None vs empty string, two cases are indistinguishable in Go.
+			continue
+		}
+		// Skip events that do not belong to the current branch.
+		// TODO: can we use a richer type for branch (e.g. []string) instead of using string prefix test?
+		if !eventBelongsToBranch(invocationBranch, ev) {
+			continue
+		}
+		if shouldExcludeEvent(ev) {
+			continue
+		}
+		if isOtherAgentReply(agentName, ev) {
+			filtered = append(filtered, ConvertForeignEvent(ev))
+		} else {
+			filtered = append(filtered, ev)
+		}
+	}
+
+	//  src/google/adk/flows/llm_flows/contents.py
+	// 	 - _rearrange_events_for_async_function_response
+	filtered, err := rearrangeEventsForLatestFunctionResponse(filtered)
+	if err != nil {
+		return nil, err
+	}
+	//   - _rearrange_events_for_async_function_responses_in_history
+	filtered, err = rearrangeEventsForFunctionResponsesInHistory(filtered)
+	if err != nil {
+		return nil, err
+	}
+
+	var contents []*genai.Content
+	for _, ev := range filtered {
+		content := clone(utils.Content(ev))
+		if content == nil {
+			continue
+		}
+
+		// gemini 3 in streaming returns a last response with an empty part. We need to filter it out.
+		content.Parts = slices.DeleteFunc(content.Parts, func(p *genai.Part) bool {
+			return p == nil || reflect.ValueOf(*p).IsZero()
+		})
+		if len(content.Parts) == 0 {
+			continue
+		}
+
+		utils.RemoveClientFunctionCallID(content)
+		contents = append(contents, content)
+	}
+	return contents, nil
+}
+
+func eventBelongsToBranch(invocationBranch string, event *session.Event) bool {
+	if invocationBranch == "" || event.Branch == "" {
+		return true
+	}
+	if event.Branch == invocationBranch {
+		return true
+	}
+	// We use dot to delimit branch nodes. To avoid simple prefix match
+	// (e.g. agent_0 unexpectedly matching agent_00), require either perfect branch
+	// match, or match prefix with an additional explicit '.'
+	return strings.HasPrefix(invocationBranch, event.Branch+".")
+}
+
+// rearrangeEventsForLatestFunctionResponse
+// This function only acts if the very last event is a function response.
+// It searches backward for the matching call, deletes all intervening events,
+// and appends a single (merged) response.
+// If the latest function_response is for an async function_call, all events
+// between the initial function_call and the latest function_response will be removed.
+func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*session.Event, error) {
+	if len(events) < 2 {
+		return events, nil
+	}
+
+	lastEvent := events[len(events)-1]
+	lastResponses := utils.FunctionResponses(lastEvent.Content)
+	// No need to process, since the latest event is not function_response.
+	if len(lastResponses) == 0 {
+		return events, nil
+	}
+
+	// Create response id set
+	responseIDs := make(map[string]struct{})
+	for _, res := range lastResponses {
+		responseIDs[res.ID] = struct{}{}
+	}
+
+	// Check if its already in the correct position
+	prevEvent := events[len(events)-2]
+	prevCalls := utils.FunctionCalls(prevEvent.Content)
+	if len(prevCalls) > 0 {
+		for _, call := range prevCalls {
+			if _, found := responseIDs[call.ID]; found {
+				// The latest response is already matched with the immediately
+				// preceding call event. The history is clean. Nothing to do.
+				return events, nil
+			}
+		}
+	}
+
+	functionCallEventIdx := -1
+	var allCallIDsFromMatchingEvent map[string]struct{}
+
+SearchLoop: // A label to allow breaking out of the nested loop
+	for idx := len(events) - 2; idx >= 0; idx-- {
+		event := events[idx]
+		calls := utils.FunctionCalls(event.Content)
+
+		if len(calls) > 0 {
+			for _, call := range calls {
+				if _, found := responseIDs[call.ID]; found {
+					// Match found. This is the event we're looking for.
+					functionCallEventIdx = idx
+
+					// Create a new set of all call IDs from this specific event
+					allCallIDsFromMatchingEvent = make(map[string]struct{})
+					for _, c := range calls {
+						allCallIDsFromMatchingEvent[c.ID] = struct{}{}
+					}
+
+					// Validation check
+					// last response event should only contain the responses for the
+					// function calls in the same function call event
+					for respID := range responseIDs {
+						if _, exists := allCallIDsFromMatchingEvent[respID]; !exists {
+							return nil, fmt.Errorf(
+								"validation failed: last response event has IDs not in the matching call event. Call IDs: %v, Response IDs: %v",
+								allCallIDsFromMatchingEvent, responseIDs,
+							)
+						}
+					}
+
+					// Update the tracked IDs to be ALL IDs from the call event
+					responseIDs = allCallIDsFromMatchingEvent
+
+					// Exit the search loop
+					break SearchLoop
+				}
+			}
+		}
+	}
+
+	if functionCallEventIdx == -1 {
+		return nil, fmt.Errorf(
+			"no function call event found for function responses ids: %v",
+			responseIDs,
+		)
+	}
+
+	// Collect all function response events *between* the call and the last response.
+	var responseEventsToMerge []*session.Event
+	for i := functionCallEventIdx + 1; i < len(events)-1; i++ {
+		event := events[i]
+		responses := utils.FunctionResponses(event.Content)
+		if len(responses) == 0 {
+			continue
+		}
+
+		// Check if this event contains any response relevant to our call.
+		isRelated := false
+		for _, res := range responses {
+			if _, exists := responseIDs[res.ID]; exists {
+				isRelated = true
+				break
+			}
+		}
+
+		if isRelated {
+			responseEventsToMerge = append(responseEventsToMerge, event)
+		}
+	}
+
+	// Add the final response event itself to the list to be merged.
+	responseEventsToMerge = append(responseEventsToMerge, events[len(events)-1])
+
+	resultEvents := events[:functionCallEventIdx+1]
+	mergedEvent, err := mergeFunctionResponseEvents(responseEventsToMerge)
+	if err != nil {
+		return nil, err
+	}
+	resultEvents = append(resultEvents, mergedEvent)
+	return resultEvents, nil
+}
+
+// rearrangeEventsForFunctionResponsesInHistory reorganizes an entire event history to ensure
+// every function call event is immediately followed by a single, consolidated
+// function response event.
+//
+// This function processes the whole slice of events to clean up and correctly
+// pair function calls with their corresponding responses, which is especially
+// useful for histories involving long running tool calls where
+// responses may not have originally been consecutive. It preserves all
+// non-tool-call events (like user messages) in their original order.
+//
+// It returns a new, correctly ordered slice of events or an error if the
+// history is malformed (e.g., a response is found without a corresponding call).
+func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*session.Event, error) {
+	if len(events) < 2 {
+		return events, nil
+	}
+
+	// Create a map to store the index of the event containing each function response.
+	callIDToResponseEventIndex := make(map[string]int)
+	for i, event := range events {
+		responses := utils.FunctionResponses(event.Content)
+
+		if len(responses) > 0 {
+			for _, res := range responses {
+				callIDToResponseEventIndex[res.ID] = i
+			}
+		}
+	}
+
+	// Rebuild the event list
+	var resultEvents []*session.Event
+
+	for _, event := range events {
+		// If the event contains responses, skip it. It will be handled
+		// when we process its corresponding call event.
+		if len(utils.FunctionResponses(event.Content)) > 0 {
+			continue
+		}
+
+		calls := utils.FunctionCalls(event.Content)
+		if len(calls) == 0 {
+			// This is a regular event (e.g., user message). Just append it.
+			resultEvents = append(resultEvents, event)
+		} else {
+			// This is a function call event, append it and search for responses
+			resultEvents = append(resultEvents, event)
+
+			// Find the unique indices of all corresponding response events.
+			// Using a map[int]struct{} as a set.
+			responseEventIndicesSet := make(map[int]struct{})
+			for _, call := range calls {
+				if index, found := callIDToResponseEventIndex[call.ID]; found {
+					responseEventIndicesSet[index] = struct{}{}
+				}
+			}
+
+			// If no responses were found for any calls in this event, continue.
+			if len(responseEventIndicesSet) == 0 {
+				continue
+			}
+
+			// If there's only one unique response event, append it directly.
+			if len(responseEventIndicesSet) == 1 {
+				for index := range responseEventIndicesSet { // A trick to get the single key
+					resultEvents = append(resultEvents, events[index])
+				}
+			} else {
+				// Multiple response events exist for that function call so we merge them.
+				// Collect and sort the indices to process events in order.
+				var sortedIndices []int
+				for index := range responseEventIndicesSet {
+					sortedIndices = append(sortedIndices, index)
+				}
+				sort.Ints(sortedIndices)
+
+				// Collect the actual event objects to be merged.
+				eventsToMerge := make([]*session.Event, len(sortedIndices))
+				for i, index := range sortedIndices {
+					eventsToMerge[i] = events[index]
+				}
+
+				// Merge the events and append the single result.
+				mergedEvent, err := mergeFunctionResponseEvents(eventsToMerge)
+				if err != nil {
+					return nil, fmt.Errorf("failed to merge response events: %w", err)
+				}
+				resultEvents = append(resultEvents, mergedEvent)
+			}
+		}
+	}
+
+	return resultEvents, nil
+}
+
+// mergeFunctionResponseEvents merges a list of function response events into one.
+//
+// Its key goal is to ensure that a function call event is followed by a
+// single, consolidated response event containing all relevant parts.
+//
+// The input `functionResponseEvents` must meet several requirements:
+//  1. The list must be sorted in increasing order of timestamp.
+//  2. The first event is treated as the initial "base" response event.
+//  3. All later events must contain at least one response part related
+//     to the original function call.
+//
+// The function returns a single merged event with the following properties:
+//  1. Function response parts from later events will replace any matching
+//     (by function call ID) response parts from the initial event.
+//  2. All non-function-response parts (e.g., text) are appended to the
+//     end of the part list.
+//
+// Caveat: This implementation doesn't support a parallel function call
+// event that contains async function calls of the same name.
+func mergeFunctionResponseEvents(functionResponseEvents []*session.Event) (*session.Event, error) {
+	if len(functionResponseEvents) == 0 {
+		return nil, fmt.Errorf("at least one function_response event is required")
+	}
+
+	// 1. Use the first event as the base
+	mergedEvent := cloneEvent(functionResponseEvents[0])
+	if mergedEvent == nil {
+		return nil, fmt.Errorf("mergedEvent based on the first event should not be nil")
+	}
+	if mergedEvent.Content == nil {
+		return nil, fmt.Errorf("content for the first event should not be nil")
+	}
+	partsInMergedEvent := mergedEvent.LLMResponse.Content.Parts
+
+	if len(partsInMergedEvent) == 0 {
+		return nil, fmt.Errorf("there should be at least one function_response part")
+	}
+
+	// 2. Create an index (map) of function_response parts by their ID
+	partIndicesInMergedEvent := make(map[string]int)
+	for idx, part := range partsInMergedEvent {
+		if part.FunctionResponse != nil {
+			functionCallID := part.FunctionResponse.ID
+			partIndicesInMergedEvent[functionCallID] = idx
+		}
+	}
+
+	// 3. Merge subsequent events
+	for _, event := range functionResponseEvents[1:] {
+		if len(event.LLMResponse.Content.Parts) == 0 {
+			return nil, fmt.Errorf("event should contain at least one part")
+		}
+
+		// 4. Update or Append parts
+		for _, part := range event.LLMResponse.Content.Parts {
+			if part.FunctionResponse != nil {
+				functionCallID := part.FunctionResponse.ID
+				// If we've seen this response ID before, replace it
+				if idx, found := partIndicesInMergedEvent[functionCallID]; found {
+					partsInMergedEvent[idx] = part
+				} else {
+					// Otherwise, append it and update the index
+					partsInMergedEvent = append(partsInMergedEvent, part)
+					partIndicesInMergedEvent[functionCallID] = len(partsInMergedEvent) - 1
+				}
+			} else {
+				// If it's not a function response, just append it
+				partsInMergedEvent = append(partsInMergedEvent, part)
+			}
+		}
+	}
+
+	// Update the parts slice in the merged event in case it was reallocated
+	mergedEvent.LLMResponse.Content.Parts = partsInMergedEvent
+
+	return mergedEvent, nil
+}
+
+// buildContentsCurrentTurnContextOnly returns contents for the current turn only (no conversation history).
+//
+// When include_contents='none', we want to include:
+//   - The current user input
+//   - Tool calls and responses from the current turn
+//
+// But exclude conversation history from previous turns.
+//
+//	In multi-agent scenarios, the "current turn" for an agent starts from an
+//	actual user or from another agent.
+func buildContentsCurrentTurnContextOnly(agentName, branch string, events []*session.Event) ([]*genai.Content, error) {
+	// Find the latest event that starts the current turn and process from there
+	for i := len(events) - 1; i >= 0; i-- {
+		event := events[i]
+		if event.Author == "user" || isOtherAgentReply(agentName, event) {
+			return buildContentsDefault(agentName, branch, events[i:])
+		}
+	}
+	// NOTE: in Python, it returns [] if there is no event authored by a user or another agent,
+	// but that may be a bug.
+	return buildContentsDefault(agentName, branch, events)
+}
+
+func isOtherAgentReply(currentAgentName string, ev *session.Event) bool {
+	return ev.Author != currentAgentName && ev.Author != "user"
+}
+
+// ConvertForeignEvent converts an event authored by another agent as
+// a user-content event.
+// This is to provide another aget's output as context to the current agent,
+// so that the current agent can continue to respond, such as summarizing
+// the previous agent's reply, etc.
+func ConvertForeignEvent(ev *session.Event) *session.Event {
+	content := utils.Content(ev)
+	if content == nil || len(content.Parts) == 0 {
+		return ev
+	}
+
+	converted := &genai.Content{
+		Role:  "user",
+		Parts: []*genai.Part{{Text: "For context:"}},
+	}
+	for _, p := range content.Parts {
+		switch {
+		case p.Text != "":
+			converted.Parts = append(converted.Parts, &genai.Part{
+				Text: fmt.Sprintf("[%s] said: %s", ev.Author, p.Text),
+			})
+		case p.FunctionCall != nil:
+			converted.Parts = append(converted.Parts, &genai.Part{
+				Text: fmt.Sprintf("[%s] called tool `%s` with parameters: %s", ev.Author, p.FunctionCall.Name, stringify(p.FunctionCall.Args)),
+			})
+		case p.FunctionResponse != nil:
+			converted.Parts = append(converted.Parts, &genai.Part{
+				Text: fmt.Sprintf("[%s] `%s` tool returned result: %v", ev.Author, p.FunctionResponse.Name, stringify(p.FunctionResponse.Response)),
+			})
+		default: // fallback to the original part for non-text and non-functionCall parts.
+			converted.Parts = append(converted.Parts, p)
+		}
+	}
+
+	return &session.Event{ // made-up event. Don't go through types.NewEvent.
+		Timestamp:   ev.Timestamp,
+		Author:      "user",
+		LLMResponse: model.LLMResponse{Content: converted},
+		Branch:      ev.Branch,
+	}
+}
+
+func stringify(v any) string {
+	s, _ := json.Marshal(v)
+	return string(s)
+}
+
+// requestEUCFunctionCallName is a special function to handle credential
+// request.
+const (
+	requestEUCFunctionCallName = "adk_request_credential"
+)
+
+func shouldExcludeEvent(ev *session.Event) bool {
+	c := utils.Content(ev)
+	if c == nil {
+		return false
+	}
+	for _, p := range c.Parts {
+		if p.FunctionCall != nil {
+			switch p.FunctionCall.Name {
+			case requestEUCFunctionCallName, toolconfirmation.FunctionCallName:
+				return true
+			}
+		}
+		if p.FunctionResponse != nil {
+			switch p.FunctionResponse.Name {
+			case requestEUCFunctionCallName, toolconfirmation.FunctionCallName:
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func cloneEvent(e *session.Event) *session.Event {
+	if e == nil {
+		return nil
+	}
+
+	// 1. Create a new Event instance
+	newEvent := &session.Event{
+		ID:           e.ID,
+		Timestamp:    e.Timestamp,
+		InvocationID: e.InvocationID,
+		Branch:       e.Branch,
+		Author:       e.Author,
+		Actions:      e.Actions,
+	}
+
+	// 2. Deep copy the LongRunningToolIDs slice
+	if e.LongRunningToolIDs != nil {
+		newEvent.LongRunningToolIDs = make([]string, len(e.LongRunningToolIDs))
+		copy(newEvent.LongRunningToolIDs, e.LongRunningToolIDs)
+	}
+
+	// TODO check if copy parts is needed
+	// 3. Deep copy the LLMResponse pointer struct and content
+	if e.LLMResponse.Content != nil {
+		newEvent.LLMResponse.Content = &genai.Content{
+			Parts: make([]*genai.Part, len(e.LLMResponse.Content.Parts)),
+			Role:  e.LLMResponse.Content.Role,
+		}
+		copy(newEvent.LLMResponse.Content.Parts, e.LLMResponse.Content.Parts)
+	}
+
+	return newEvent
+}
+
+
+===== internal\llminternal\instruction_processor.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package llminternal
+
+import (
+	"fmt"
+	"iter"
+	"regexp"
+	"slices"
+	"strings"
+	"unicode"
+
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/internal/agent/parentmap"
+	icontext "google.golang.org/adk/internal/context"
+	"google.golang.org/adk/internal/utils"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/session"
+)
+
+// TODO: Remove this once state keywords are implemented and replace with those consts
+const (
+	appPrefix  = "app:"
+	userPrefix = "user:"
+	tempPrefix = "temp:"
+)
+
+// instructionsRequestProcessor configures req's instructions and global instructions for LLM flow.
+func instructionsRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest, f *Flow) iter.Seq2[*session.Event, error] {
+	return func(yield func(*session.Event, error) bool) {
+		llmAgent := asLLMAgent(ctx.Agent())
+		if llmAgent == nil {
+			return // do nothing.
+		}
+
+		parents := parentmap.FromContext(ctx)
+
+		rootAgent := asLLMAgent(parents.RootAgent(ctx.Agent()))
+		if rootAgent == nil {
+			rootAgent = llmAgent
+		}
+
+		// Append global instructions.
+		if err := appendGlobalInstructions(ctx, req, rootAgent.internal()); err != nil {
+			yield(nil, fmt.Errorf("failed to append global instructions: %w", err))
+			return
+		}
+
+		// Append agent's instruction
+		if err := appendInstructions(ctx, req, llmAgent.internal()); err != nil {
+			yield(nil, fmt.Errorf("failed to append instructions: %w", err))
+			return
+		}
+	}
+}
+
+// The regex to find placeholders like {variable} or {artifact.file_name}.
+var placeholderRegex = regexp.MustCompile(`{+[^{}]*}+`)
+
+func appendInstructions(ctx agent.InvocationContext, req *model.LLMRequest, agentState *State) error {
+	if agentState.InstructionProvider != nil {
+		instruction, err := agentState.InstructionProvider(icontext.NewReadonlyContext(ctx))
+		if err != nil {
+			return fmt.Errorf("failed to evaluate global instruction provider: %w", err)
+		}
+
+		utils.AppendInstructions(req, instruction)
+		return nil
+	}
+
+	if agentState.Instruction == "" {
+		return nil
+	}
+
+	inst, err := InjectSessionState(ctx, agentState.Instruction)
+	if err != nil {
+		return fmt.Errorf("failed to inject session state into instruction: %w", err)
+	}
+
+	utils.AppendInstructions(req, inst)
+	return nil
+}
+
+func appendGlobalInstructions(ctx agent.InvocationContext, req *model.LLMRequest, agentState *State) error {
+	if agentState.GlobalInstructionProvider != nil {
+		instruction, err := agentState.GlobalInstructionProvider(icontext.NewReadonlyContext(ctx))
+		if err != nil {
+			return fmt.Errorf("failed to evaluate global instruction provider: %w", err)
+		}
+
+		utils.AppendInstructions(req, instruction)
+		return nil
+	}
+
+	if agentState.GlobalInstruction == "" {
+		return nil
+	}
+
+	inst, err := InjectSessionState(ctx, agentState.GlobalInstruction)
+	if err != nil {
+		return fmt.Errorf("failed to inject session state into global instruction: %w", err)
+	}
+
+	utils.AppendInstructions(req, inst)
+	return nil
+}
+
+// replaceMatch is the Go equivalent of the _replace_match async function in the Python code.
+func replaceMatch(ctx agent.InvocationContext, match string) (string, error) {
+	// Trim curly braces: "{var_name}" -> "var_name"
+	varName := strings.TrimSpace(strings.Trim(match, "{}"))
+	optional := false
+	if strings.HasSuffix(varName, "?") {
+		optional = true
+		varName = strings.TrimSuffix(varName, "?")
+	}
+
+	if after, ok := strings.CutPrefix(varName, "artifact."); ok {
+		fileName := after
+		if ctx.Artifacts() == nil {
+			return "", fmt.Errorf("artifact service is not initialized")
+		}
+		resp, err := ctx.Artifacts().Load(ctx, fileName)
+		if err != nil {
+			if optional {
+				// TODO: consistent logging approach in adk-go
+				return "", nil
+			}
+			return "", fmt.Errorf("failed to load artifact %s: %w", fileName, err)
+		}
+		return resp.Part.Text, nil
+	}
+
+	if !isValidStateName(varName) {
+		return match, nil // Return the original string if not a valid name
+	}
+
+	value, err := ctx.Session().State().Get(varName)
+	if err != nil {
+		if optional {
+			// TODO: log error when !errors.Is(err, session.ErrStateKeyNotExist)
+			return "", nil
+		}
+		return "", err
+	}
+
+	if value == nil {
+		return "", nil
+	}
+
+	return fmt.Sprintf("%v", value), nil
+}
+
+// isIdentifier checks if a string is a valid Go identifier.
+// This is the equivalent of Python's `str.isidentifier()`.
+func isIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		if i == 0 {
+			if !unicode.IsLetter(r) && r != '_' {
+				return false
+			}
+		} else {
+			if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// isValidStateName checks if the variable name is a valid state name.
+func isValidStateName(varName string) bool {
+	parts := strings.Split(varName, ":")
+	if len(parts) == 1 {
+		return isIdentifier(varName)
+	}
+
+	if len(parts) == 2 {
+		prefix := parts[0] + ":"
+		validPrefixes := []string{appPrefix, userPrefix, tempPrefix}
+		if slices.Contains(validPrefixes, prefix) {
+			return isIdentifier(parts[1])
+		}
+	}
+	return false
+}
+
+// InjectSessionState populates values in an instruction template from a context.
+func InjectSessionState(ctx agent.InvocationContext, template string) (string, error) {
+	// Find all matches, then iterate through them, building the result string.
+	var result strings.Builder
+	lastIndex := 0
+	matches := placeholderRegex.FindAllStringIndex(template, -1)
+
+	for _, matchIndexes := range matches {
+		startIndex, endIndex := matchIndexes[0], matchIndexes[1]
+
+		// Append the text between the last match and this one
+		result.WriteString(template[lastIndex:startIndex])
+
+		// Get the replacement for the current match
+		matchStr := template[startIndex:endIndex]
+		replacement, err := replaceMatch(ctx, matchStr)
+		if err != nil {
+			return "", err // Propagate the error
+		}
+		result.WriteString(replacement)
+
+		lastIndex = endIndex
+	}
+
+	// Append any remaining text after the last match
+	result.WriteString(template[lastIndex:])
+
+	return result.String(), nil
+}
+
+
+===== session\session.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package session
+
+import (
+	"errors"
+	"iter"
+	"time"
+
+	"github.com/google/uuid"
+
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/tool/toolconfirmation"
+)
+
+// Session represents a series of interactions between a user and agents.
+//
+// When a user starts interacting with your agent, session holds everything
+// related to that one specific chat thread.
+type Session interface {
+	// ID returns the unique identifier of the session.
+	ID() string
+	// AppName returns name of the app.
+	AppName() string
+	// UserID returns the id of the user.
+	UserID() string
+
+	// State returns the state of the session.
+	State() State
+	// Events return the events of the session, e.g. user input, model response, function call/response, etc.
+	Events() Events
+	// LastUpdateTime returns the time of the last update.
+	LastUpdateTime() time.Time
+}
+
+// State defines a standard interface for a key-value store.
+// It provides basic methods for accessing, modifying, and iterating over
+// key-value pairs.
+type State interface {
+	// Get retrieves the value associated with a given key.
+	// It returns a ErrStateKeyNotExist error if the key does not exist.
+	Get(string) (any, error)
+	// Set assigns the given value to the given key, overwriting any
+	// existing value. It returns an error if the underlying storage
+	// operation fails.
+	Set(string, any) error
+	// All returns an iterator (iter.Seq2) that yields all key-value pairs
+	// currently in the state. The order of iteration is not guaranteed.
+	All() iter.Seq2[string, any]
+}
+
+// ReadonlyState defines a standard interface for a key-value store.
+// It provides basic methods for accessing, and iterating over
+// key-value pairs.
+type ReadonlyState interface {
+	// Get retrieves the value associated with a given key.
+	// It returns a ErrStateKeyNotExist error if the key does not exist.
+	Get(string) (any, error)
+	// All returns an iterator (iter.Seq2) that yields all key-value pairs
+	// currently in the state. The order of iteration is not guaranteed.
+	All() iter.Seq2[string, any]
+}
+
+// Events define a standard interface for an [Event] list.
+// It provides methods for iterating over the sequence and accessing
+// individual events by their index.
+type Events interface {
+	// All returns an iterator (iter.Seq) that yields all events
+	// in the sequence, preserving their order.
+	All() iter.Seq[*Event]
+	// Len returns the total number of events in the sequence.
+	Len() int
+	// At returns the event at the specified index i.
+	At(i int) *Event
+}
+
+// Event represents an interaction in a conversation between agents and users.
+// It is used to store the content of the conversation, as well as
+// the actions taken by the agents like function calls, etc.
+// 中文业务注释：Event 是框架里的“事实记录”。不要把它只理解成聊天消息，它还承载工具调用、工具响应、状态变化、转交、人工确认等运行时信息。
+type Event struct {
+	model.LLMResponse
+
+	// Set by storage
+	ID        string
+	Timestamp time.Time
+
+	// Set by agent.Context implementation.
+	InvocationID string
+	// The branch of the event.
+	//
+	// The format is like agent_1.agent_2.agent_3, where agent_1 is
+	// the parent of agent_2, and agent_2 is the parent of agent_3.
+	//
+	// Branch is used when multiple sub-agent shouldn't see their peer agents'
+	// conversation history.
+	Branch string
+	// Author is the name of the event's author
+	Author string
+
+	// The actions taken by the agent.
+	Actions EventActions
+	// Set of IDs of the long running function calls.
+	// Agent client will know from this field about which function call is long running.
+	// Only valid for function call event.
+	LongRunningToolIDs []string
+}
+
+// IsFinalResponse returns whether the event is the final response of an agent.
+//
+// Note: when multiple agents participate in one invocation, there could be
+// multiple events with IsFinalResponse() as True, for each participating agent.
+// 中文业务注释：判断一个事件是否让本轮 Flow 停止。只要还包含 function_call/function_response/partial，通常说明还需要继续下一步模型或工具循环。
+func (e *Event) IsFinalResponse() bool {
+	if (e.Actions.SkipSummarization) || len(e.LongRunningToolIDs) > 0 {
+		return true
+	}
+
+	return !hasFunctionCalls(&e.LLMResponse) && !hasFunctionResponses(&e.LLMResponse) && !e.LLMResponse.Partial && !hasTrailingCodeExecutionResult(&e.LLMResponse)
+}
+
+// NewEvent creates a new event defining now as the timestamp.
+func NewEvent(invocationID string) *Event {
+	return &Event{
+		ID:           uuid.NewString(),
+		InvocationID: invocationID,
+		Timestamp:    time.Now(),
+		Actions:      EventActions{StateDelta: make(map[string]any), ArtifactDelta: make(map[string]int64)},
+	}
+}
+
+// EventActions represent the actions attached to an event.
+// 中文业务注释：EventActions 是事件附带的“副作用指令”，例如更新状态、保存 Artifact、请求人工确认、转交给其他 Agent。
+type EventActions struct {
+	// Set by agent.Context implementation.
+	StateDelta map[string]any
+
+	// Indicates that the event is updating an artifact. key is the filename,
+	// value is the version.
+	ArtifactDelta map[string]int64
+
+	RequestedToolConfirmations map[string]toolconfirmation.ToolConfirmation
+
+	// If true, it won't call model to summarize function response.
+	// Only valid for function response event.
+	SkipSummarization bool
+	// If set, the event transfers to the specified agent.
+	TransferToAgent string
+	// The agent is escalating to a higher level agent.
+	Escalate bool
+}
+
+// Prefixes for defining session's state scopes
+const (
+	// KeyPrefixApp is the prefix for app-level state keys.
+	// They are shared across all users and sessions for that application.
+	KeyPrefixApp string = "app:"
+	// KeyPrefixTemp is the prefix for temporary state keys.
+	// Such entries are specific to the current invocation (the entire process
+	// from an agent receiving user input to generating the final output for
+	// that input. Discarded after the invocation completes.
+	KeyPrefixTemp string = "temp:"
+	// KeyPrefixUser is the prefix for user-level state keys.
+	// They are tied to the user_id, shared across all sessions for that user
+	// (within the same app_name).
+	KeyPrefixUser string = "user:"
+)
+
+// ErrStateKeyNotExist is the error thrown when key does not exist.
+var ErrStateKeyNotExist = errors.New("state key does not exist")
+
+func hasFunctionCalls(resp *model.LLMResponse) bool {
+	if resp == nil || resp.Content == nil {
+		return false
+	}
+	for _, part := range resp.Content.Parts {
+		if part.FunctionCall != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFunctionResponses(resp *model.LLMResponse) bool {
+	if resp == nil || resp.Content == nil {
+		return false
+	}
+	for _, part := range resp.Content.Parts {
+		if part.FunctionResponse != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// Returns whether the event has a trailing code execution result.
+func hasTrailingCodeExecutionResult(resp *model.LLMResponse) bool {
+	if resp == nil || resp.Content == nil || len(resp.Content.Parts) == 0 {
+		return false
+	}
+	lastPart := resp.Content.Parts[len(resp.Content.Parts)-1]
+	return lastPart.CodeExecutionResult != nil
+}
+
+
+===== session\service.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package session
+
+import (
+	"context"
+	"time"
+)
+
+// Service is a session storage service.
+//
+// It provides a set of methods for managing sessions and events.
+type Service interface {
+	Create(context.Context, *CreateRequest) (*CreateResponse, error)
+	Get(context.Context, *GetRequest) (*GetResponse, error)
+	List(context.Context, *ListRequest) (*ListResponse, error)
+	Delete(context.Context, *DeleteRequest) error
+	// AppendEvent is used to append an event to a session, and remove temporary state keys from the event.
+	AppendEvent(context.Context, Session, *Event) error
+}
+
+// InMemoryService returns an in-memory implementation of the session service.
+func InMemoryService() Service {
+	return &inMemoryService{
+		appState:  make(map[string]stateMap),
+		userState: make(map[string]map[string]stateMap),
+	}
+}
+
+// CreateRequest represents a request to create a session.
+type CreateRequest struct {
+	AppName string
+	UserID  string
+	// SessionID is the client-provided ID of the session to create.
+	// Optional: if not set, it will be autogenerated.
+	SessionID string
+	// State is the initial state of the session.
+	State map[string]any
+}
+
+// CreateResponse represents a response for newly created session.
+type CreateResponse struct {
+	Session Session
+}
+
+// GetRequest represents a request to get a session.
+type GetRequest struct {
+	AppName   string
+	UserID    string
+	SessionID string
+
+	// NumRecentEvents returns at most NumRecentEvents most recent events.
+	// Optional: if zero, the filter is not applied.
+	NumRecentEvents int
+	// After returns events with timestamp >= the given time.
+	// Optional: if zero, the filter is not applied.
+	After time.Time
+}
+
+// GetResponse represents a response from [Service.Get].
+type GetResponse struct {
+	Session Session
+}
+
+// ListRequest represents a request to list sessions.
+type ListRequest struct {
+	AppName string
+	UserID  string
+}
+
+// ListResponse represents a response from [Service.List].
+type ListResponse struct {
+	Sessions []Session
+}
+
+// DeleteRequest represents a request to delete a session.
+type DeleteRequest struct {
+	AppName   string
+	UserID    string
+	SessionID string
+}
+
+
+===== session\inmemory.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package session
+
+import (
+	"context"
+	"fmt"
+	"iter"
+	"maps"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	"rsc.io/omap"
+	"rsc.io/ordered"
+
+	"google.golang.org/adk/internal/sessionutils"
+)
+
+type stateMap map[string]any
+
+// inMemoryService is an in-memory implementation of sessionService.Service.
+// Thread-safe.
+type inMemoryService struct {
+	mu        sync.RWMutex
+	sessions  omap.Map[string, *session] // session.ID) -> storedSession
+	userState map[string]map[string]stateMap
+	appState  map[string]stateMap
+}
+
+// 中文业务注释：创建 Session。这里不仅保存 session 私有状态，还会把 app:/user: 前缀的状态拆入全局/用户级状态池。
+func (s *inMemoryService) Create(ctx context.Context, req *CreateRequest) (*CreateResponse, error) {
+	if req.AppName == "" || req.UserID == "" {
+		return nil, fmt.Errorf("app_name and user_id are required, got app_name: %q, user_id: %q", req.AppName, req.UserID)
+	}
+
+	sessionID := req.SessionID
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+	}
+
+	key := id{
+		appName:   req.AppName,
+		userID:    req.UserID,
+		sessionID: sessionID,
+	}
+
+	encodedKey := key.Encode()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.sessions.Get(encodedKey); ok {
+		return nil, fmt.Errorf("session %s already exists", req.SessionID)
+	}
+
+	state := req.State
+	if state == nil {
+		state = make(stateMap)
+	}
+	val := &session{
+		id:        key,
+		state:     state,
+		updatedAt: time.Now(),
+	}
+
+	s.sessions.Set(encodedKey, val)
+	appDelta, userDelta, _ := sessionutils.ExtractStateDeltas(req.State)
+	appState := s.updateAppState(appDelta, req.AppName)
+	userState := s.updateUserState(userDelta, req.AppName, req.UserID)
+	val.state = sessionutils.MergeStates(appState, userState, state)
+
+	copiedSession := copySessionWithoutStateAndEvents(val)
+	copiedSession.state = maps.Clone(val.state)
+	copiedSession.events = slices.Clone(val.events)
+
+	return &CreateResponse{
+		Session: copiedSession,
+	}, nil
+}
+
+// 中文业务注释：读取 Session。返回前会重新合并 appState、userState、sessionState，并可按最近条数/时间过滤事件。
+func (s *inMemoryService) Get(ctx context.Context, req *GetRequest) (*GetResponse, error) {
+	appName, userID, sessionID := req.AppName, req.UserID, req.SessionID
+	if appName == "" || userID == "" || sessionID == "" {
+		return nil, fmt.Errorf("app_name, user_id, session_id are required, got app_name: %q, user_id: %q, session_id: %q", appName, userID, sessionID)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	id := id{
+		appName:   appName,
+		userID:    userID,
+		sessionID: sessionID,
+	}
+
+	res, ok := s.sessions.Get(id.Encode())
+	if !ok {
+		return nil, fmt.Errorf("session %+v not found", req.SessionID)
+	}
+
+	copiedSession := copySessionWithoutStateAndEvents(res)
+	copiedSession.state = s.mergeStates(res.state, appName, userID)
+
+	filteredEvents := res.events
+	if req.NumRecentEvents > 0 {
+		start := max(len(filteredEvents)-req.NumRecentEvents, 0)
+		// create a new slice header pointing to the same array
+		filteredEvents = filteredEvents[start:]
+	}
+	// apply timestamp filter, assuming list is sorted
+	if !req.After.IsZero() && len(filteredEvents) > 0 {
+		firstIndexToKeep := sort.Search(len(filteredEvents), func(i int) bool {
+			// Find the first event that is not before the timestamp
+			return !filteredEvents[i].Timestamp.Before(req.After)
+		})
+		filteredEvents = filteredEvents[firstIndexToKeep:]
+	}
+
+	copiedSession.events = make([]*Event, 0, len(filteredEvents))
+	copiedSession.events = append(copiedSession.events, filteredEvents...)
+
+	return &GetResponse{
+		Session: copiedSession,
+	}, nil
+}
+
+func (s *inMemoryService) List(ctx context.Context, req *ListRequest) (*ListResponse, error) {
+	appName, userID := req.AppName, req.UserID
+	if appName == "" {
+		return nil, fmt.Errorf("app_name is required, got app_name: %q", appName)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	lo := id{appName: appName, userID: userID}.Encode()
+
+	var hi string
+	if userID == "" {
+		hi = id{appName: appName + "\x00"}.Encode()
+	} else {
+		hi = id{appName: appName, userID: userID + "\x00"}.Encode()
+	}
+
+	sessions := make([]Session, 0)
+	for k, storedSession := range s.sessions.Scan(lo, hi) {
+		var key id
+		if err := key.Decode(k); err != nil {
+			return nil, fmt.Errorf("failed to decode key: %w", err)
+		}
+
+		if key.appName != appName && key.userID != userID {
+			break
+		}
+		copiedSession := copySessionWithoutStateAndEvents(storedSession)
+		copiedSession.state = s.mergeStates(storedSession.state, appName, storedSession.UserID())
+		sessions = append(sessions, copiedSession)
+	}
+	return &ListResponse{
+		Sessions: sessions,
+	}, nil
+}
+
+func (s *inMemoryService) Delete(ctx context.Context, req *DeleteRequest) error {
+	appName, userID, sessionID := req.AppName, req.UserID, req.SessionID
+	if appName == "" || userID == "" || sessionID == "" {
+		return fmt.Errorf("app_name, user_id, session_id are required, got app_name: %q, user_id: %q, session_id: %q", appName, userID, sessionID)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := id{
+		appName:   appName,
+		userID:    userID,
+		sessionID: sessionID,
+	}
+
+	s.sessions.Delete(id.Encode())
+	return nil
+}
+
+// 中文业务注释：追加事件是 Session 管理的核心。每个非 partial Event 都会进入历史，同时根据 StateDelta 更新不同作用域的状态。
+func (s *inMemoryService) AppendEvent(ctx context.Context, curSession Session, event *Event) error {
+	if curSession == nil {
+		return fmt.Errorf("session is nil")
+	}
+	if event == nil {
+		return fmt.Errorf("event is nil")
+	}
+	// 中文业务注释：流式 partial 只用于实时展示，不进入长期历史；最终非 partial 事件才是可回放、可持久化的事实。
+	if event.Partial {
+		return nil
+	}
+
+	sess, ok := curSession.(*session)
+	if !ok {
+		return fmt.Errorf("unexpected session type %T for session ID %s", curSession, curSession.ID())
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	stored_session, ok := s.sessions.Get(sess.id.Encode())
+	if !ok {
+		return fmt.Errorf("session not found, cannot apply event")
+	}
+
+	// update the in-memory session
+	if err := sess.appendEvent(event); err != nil {
+		return fmt.Errorf("fail to set state on appendEvent: %w", err)
+	}
+
+	eventCopy := &Event{
+		ID:           event.ID,
+		InvocationID: event.InvocationID,
+		Timestamp:    event.Timestamp,
+		Author:       event.Author,
+		Branch:       event.Branch,
+		Actions: EventActions{
+			StateDelta:                 maps.Clone(event.Actions.StateDelta),
+			ArtifactDelta:              maps.Clone(event.Actions.ArtifactDelta),
+			RequestedToolConfirmations: maps.Clone(event.Actions.RequestedToolConfirmations),
+			TransferToAgent:            event.Actions.TransferToAgent,
+			Escalate:                   event.Actions.Escalate,
+			SkipSummarization:          event.Actions.SkipSummarization,
+		},
+		LongRunningToolIDs: slices.Clone(event.LongRunningToolIDs),
+		LLMResponse:        event.LLMResponse,
+	}
+
+	// update the in-memory session service
+	stored_session.events = append(stored_session.events, eventCopy)
+	stored_session.updatedAt = event.Timestamp
+	// 中文业务注释：StateDelta 是“事件驱动状态更新”的入口。这里把 app:/user:/session 普通 key 拆分到对应存储层。
+	if len(event.Actions.StateDelta) > 0 {
+		appDelta, userDelta, sessionDelta := sessionutils.ExtractStateDeltas(event.Actions.StateDelta)
+		s.updateAppState(appDelta, curSession.AppName())
+		s.updateUserState(userDelta, curSession.AppName(), curSession.UserID())
+		maps.Copy(stored_session.state, sessionDelta)
+	}
+	return nil
+}
+
+func (s *inMemoryService) updateAppState(appDelta stateMap, appName string) stateMap {
+	innerMap, ok := s.appState[appName]
+	if !ok {
+		innerMap = make(stateMap)
+		s.appState[appName] = innerMap
+	}
+	maps.Copy(innerMap, appDelta)
+	return innerMap
+}
+
+func (s *inMemoryService) updateUserState(userDelta stateMap, appName, userID string) stateMap {
+	innerUsersMap, ok := s.userState[appName]
+	if !ok {
+		innerUsersMap = make(map[string]stateMap)
+		s.userState[appName] = innerUsersMap
+	}
+	innerMap, ok := innerUsersMap[userID]
+	if !ok {
+		innerMap = make(stateMap)
+		innerUsersMap[userID] = innerMap
+	}
+	maps.Copy(innerMap, userDelta)
+	return innerMap
+}
+
+func (s *inMemoryService) mergeStates(state stateMap, appName, userID string) stateMap {
+	appState := s.appState[appName]
+	var userState stateMap
+	userStateMap, ok := s.userState[appName]
+	if ok {
+		userState = userStateMap[userID]
+	}
+	return sessionutils.MergeStates(appState, userState, state)
+}
+
+func (id id) Encode() string {
+	return string(ordered.Encode(id.appName, id.userID, id.sessionID))
+}
+
+func (id *id) Decode(key string) error {
+	return ordered.Decode([]byte(key), &id.appName, &id.userID, &id.sessionID)
+}
+
+type id struct {
+	appName   string
+	userID    string
+	sessionID string
+}
+
+type session struct {
+	id id
+
+	// guards all mutable fields
+	mu        sync.RWMutex
+	events    []*Event
+	state     map[string]any
+	updatedAt time.Time
+}
+
+func (s *session) ID() string {
+	return s.id.sessionID
+}
+
+func (s *session) AppName() string {
+	return s.id.appName
+}
+
+func (s *session) UserID() string {
+	return s.id.userID
+}
+
+func (s *session) State() State {
+	return &state{
+		mu:    &s.mu,
+		state: s.state,
+	}
+}
+
+func (s *session) Events() Events {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return events(s.events)
+}
+
+func (s *session) LastUpdateTime() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.updatedAt
+}
+
+func (s *session) appendEvent(event *Event) error {
+	if event.Partial {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := updateSessionState(s, event); err != nil {
+		return fmt.Errorf("error on appendEvent: %w", err)
+	}
+	processedEvent := trimTempDeltaState(event)
+
+	s.events = append(s.events, processedEvent)
+	s.updatedAt = event.Timestamp
+	return nil
+}
+
+type events []*Event
+
+func (e events) All() iter.Seq[*Event] {
+	return func(yield func(*Event) bool) {
+		for _, event := range e {
+			if !yield(event) {
+				return
+			}
+		}
+	}
+}
+
+func (e events) Len() int {
+	return len(e)
+}
+
+func (e events) At(i int) *Event {
+	if i >= 0 && i < len(e) {
+		return e[i]
+	}
+	return nil
+}
+
+type state struct {
+	mu    *sync.RWMutex
+	state map[string]any
+}
+
+func (s *state) Get(key string) (any, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	val, ok := s.state[key]
+	if !ok {
+		return nil, ErrStateKeyNotExist
+	}
+
+	return val, nil
+}
+
+func (s *state) All() iter.Seq2[string, any] {
+	s.mu.RLock()
+	// Create a copy of the state to iterate over it without holding the lock.
+	stateCopy := maps.Clone(s.state)
+	s.mu.RUnlock()
+
+	return func(yield func(key string, val any) bool) {
+		for k, v := range stateCopy {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
+}
+
+func (s *state) Set(key string, value any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.state[key] = value
+	return nil
+}
+
+// trimTempDeltaState removes temporary state delta keys from the event.
+// 中文业务注释：temp: 状态只在当前 invocation 内有效，不能污染长期会话历史，因此追加事件前会裁剪。
+func trimTempDeltaState(event *Event) *Event {
+	if len(event.Actions.StateDelta) == 0 {
+		return event
+	}
+
+	// Iterate over the map and build a new one with the keys we want to keep.
+	filteredStateDelta := make(map[string]any)
+	for key, value := range event.Actions.StateDelta {
+		if !strings.HasPrefix(key, KeyPrefixTemp) {
+			filteredStateDelta[key] = value
+		}
+	}
+
+	// Replace the old map with the newly filtered one.
+	event.Actions.StateDelta = filteredStateDelta
+
+	return event
+}
+
+// updateSessionState updates the session state based on the event state delta.
+// 中文业务注释：把 Event 上携带的 StateDelta 合并到当前 session 可见状态，让后续 prompt 模板和工具能够读取。
+func updateSessionState(session *session, event *Event) error {
+	if event.Actions.StateDelta == nil {
+		return nil // Nothing to do
+	}
+
+	// ensure the session state map is initialized
+	if session.state == nil {
+		session.state = make(map[string]any)
+	}
+
+	maps.Copy(session.state, event.Actions.StateDelta)
+	return nil
+}
+
+func copySessionWithoutStateAndEvents(sess *session) *session {
+	return &session{
+		id: id{
+			appName:   sess.id.appName,
+			userID:    sess.id.userID,
+			sessionID: sess.id.sessionID,
+		},
+		updatedAt: sess.updatedAt,
+	}
+}
+
+var _ Service = (*inMemoryService)(nil)
+
+
+===== session\database\service.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package database
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"maps"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"google.golang.org/adk/session"
+)
+
+// databaseService is an database implementation of sessionService.Service.
+type databaseService struct {
+	db *gorm.DB
+}
+
+// NewSessionService creates a new [session.Service] implementation that uses a
+// relational database (e.g., PostgreSQL, Spanner, SQLite) via the GORM library.
+//
+// It requires a [gorm.Dialector] to specify the database connection and
+// accepts optional [gorm.Option] values for further GORM configuration.
+//
+// It returns the new [session.Service] or an error if the database connection
+// [gorm.Open] fails.
+func NewSessionService(dialector gorm.Dialector, opts ...gorm.Option) (session.Service, error) {
+	db, err := gorm.Open(dialector, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("error creating database session service: %w", err)
+	}
+	return &databaseService{db: db}, nil
+}
+
+// AutoMigrate runs the GORM auto-migration tool to ensure the database schema
+// matches the internal storage models (e.g., storageSession, storageEvent).
+//
+// NOTE: This function relies on a type assertion to the concrete *databaseService
+// implementation. It will return an error if the provided session.Service is
+// a different implementation.
+func AutoMigrate(service session.Service) error {
+	dbservice, ok := service.(*databaseService)
+	if !ok {
+		return fmt.Errorf("invalid session service type")
+	}
+	err := dbservice.db.AutoMigrate(&storageSession{}, &storageEvent{}, &storageAppState{}, &storageUserState{})
+	if err != nil {
+		return fmt.Errorf("auto migrate failed: %w", err)
+	}
+	return nil
+}
+
+// Create generates a session and inserts it to the db, implements session.Service
+func (s *databaseService) Create(ctx context.Context, req *session.CreateRequest) (*session.CreateResponse, error) {
+	if req.AppName == "" || req.UserID == "" {
+		return nil, fmt.Errorf("app_name and user_id are required")
+	}
+
+	sessionID := req.SessionID
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+	}
+
+	stateMap := req.State
+	if stateMap == nil {
+		stateMap = make(map[string]any)
+	}
+	val := &localSession{
+		appName:   req.AppName,
+		userID:    req.UserID,
+		sessionID: sessionID,
+		state:     stateMap,
+		updatedAt: time.Now(),
+	}
+	createdSession, err := createStorageSession(val)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		storageApp, err := fetchStorageAppState(tx, req.AppName)
+		if err != nil {
+			return fmt.Errorf("error on create session: %w", err)
+		}
+		storageUser, err := fetchStorageUserState(tx, req.AppName, req.UserID)
+		if err != nil {
+			return fmt.Errorf("error on create session: %w", err)
+		}
+
+		appDelta, userDelta, sessionState := extractStateDeltas(req.State)
+
+		// apply state delta
+		if len(appDelta) > 0 {
+			maps.Copy(storageApp.State, appDelta)
+			if err := tx.Save(&storageApp).Error; err != nil {
+				return fmt.Errorf("failed to save app state: %w", err)
+			}
+		}
+		if len(userDelta) > 0 {
+			maps.Copy(storageUser.State, userDelta)
+			if err := tx.Save(&storageUser).Error; err != nil {
+				return fmt.Errorf("failed to save user state: %w", err)
+			}
+		}
+		createdSession.State = sessionState
+
+		if err := tx.Create(createdSession).Error; err != nil {
+			return fmt.Errorf("error creating session on database: %w", err)
+		}
+
+		val.state = mergeStates(storageApp.State, storageUser.State, sessionState)
+		val.updatedAt = createdSession.UpdateTime
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &session.CreateResponse{
+		Session: val,
+	}, nil
+}
+
+// Get retrieves a single session from the database using its composite primary key.
+func (s *databaseService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	// Ensure all parts of the composite key are provided.
+	appName, userID, sessionID := req.AppName, req.UserID, req.SessionID
+	if appName == "" || userID == "" || sessionID == "" {
+		return nil, fmt.Errorf("app_name, user_id, session_id are required, got app_name: %q, user_id: %q, session_id: %q", appName, userID, sessionID)
+	}
+
+	var foundSession storageSession
+	err := s.db.WithContext(ctx).
+		Where(&storageSession{
+			AppName: appName,
+			UserID:  userID,
+			ID:      sessionID,
+		}).
+		First(&foundSession).Error
+	if err != nil {
+		// For any error including ErrRecordNotFound, return it as a system error.
+		return nil, fmt.Errorf("database error while fetching session: %w", err)
+	}
+
+	// Fetch events
+	eventQuery := s.db.WithContext(ctx).
+		Model(&storageEvent{}).
+		Where("app_name = ?", appName).
+		Where("user_id = ?", userID).
+		Where("session_id = ?", sessionID)
+
+	// Apply conditional filters from the request
+	if !req.After.IsZero() {
+		eventQuery = eventQuery.Where("timestamp >= ?", req.After)
+	}
+
+	// Order by timestamp DESC to get the most recent events when limiting
+	eventQuery = eventQuery.Order("timestamp DESC")
+
+	if req.NumRecentEvents > 0 {
+		eventQuery = eventQuery.Limit(req.NumRecentEvents)
+	}
+
+	var storageEvents []storageEvent
+	if err := eventQuery.Find(&storageEvents).Error; err != nil {
+		// This is a system failure, not a "not found"
+		return nil, fmt.Errorf("database error while fetching events: %w", err)
+	}
+
+	// fetch app and user states
+	storageApp, err := fetchStorageAppState(s.db.WithContext(ctx), appName)
+	if err != nil {
+		return nil, fmt.Errorf("error on get session: %w", err)
+	}
+	storageUser, err := fetchStorageUserState(s.db.WithContext(ctx), appName, userID)
+	if err != nil {
+		return nil, fmt.Errorf("error on get session: %w", err)
+	}
+
+	responseSession, err := createSessionFromStorageSession(&foundSession)
+	responseSession.state = mergeStates(storageApp.State, storageUser.State, responseSession.state)
+	if err != nil {
+		return nil, fmt.Errorf("failed to map storage object: %w", err)
+	}
+
+	// We fetched in DESC order to get the most recent ones (due to LIMIT).
+	// Now we reverse them to be in chronological ASC order for the response.
+	// Convert storage events to response events
+	responseEvents := make([]*session.Event, 0, len(storageEvents))
+	for i := len(storageEvents) - 1; i >= 0; i-- {
+		evt, err := createEventFromStorageEvent(&storageEvents[i])
+		if err != nil {
+			return nil, fmt.Errorf("failed to map storage event: %w", err)
+		}
+		responseEvents = append(responseEvents, evt)
+	}
+	responseSession.events = responseEvents
+
+	return &session.GetResponse{
+		Session: responseSession,
+	}, nil
+}
+
+// List retrieves sessions from the database using its appName and optional UserID
+func (s *databaseService) List(ctx context.Context, req *session.ListRequest) (*session.ListResponse, error) {
+	appName, userID := req.AppName, req.UserID
+	if appName == "" {
+		return nil, fmt.Errorf("app_name is required, got app_name: %q", req.AppName)
+	}
+
+	var foundSessions []storageSession
+	listQuery := s.db.WithContext(ctx).
+		Where(&storageSession{
+			AppName: appName,
+		})
+
+	if userID != "" {
+		listQuery = listQuery.Where(&storageSession{
+			UserID: userID,
+		})
+	}
+
+	err := listQuery.Find(&foundSessions).Error
+	if err != nil {
+		// Specifically check if the error is "record not found".
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// This is not a system failure. The record simply doesn't exist.
+			return &session.ListResponse{
+				Sessions: make([]session.Session, 0),
+			}, nil
+		}
+		// For any other error (e.g., connection lost), return it as a system error.
+		return nil, fmt.Errorf("database error while fetching session: %w", err)
+	}
+
+	storageApp, err := fetchStorageAppState(s.db.WithContext(ctx), appName)
+	if err != nil {
+		return nil, fmt.Errorf("error on list sessions: %w", err)
+	}
+
+	var userStates map[string]*storageUserState
+	if userID != "" {
+		userState, err := fetchStorageUserState(s.db.WithContext(ctx), appName, userID)
+		if err != nil {
+			return nil, fmt.Errorf("error on list sessions: %w", err)
+		}
+		userStates = map[string]*storageUserState{userID: userState}
+	} else {
+		userStates, err = fetchAllAppStorageUserState(s.db.WithContext(ctx), appName)
+		if err != nil {
+			return nil, fmt.Errorf("error on list sessions: %w", err)
+		}
+	}
+
+	// Create response sessions, transform the storageSessions into
+	responseSessions := make([]session.Session, 0, len(foundSessions))
+	for _, storage := range foundSessions {
+		s := storage
+		sess, err := createSessionFromStorageSession(&s)
+		if err != nil {
+			// If we encounter a single mapping error, we fail the whole request.
+			return nil, fmt.Errorf("failed to map storage object for session %s: %w", s.ID, err)
+		}
+
+		userState, ok := userStates[sess.UserID()]
+		if !ok {
+			userState = &storageUserState{AppName: appName, UserID: userID, State: make(map[string]any)}
+		}
+		sess.state = mergeStates(storageApp.State, userState.State, sess.state)
+		responseSessions = append(responseSessions, sess)
+	}
+
+	return &session.ListResponse{
+		Sessions: responseSessions,
+	}, nil
+}
+
+// Delete, deletes a session given a specific id returning error on failure, implements session.Service
+func (s *databaseService) Delete(ctx context.Context, req *session.DeleteRequest) error {
+	appName, userID, sessionID := req.AppName, req.UserID, req.SessionID
+	if appName == "" || userID == "" || sessionID == "" {
+		return fmt.Errorf("app_name, user_id, session_id are required, got app_name: %q, user_id: %q, session_id: %q", appName, userID, sessionID)
+	}
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		target := &storageSession{}
+
+		result := tx.Where(&storageSession{
+			AppName: req.AppName,
+			UserID:  req.UserID,
+			ID:      req.SessionID,
+		}).Delete(target)
+
+		if result.Error != nil {
+			return fmt.Errorf("database error during session deletion: %w", result.Error)
+		}
+
+		return nil // Returning nil commits the transaction
+	})
+}
+
+func (s *databaseService) AppendEvent(ctx context.Context, curSession session.Session, event *session.Event) error {
+	if curSession == nil {
+		return fmt.Errorf("session is nil")
+	}
+	if event == nil {
+		return fmt.Errorf("event is nil")
+	}
+	// ignore partial events
+	if event.Partial {
+		return nil
+	}
+
+	// Truncate timestamp to microsecond precision to match database precision and prevent rounding errors.
+	event.Timestamp = event.Timestamp.Truncate(time.Microsecond)
+
+	sess, ok := curSession.(*localSession)
+	if !ok {
+		return fmt.Errorf("unexpected session type %T", sess)
+	}
+	// append it to session
+	if err := sess.appendEvent(event); err != nil {
+		return err
+	}
+
+	// Trim temp state before persisting
+	event = trimTempDeltaState(event)
+	// applyChanges and persist them
+	err := s.applyEvent(ctx, sess, event)
+	if err != nil {
+		return err
+	}
+
+	// update local session last update time
+	sess.updatedAt = event.Timestamp
+	return nil
+}
+
+// applyEvent fetches the session, validates it, applies state changes from an
+// event, and saves the event atomically.
+func (s *databaseService) applyEvent(ctx context.Context, session *localSession, event *session.Event) error {
+	// Wrap database operations in a single transaction.
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Fetch the session object from storage.
+		var storageSess storageSession
+		err := tx.Where(&storageSession{AppName: session.AppName(), UserID: session.UserID(), ID: session.ID()}).
+			First(&storageSess).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("session not found, cannot apply event")
+			}
+			return fmt.Errorf("failed to get session: %w", err)
+		}
+
+		// Ensure the session object is not stale.
+		// We use UnixMicro() for microsecond-level precision, matching the Python code.
+		storageUpdateTime := storageSess.UpdateTime.UnixMicro()
+		sessionUpdateTime := session.updatedAt.UnixMicro()
+		if storageUpdateTime > sessionUpdateTime {
+			return fmt.Errorf(
+				"stale session error: last update time from request (%s) is older than in database (%s)",
+				time.Unix(0, sessionUpdateTime).Format(time.RFC3339Nano),
+				time.Unix(0, storageUpdateTime).Format(time.RFC3339Nano),
+			)
+		}
+
+		// Fetch App and User states.
+		storageApp, err := fetchStorageAppState(tx, session.AppName())
+		if err != nil {
+			return err
+		}
+		storageUser, err := fetchStorageUserState(tx, session.AppName(), session.UserID())
+		if err != nil {
+			return err
+		}
+
+		appDelta, userDelta, sessionDelta := extractStateDeltas(event.Actions.StateDelta)
+
+		// Merge state deltas and update the storage objects.
+		// GORM's .Save() method will correctly perform an INSERT or UPDATE.
+		if len(appDelta) > 0 {
+			maps.Copy(storageApp.State, appDelta)
+			if err := tx.Save(&storageApp).Error; err != nil {
+				return fmt.Errorf("failed to save app state: %w", err)
+			}
+		}
+		if len(userDelta) > 0 {
+			maps.Copy(storageUser.State, userDelta)
+			if err := tx.Save(&storageUser).Error; err != nil {
+				return fmt.Errorf("failed to save user state: %w", err)
+			}
+		}
+		if len(sessionDelta) > 0 {
+			maps.Copy(storageSess.State, sessionDelta)
+			// The session state update will be saved along with the event timestamp update.
+		}
+
+		// Create the new event record in the database.
+		storageEv, err := createStorageEvent(session, event)
+		if err != nil {
+			return fmt.Errorf("failed to map event to storage model: %w", err)
+		}
+		if err := tx.Create(storageEv).Error; err != nil {
+			return fmt.Errorf("failed to save event: %w", err)
+		}
+
+		storageSess.UpdateTime = event.Timestamp
+		// Save the session to update its state and UpdateTime.
+		if err := tx.Save(&storageSess).Error; err != nil {
+			return fmt.Errorf("failed to save session state: %w", err)
+		}
+
+		session.updatedAt = storageSess.UpdateTime
+
+		return nil // Returning nil commits the transaction.
+	})
+
+	return err
+}
+
+func fetchStorageAppState(tx *gorm.DB, appName string) (*storageAppState, error) {
+	var storageApp storageAppState
+	if err := tx.First(&storageApp, "app_name = ?", appName).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("failed to fetch app state: %w", err)
+		}
+		// If not found, initialize a new object to be created later.
+		storageApp = storageAppState{AppName: appName, State: make(map[string]any)}
+	}
+	return &storageApp, nil
+}
+
+func fetchStorageUserState(tx *gorm.DB, appName, userID string) (*storageUserState, error) {
+	var storageUser storageUserState
+	if err := tx.First(&storageUser, "app_name = ? AND user_id = ?", appName, userID).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("failed to fetch user state: %w", err)
+		}
+		// If not found, initialize a new object.
+		storageUser = storageUserState{AppName: appName, UserID: userID, State: make(map[string]any)}
+	}
+	return &storageUser, nil
+}
+
+func fetchAllAppStorageUserState(tx *gorm.DB, appName string) (map[string]*storageUserState, error) {
+	var storageUserStates []storageUserState
+
+	if err := tx.Find(&storageUserStates, "app_name = ?", appName).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("failed to fetch user states: %w", err)
+		}
+		return make(map[string]*storageUserState), nil
+	}
+	statesByUserId := make(map[string]*storageUserState, len(storageUserStates))
+	for _, storageUserState := range storageUserStates {
+		statesByUserId[storageUserState.UserID] = &storageUserState
+	}
+	return statesByUserId, nil
+}
+
+// extractStateDeltas splits a single state delta map into three separate maps
+// for app, user, and session states based on key prefixes.
+// Temporary keys (starting with TempStatePrefix) are ignored.
+func extractStateDeltas(delta map[string]any) (
+	appStateDelta, userStateDelta, sessionStateDelta map[string]any,
+) {
+	// Initialize the maps to be returned.
+	appStateDelta = make(map[string]any)
+	userStateDelta = make(map[string]any)
+	sessionStateDelta = make(map[string]any)
+
+	if delta == nil {
+		return appStateDelta, userStateDelta, sessionStateDelta
+	}
+
+	for key, value := range delta {
+		if cleanKey, found := strings.CutPrefix(key, session.KeyPrefixApp); found {
+			appStateDelta[cleanKey] = value
+		} else if cleanKey, found := strings.CutPrefix(key, session.KeyPrefixUser); found {
+			userStateDelta[cleanKey] = value
+		} else if !strings.HasPrefix(key, session.KeyPrefixTemp) {
+			// This key belongs to the session state, as long as it's not temporary.
+			sessionStateDelta[key] = value
+		}
+	}
+	return appStateDelta, userStateDelta, sessionStateDelta
+}
+
+// mergeStates combines app, user, and session state maps into a single map
+// for client-side responses, adding the appropriate prefixes back.
+func mergeStates(appState, userState, sessionState map[string]any) map[string]any {
+	// Pre-allocate map capacity for efficiency.
+	totalSize := len(appState) + len(userState) + len(sessionState)
+	mergedState := make(map[string]any, totalSize)
+
+	// In Go, we create a new map and copy key-value pairs. This is equivalent
+	// to the goal of Python's copy.deepcopy() in this context, which is to
+	// avoid modifying the original sessionState map.
+	maps.Copy(mergedState, sessionState)
+
+	for key, value := range appState {
+		mergedState[session.KeyPrefixApp+key] = value
+	}
+
+	for key, value := range userState {
+		mergedState[session.KeyPrefixUser+key] = value
+	}
+
+	return mergedState
+}
+
+
+===== tool\tool.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package tool defines the interfaces for tools that can be called by an agent.
+// A tool is a piece of code that performs a specific task. You can either define
+// your own custom tools or use built-in ones, for example, GoogleSearch.
+package tool
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/internal/toolinternal/toolutils"
+	"google.golang.org/adk/memory"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/session"
+	"google.golang.org/adk/tool/toolconfirmation"
+)
+
+// ErrConfirmationRequired indicates that the tool requires confirmation.
+var ErrConfirmationRequired = errors.New("requires confirmation, please approve or reject")
+
+// ErrConfirmationRejected indicated that the tool call confirmation rejected.
+var ErrConfirmationRejected = errors.New("call is rejected")
+
+// Tool defines the interface for a callable tool.
+type Tool interface {
+	// Name returns the name of the tool.
+	Name() string
+	// Description returns a description of the tool.
+	Description() string
+	// IsLongRunning indicates whether the tool is a long-running operation,
+	// which typically returns a resource id first and finishes the operation later.
+	IsLongRunning() bool
+}
+
+// Context defines the interface for the context passed to a tool when it's
+// called. It provides access to invocation-specific information and allows
+// the tool to interact with the agent's state and memory.
+type Context interface {
+	agent.CallbackContext
+	// FunctionCallID returns the unique identifier of the function call
+	// that triggered this tool execution.
+	FunctionCallID() string
+
+	// Actions returns the EventActions for the current event. This can be
+	// used by the tool to modify the agent's state, transfer to another
+	// agent, or perform other actions.
+	Actions() *session.EventActions
+	// SearchMemory performs a semantic search on the agent's memory.
+	SearchMemory(context.Context, string) (*memory.SearchResponse, error)
+
+	// ToolConfirmation returns a handler for checking the Human-in-the-Loop
+	// confirmation status for the current tool context. This should be used within a tool's logic
+	// *before* performing any sensitive operations that require user approval.
+	//
+	// Example Usage:
+	// if confirmation := ctx.ToolConfirmation(); confirmation == nil {
+	//     // Confirmation required, create confirmation or handle appropriately
+	//     ctx.RequestConfirmation("hint", payload)
+	// }
+	//
+	// The returned *toolconfirmation.ToolConfirmation object provides methods to check the actual
+	// confirmation state.
+	ToolConfirmation() *toolconfirmation.ToolConfirmation
+
+	// RequestConfirmation initiates the Human-in-the-Loop (HITL) process to ask the user for approval
+	// before the tool proceeds with a specific action. Call this method when a tool needs
+	// explicit user consent.
+	//
+	// This will typically result in the ADK emitting a special event
+	// (e.g., a FunctionCall like "adk_request_confirmation") to the client application/UI,
+	// prompting the user for a decision.
+	//
+	// Args:
+	//   - hint: A human-readable string explaining why confirmation is needed. This is usually
+	//     displayed to the user in the confirmation prompt.
+	//   - payload: Any additional data or context about the action requiring confirmation.
+	//
+	// Returns:
+	//   - nil: If the confirmation request was successfully enqueued or initiated within the ADK.
+	//     This indicates that the process of asking the user has begun. It does NOT mean the action
+	//     is approved. The tool's execution will likely pause or be suspended until the user responds.
+	//   - error: If there was a failure in initiating the confirmation process itself (e.g., invalid
+	//     arguments, issue with the event system). The request to ask the user has not been sent.
+	RequestConfirmation(hint string, payload any) error
+}
+
+// Toolset is an interface for a collection of tools. It allows grouping
+// related tools together and providing them to an agent.
+type Toolset interface {
+	// Name returns the name of the toolset.
+	Name() string
+	// Tools returns a list of tools in the toolset. The provided
+	// ReadonlyContext can be used to dynamically determine which tools
+	// to return based on the current invocation state.
+	Tools(ctx agent.ReadonlyContext) ([]Tool, error)
+}
+
+// Predicate is a function which decides whether a tool should be exposed to LLM.
+type Predicate func(ctx agent.ReadonlyContext, tool Tool) bool
+
+// StringPredicate is a helper that creates a Predicate from a string slice.
+// Deprecated: use AllowedToolsPredicate instead.
+func StringPredicate(allowedTools []string) Predicate {
+	return AllowedToolsPredicate(allowedTools)
+}
+
+// AllowedToolsPredicate returns a Predicate that allows only the tools with the given names.
+func AllowedToolsPredicate(allowedTools []string) Predicate {
+	m := make(map[string]bool)
+	for _, t := range allowedTools {
+		m[t] = true
+	}
+
+	return func(ctx agent.ReadonlyContext, tool Tool) bool {
+		return m[tool.Name()]
+	}
+}
+
+// FilterToolset returns a Toolset that filters the tools in the given Toolset
+// using the given predicate.
+// 中文业务注释：FilterToolset 用于按业务策略裁剪工具，例如某些用户、某些阶段、某些 Agent 只允许看到指定工具。
+func FilterToolset(toolset Toolset, predicate Predicate) Toolset {
+	if toolset == nil {
+		panic("toolset must not be nil")
+	}
+	if predicate == nil {
+		panic("predicate must not be nil")
+	}
+
+	return &filteredToolset{
+		toolset:   toolset,
+		predicate: predicate,
+	}
+}
+
+type filteredToolset struct {
+	toolset   Toolset
+	predicate Predicate
+}
+
+func (f *filteredToolset) Name() string {
+	return f.toolset.Name()
+}
+
+func (f *filteredToolset) Tools(ctx agent.ReadonlyContext) ([]Tool, error) {
+	tools, err := f.toolset.Tools(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var filtered []Tool
+	for _, tool := range tools {
+		if f.predicate(ctx, tool) {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered, nil
+}
+
+// ConfirmationProvider defines a function that dynamically determines whether
+// a specific tool execution requires user confirmation.
+//
+// It accepts the tool name and the input parameters as arguments.
+// Returning true signals that the system must wait for Human-in-the-Loop (HITL)
+// approval before proceeding with the execution.
+//
+// EXPERIMENTAL: ConfirmationProvider is experimental and not currently in scope for the v1.0 API.
+type ConfirmationProvider func(toolName string, toolInput any) bool
+
+// WithConfirmation wraps a toolset to inject confirmation logic in each tool.
+// Only tools within the provided Toolset that implement the `runnableTool` interface
+// (i.e., provide a FunctionDeclaration and a Run method) will be wrapped with
+// confirmation logic. Other tools will be included in the returned Toolset without
+// modification.
+//
+// EXPERIMENTAL: WithConfirmation is experimental and not currently in scope for the v1.0 API.
+// 中文业务注释：WithConfirmation 给工具集合套上人工确认策略，常用于删除、支付、发邮件、执行命令等高风险工具。
+func WithConfirmation(ts Toolset, requireConfirmation bool, requireConfirmationProvider ConfirmationProvider) Toolset {
+	return &confirmationToolset{
+		toolset:                     ts,
+		requireConfirmation:         requireConfirmation,
+		requireConfirmationProvider: requireConfirmationProvider,
+	}
+}
+
+type confirmationToolset struct {
+	toolset                     Toolset
+	requireConfirmation         bool
+	requireConfirmationProvider ConfirmationProvider
+}
+
+func (c *confirmationToolset) Name() string { return c.toolset.Name() }
+
+func (c *confirmationToolset) Tools(ctx agent.ReadonlyContext) ([]Tool, error) {
+	tools, err := c.toolset.Tools(ctx)
+	if err != nil {
+		return nil, err
+	}
+	wrappedTools := make([]Tool, 0, len(tools))
+	for _, t := range tools {
+		if _, ok := t.(runnableTool); ok {
+			wrappedTools = append(wrappedTools, &confirmationTool{
+				runnableTool:        t.(runnableTool),
+				requireConfirmation: c.requireConfirmation,
+				provider:            c.requireConfirmationProvider,
+			})
+		} else {
+			// Tools that are not runnableTool are not wrapped.
+			wrappedTools = append(wrappedTools, t)
+		}
+	}
+
+	return wrappedTools, nil
+}
+
+// confirmationTool is a wrapper around a tool that adds confirmation logic.
+// It implements tool.Tool and adk/internal/toolinternal.FunctionTool and adk/internal/toolinternal.RequestProcessor.
+type confirmationTool struct {
+	runnableTool
+	requireConfirmation bool
+	provider            ConfirmationProvider
+}
+
+type runnableTool interface {
+	Tool
+	Declaration() *genai.FunctionDeclaration
+	Run(ctx Context, args any) (result map[string]any, err error)
+}
+
+func (t *confirmationTool) Declaration() *genai.FunctionDeclaration {
+	return t.runnableTool.Declaration()
+}
+
+func (t *confirmationTool) ProcessRequest(ctx Context, req *model.LLMRequest) error {
+	return toolutils.PackTool(req, t)
+}
+
+func (t *confirmationTool) Run(ctx Context, args any) (map[string]any, error) {
+	ft := t.runnableTool
+
+	// Check for Human-in-the-Loop confirmation.
+	if confirmation := ctx.ToolConfirmation(); confirmation != nil {
+		if !confirmation.Confirmed {
+			return nil, fmt.Errorf("error tool %q %w", t.runnableTool.Name(), ErrConfirmationRejected)
+		}
+	} else {
+		requireConfirmation := t.requireConfirmation
+		if t.provider != nil {
+			requireConfirmation = t.provider(t.Name(), args)
+		}
+
+		if requireConfirmation {
+			err := ctx.RequestConfirmation(
+				fmt.Sprintf("Please approve or reject the tool call %s() by responding with a FunctionResponse with an expected ToolConfirmation payload.",
+					t.Name()), nil)
+			if err != nil {
+				return nil, err
+			}
+			ctx.Actions().SkipSummarization = true
+			return nil, fmt.Errorf("error tool %q %w", t.Name(), ErrConfirmationRequired)
+		}
+	}
+
+	return ft.Run(ctx, args)
+}
+
+
+===== tool\functiontool\function.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package functiontool provides a tool that wraps a Go function.
+package functiontool
+
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"runtime/debug"
+
+	"github.com/google/jsonschema-go/jsonschema"
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/internal/toolinternal/toolutils"
+	"google.golang.org/adk/internal/typeutil"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/tool"
+)
+
+// FunctionTool: borrow implementation from MCP go.
+
+// Config is the input to the NewFunctionTool function.
+type Config struct {
+	// The name of this tool.
+	Name string
+	// A human-readable description of the tool.
+	Description string
+	// An optional JSON schema object defining the expected parameters for the tool.
+	// If it is nil, FunctionTool tries to infer the schema based on the handler type.
+	InputSchema *jsonschema.Schema
+	// An optional JSON schema object defining the structure of the tool's output.
+	// If it is nil, FunctionTool tries to infer the schema based on the handler type.
+	OutputSchema *jsonschema.Schema
+	// IsLongRunning makes a FunctionTool a long-running operation.
+	IsLongRunning bool
+
+	// RequireConfirmation flags whether this tool must always ask for user confirmation
+	// before execution. If set to true, the ADK framework will automatically initiate
+	// a Human-in-the-Loop (HITL) confirmation request when this tool is invoked.
+	RequireConfirmation bool
+
+	// RequireConfirmationProvider allows for dynamic determination of whether
+	// user confirmation is needed. This field is a function called at runtime to decide if
+	// a confirmation request should be sent. The function takes the tool's input parameters as arguments.
+	// This provider offers more flexibility than the static RequireConfirmation flag,
+	// enabling conditional confirmation based on the invocation details.
+	// If set, this often takes precedence over the RequireConfirmation flag.
+	//
+	// Required signature for a provider function:
+	// func(toolInput ToolArgs) (bool)
+	// where ToolArgs is the input type of your go function
+	// Returning true means confirmation is required.
+	RequireConfirmationProvider any
+}
+
+// Func represents a Go function that can be wrapped in a tool.
+// It takes a tool.Context and a generic argument type, and returns a generic result type.
+type Func[TArgs, TResults any] func(tool.Context, TArgs) (TResults, error)
+
+// ErrInvalidArgument indicates the input parameter type is invalid.
+var ErrInvalidArgument = errors.New("invalid argument")
+
+// New creates a new tool with a name, description, and the provided handler.
+// Input schema is automatically inferred from the input and output types.
+// 中文业务注释：New 把一个强类型 Go 函数包装成 LLM 工具。参数/返回值 Schema 会自动推导，模型据此知道如何传参。
+func New[TArgs, TResults any](cfg Config, handler Func[TArgs, TResults]) (tool.Tool, error) {
+	// TODO: How can we improve UX for functions that does not require an argument, returns a simple type value, or returns a no result?
+	// https://github.com/modelcontextprotocol/go-sdk/discussions/37
+
+	var zeroArgs TArgs
+	argsType := reflect.TypeOf(zeroArgs)
+	for argsType != nil && argsType.Kind() == reflect.Pointer {
+		argsType = argsType.Elem()
+	}
+	if argsType == nil || (argsType.Kind() != reflect.Struct && argsType.Kind() != reflect.Map) {
+		return nil, fmt.Errorf("input must be a struct or a map or a pointer to those types, but received: %v: %w", argsType, ErrInvalidArgument)
+	}
+
+	ischema, err := resolvedSchema[TArgs](cfg.InputSchema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer input schema: %w", err)
+	}
+	oschema, err := resolvedSchema[TResults](cfg.OutputSchema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer output schema: %w", err)
+	}
+
+	var confirmWrapper func(TArgs) bool
+
+	if cfg.RequireConfirmationProvider != nil {
+		// Attempt to cast the interface directly to the function signature
+		fn, ok := cfg.RequireConfirmationProvider.(func(TArgs) bool)
+		if !ok {
+			return nil, fmt.Errorf("error RequireConfirmationProvider must be a function with signature func(%T) bool", *new(TArgs))
+		}
+		confirmWrapper = fn
+	}
+
+	return &functionTool[TArgs, TResults]{
+		cfg:                         cfg,
+		inputSchema:                 ischema,
+		outputSchema:                oschema,
+		handler:                     handler,
+		requireConfirmation:         cfg.RequireConfirmation,
+		requireConfirmationProvider: confirmWrapper,
+	}, nil
+}
+
+// functionTool wraps a Go function.
+type functionTool[TArgs, TResults any] struct {
+	cfg Config
+
+	// A JSON Schema object defining the expected parameters for the tool.
+	inputSchema *jsonschema.Resolved
+	// A JSON Schema object defining the result of the tool.
+	outputSchema *jsonschema.Resolved
+
+	// handler is the Go function.
+	handler Func[TArgs, TResults]
+
+	requireConfirmation bool
+
+	requireConfirmationProvider func(TArgs) bool
+}
+
+// Description implements tool.Tool.
+func (f *functionTool[TArgs, TResults]) Description() string {
+	return f.cfg.Description
+}
+
+// Name implements tool.Tool.
+func (f *functionTool[TArgs, TResults]) Name() string {
+	return f.cfg.Name
+}
+
+// IsLongRunning implements tool.Tool.
+func (f *functionTool[TArgs, TResults]) IsLongRunning() bool {
+	return f.cfg.IsLongRunning
+}
+
+// ProcessRequest packs the function tool's declaration into the LLM request.
+func (f *functionTool[TArgs, TResults]) ProcessRequest(ctx tool.Context, req *model.LLMRequest) error {
+	return toolutils.PackTool(req, f)
+}
+
+// FunctionDeclaration implements interfaces.FunctionTool.
+// 中文业务注释：Declaration 决定模型看到的工具说明。工具名、描述、参数 Schema 写得越清楚，模型越不容易幻觉调用。
+func (f *functionTool[TArgs, TResults]) Declaration() *genai.FunctionDeclaration {
+	decl := &genai.FunctionDeclaration{
+		Name:        f.Name(),
+		Description: f.Description(),
+	}
+	if f.inputSchema != nil {
+		decl.ParametersJsonSchema = f.inputSchema.Schema()
+	}
+	if f.outputSchema != nil {
+		decl.ResponseJsonSchema = f.outputSchema.Schema()
+	}
+
+	if f.cfg.IsLongRunning {
+		instruction := "NOTE: This is a long-running operation. Do not call this tool again if it has already returned some intermediate or pending status."
+		if decl.Description != "" {
+			decl.Description += "\n\n" + instruction
+		} else {
+			decl.Description = instruction
+		}
+	}
+
+	return decl
+}
+
+// Run executes the tool with the provided context and yields events.
+// 中文业务注释：Run 是工具执行入口。它完成 map 参数 -> 强类型参数 -> 业务函数 -> 结构化 map 返回的双向转换，并处理人工确认。
+func (f *functionTool[TArgs, TResults]) Run(ctx tool.Context, args any) (result map[string]any, err error) {
+	// TODO: Handle function call request from tc.InvocationContext.
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic in tool %q: %v\nstack: %s", f.Name(), r, debug.Stack())
+		}
+	}()
+
+	m, ok := args.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected args type, got: %T", args)
+	}
+	input, err := typeutil.ConvertToWithJSONSchema[map[string]any, TArgs](m, f.inputSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	if confirmation := ctx.ToolConfirmation(); confirmation != nil {
+		if !confirmation.Confirmed {
+			return nil, fmt.Errorf("error tool %q %w", f.Name(), tool.ErrConfirmationRejected)
+		}
+	} else {
+		requireConfirmation := f.requireConfirmation
+
+		// Only run the potentially expensive provider if the static flag didn't already trigger it
+		// Provider takes precedence/overrides:
+		if f.requireConfirmationProvider != nil {
+			requireConfirmation = f.requireConfirmationProvider(input)
+		}
+
+		if requireConfirmation {
+			err := ctx.RequestConfirmation(
+				fmt.Sprintf("Please approve or reject the tool call %s() by responding with a FunctionResponse with an expected ToolConfirmation payload.",
+					f.Name()), nil)
+			if err != nil {
+				return nil, err
+			}
+			ctx.Actions().SkipSummarization = true
+			return nil, fmt.Errorf("error tool %q %w", f.Name(), tool.ErrConfirmationRequired)
+		}
+	}
+
+	// 中文业务注释：这里才真正进入你的业务函数。前面的逻辑都是框架层参数校验、Schema 转换和确认流程。
+	output, err := f.handler(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := typeutil.ConvertToWithJSONSchema[TResults, map[string]any](output, f.outputSchema)
+	if err == nil { // all good
+		return resp, nil
+	}
+
+	// Specs requires the result to be a map (dict in python). python impl allows basic types when building response event
+	// functions.py __build_response_event does the following
+	// if not isinstance(function_result, dict):
+	// 		function_result = {'result': function_result}
+	if f.outputSchema != nil {
+		if err1 := f.outputSchema.Validate(output); err1 != nil {
+			return resp, err // if it fails propagate original err.
+		}
+	}
+	wrappedOutput := map[string]any{"result": output}
+	return wrappedOutput, nil
+}
+
+// ** NOTE FOR REVIEWERS **
+// Initially I started to borrow the design of the MCP ServerTool and
+// ToolHandlerFor/ToolHandler [1], but got diverged.
+//  * MCP ServerTool provides direct access to mcp.CallToolResult message
+//    but we expect Function in our case is a simple wrapper around a Go
+//    function, and does not need to worry about how the result is translated
+//    in genai.Content.
+//  * Function returns only TResults, not (TResults, error). If the user
+//    function can return an error, that needs to be included in the output
+//    json schema. And for function that never returns an error, I think it
+//    gets less uglier.
+//  * MCP ToolHandler expects mcp.ServerSession. types.ToolContext may be close
+//    to it, but we don't need to expose this to user function
+//    (similar to ADK Python FunctionTool [2])
+// References
+//  [1] MCP SDK https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk@v0.0.0-20250625213837-ff0d746521c4/mcp#ToolHandler
+//  [2] ADK Python https://github.com/google/adk-python/blob/04de3e197d7a57935488eb7bfa647c7ab62cd9d9/src/google/adk/tools/function_tool.py#L110-L112
+
+func resolvedSchema[T any](override *jsonschema.Schema) (*jsonschema.Resolved, error) {
+	// TODO: check if override schema is compatible with T.
+	if override != nil {
+		return override.Resolve(nil)
+	}
+	schema, err := jsonschema.For[T](nil)
+	if err != nil {
+		return nil, err
+	}
+	return schema.Resolve(nil)
+}
+
+
+===== plugin\plugin.go =====
+
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package plugin provides.
+package plugin
+
+import (
+	"google.golang.org/genai"
+
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/agent/llmagent"
+	"google.golang.org/adk/session"
+)
+
+type Config struct {
+	Name string
+
+	OnUserMessageCallback OnUserMessageCallback
+
+	OnEventCallback OnEventCallback
+
+	BeforeRunCallback BeforeRunCallback
+	AfterRunCallback  AfterRunCallback
+
+	BeforeAgentCallback agent.BeforeAgentCallback
+	AfterAgentCallback  agent.AfterAgentCallback
+
+	BeforeModelCallback  llmagent.BeforeModelCallback
+	AfterModelCallback   llmagent.AfterModelCallback
+	OnModelErrorCallback llmagent.OnModelErrorCallback
+
+	BeforeToolCallback  llmagent.BeforeToolCallback
+	AfterToolCallback   llmagent.AfterToolCallback
+	OnToolErrorCallback llmagent.OnToolErrorCallback
+
+	CloseFunc func() error
+}
+
+// 中文业务注释：创建插件。插件适合承载日志、审计、请求改写、响应改写、错误兜底等横切能力。
+func New(cfg Config) (*Plugin, error) {
+	p := &Plugin{
+		name:                  cfg.Name,
+		onUserMessageCallback: cfg.OnUserMessageCallback,
+		onEventCallback:       cfg.OnEventCallback,
+		beforeRunCallback:     cfg.BeforeRunCallback,
+		afterRunCallback:      cfg.AfterRunCallback,
+		beforeAgentCallback:   cfg.BeforeAgentCallback,
+		afterAgentCallback:    cfg.AfterAgentCallback,
+		beforeModelCallback:   cfg.BeforeModelCallback,
+		afterModelCallback:    cfg.AfterModelCallback,
+		onModelErrorCallback:  cfg.OnModelErrorCallback,
+		beforeToolCallback:    cfg.BeforeToolCallback,
+		afterToolCallback:     cfg.AfterToolCallback,
+		onToolErrorCallback:   cfg.OnToolErrorCallback,
+		closeFunc:             cfg.CloseFunc,
+	}
+
+	// Ensure closeFunc is never nil so p.Close() doesn't panic
+	if p.closeFunc == nil {
+		p.closeFunc = func() error {
+			return nil
+		}
+	}
+
+	return p, nil
+}
+
+type Plugin struct {
+	name string
+
+	onUserMessageCallback OnUserMessageCallback
+	onEventCallback       OnEventCallback
+
+	beforeRunCallback BeforeRunCallback
+	afterRunCallback  AfterRunCallback
+
+	beforeAgentCallback agent.BeforeAgentCallback
+	afterAgentCallback  agent.AfterAgentCallback
+
+	beforeModelCallback  llmagent.BeforeModelCallback
+	afterModelCallback   llmagent.AfterModelCallback
+	onModelErrorCallback llmagent.OnModelErrorCallback
+
+	beforeToolCallback  llmagent.BeforeToolCallback
+	afterToolCallback   llmagent.AfterToolCallback
+	onToolErrorCallback llmagent.OnToolErrorCallback
+
+	closeFunc func() error
+}
+
+// Name returns the name of the plugin.
+func (p *Plugin) Name() string {
+	return p.name
+}
+
+// Close safely calls the internal close function.
+func (p *Plugin) Close() error {
+	return p.closeFunc()
+}
+
+// --- Accessors ---
+
+func (p *Plugin) OnUserMessageCallback() OnUserMessageCallback {
+	return p.onUserMessageCallback
+}
+
+func (p *Plugin) OnEventCallback() OnEventCallback {
+	return p.onEventCallback
+}
+
+func (p *Plugin) BeforeRunCallback() BeforeRunCallback {
+	return p.beforeRunCallback
+}
+
+func (p *Plugin) AfterRunCallback() AfterRunCallback {
+	return p.afterRunCallback
+}
+
+func (p *Plugin) BeforeAgentCallback() agent.BeforeAgentCallback {
+	return p.beforeAgentCallback
+}
+
+func (p *Plugin) AfterAgentCallback() agent.AfterAgentCallback {
+	return p.afterAgentCallback
+}
+
+func (p *Plugin) BeforeModelCallback() llmagent.BeforeModelCallback {
+	return p.beforeModelCallback
+}
+
+func (p *Plugin) AfterModelCallback() llmagent.AfterModelCallback {
+	return p.afterModelCallback
+}
+
+func (p *Plugin) OnModelErrorCallback() llmagent.OnModelErrorCallback {
+	return p.onModelErrorCallback
+}
+
+func (p *Plugin) BeforeToolCallback() llmagent.BeforeToolCallback {
+	return p.beforeToolCallback
+}
+
+func (p *Plugin) AfterToolCallback() llmagent.AfterToolCallback {
+	return p.afterToolCallback
+}
+
+func (p *Plugin) OnToolErrorCallback() llmagent.OnToolErrorCallback {
+	return p.onToolErrorCallback
+}
+
+type OnUserMessageCallback func(agent.InvocationContext, *genai.Content) (*genai.Content, error)
+
+type BeforeRunCallback func(agent.InvocationContext) (*genai.Content, error)
+
+type AfterRunCallback func(agent.InvocationContext)
+
+type OnEventCallback func(agent.InvocationContext, *session.Event) (*session.Event, error)
+
+
+===== server\adkrest\handler.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package adkrest
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/gorilla/mux"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/trace"
+
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/artifact"
+	"google.golang.org/adk/memory"
+	"google.golang.org/adk/runner"
+	"google.golang.org/adk/server/adkrest/controllers"
+	"google.golang.org/adk/server/adkrest/internal/routers"
+	"google.golang.org/adk/server/adkrest/internal/services"
+	"google.golang.org/adk/session"
+)
+
+// NewServer creates a new ADK REST API server which implements [http.Handler] interface.
+// 中文业务注释：创建 REST 服务。这里把 Session/Runtime/Apps/Debug/Artifacts 等 Controller 注册到 HTTP Router。
+func NewServer(cfg ServerConfig) (*Server, error) {
+	debugTelemetry, err := services.NewDebugTelemetryWithConfig(&services.DebugTelemetryConfig{
+		TraceCapacity: cfg.DebugConfig.TraceCapacity,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create debug telemetry service: %w", err)
+	}
+
+	router := mux.NewRouter().StrictSlash(true)
+	// TODO: Allow taking a prefix to allow customizing the path
+	// where the ADK REST API will be served.
+	setupRouter(router,
+		routers.NewSessionsAPIRouter(controllers.NewSessionsAPIController(cfg.SessionService)),
+		routers.NewRuntimeAPIRouter(controllers.NewRuntimeAPIController(cfg.SessionService, cfg.MemoryService, cfg.AgentLoader, cfg.ArtifactService, cfg.SSEWriteTimeout, cfg.PluginConfig)),
+		routers.NewAppsAPIRouter(controllers.NewAppsAPIController(cfg.AgentLoader)),
+		routers.NewDebugAPIRouter(controllers.NewDebugAPIController(cfg.SessionService, cfg.AgentLoader, debugTelemetry)),
+		routers.NewArtifactsAPIRouter(controllers.NewArtifactsAPIController(cfg.ArtifactService)),
+		&routers.EvalAPIRouter{},
+	)
+	return &Server{
+		router:         router,
+		telemetryStore: debugTelemetry,
+	}, nil
+}
+
+// ServerConfig contains parameters for the ADK REST API server.
+type ServerConfig struct {
+	SessionService  session.Service
+	MemoryService   memory.Service
+	AgentLoader     agent.Loader
+	ArtifactService artifact.Service
+	SSEWriteTimeout time.Duration
+	PluginConfig    runner.PluginConfig
+	DebugConfig     DebugTelemetryConfig
+}
+
+// DebugTelemetryConfig contains parameters for the debug telemetry.
+type DebugTelemetryConfig struct {
+	// Maximum number of traces to keep in memory.
+	// If <= 0, the default capacity 10_000 is used.
+	TraceCapacity int
+}
+
+// Server is an HTTP server that serves the ADK REST API.
+type Server struct {
+	router         *mux.Router
+	telemetryStore *services.DebugTelemetry
+}
+
+// ServeHTTP makes [Server] implement [http.Handler] interface.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.router.ServeHTTP(w, r)
+}
+
+// SpanProcessor returns a processor that captures spans used for /debug/trace endpoint of the ADK REST API server.
+// You can register it in your application TracerProvider to populate it with these spans.
+func (s *Server) SpanProcessor() trace.SpanProcessor {
+	return s.telemetryStore.SpanProcessor()
+}
+
+// LogProcessor returns a processor that captures log records used for /debug/trace endpoint of the ADK REST API server.
+// You can register it in your application LoggerProvider to populate it with these logs.
+func (s *Server) LogProcessor() sdklog.Processor {
+	return s.telemetryStore.LogProcessor()
+}
+
+func setupRouter(router *mux.Router, subrouters ...routers.Router) *mux.Router {
+	routers.SetupSubRouters(router, subrouters...)
+	return router
+}
+
+
+===== server\adkrest\controllers\runtime.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package controllers
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/artifact"
+	"google.golang.org/adk/memory"
+	"google.golang.org/adk/runner"
+	"google.golang.org/adk/server/adkrest/internal/models"
+	"google.golang.org/adk/session"
+)
+
+// RuntimeAPIController is the controller for the Runtime API.
+type RuntimeAPIController struct {
+	sseTimeout      time.Duration
+	sessionService  session.Service
+	memoryService   memory.Service
+	artifactService artifact.Service
+	agentLoader     agent.Loader
+	pluginConfig    runner.PluginConfig
+}
+
+// NewRuntimeAPIController creates the controller for the Runtime API.
+func NewRuntimeAPIController(sessionService session.Service, memoryService memory.Service, agentLoader agent.Loader, artifactService artifact.Service, sseTimeout time.Duration, pluginConfig runner.PluginConfig) *RuntimeAPIController {
+	return &RuntimeAPIController{sessionService: sessionService, memoryService: memoryService, agentLoader: agentLoader, artifactService: artifactService, sseTimeout: sseTimeout, pluginConfig: pluginConfig}
+}
+
+// RunAgent executes a non-streaming agent run for a given session and message.
+func (c *RuntimeAPIController) RunHandler(rw http.ResponseWriter, req *http.Request) error {
+	runAgentRequest, err := decodeRequestBody(req)
+	if err != nil {
+		return err
+	}
+	sessionEvents, err := c.runAgent(req.Context(), runAgentRequest)
+	if err != nil {
+		return err
+	}
+	var events []models.Event
+	for _, event := range sessionEvents {
+		events = append(events, models.FromSessionEvent(*event))
+	}
+	EncodeJSONResponse(events, http.StatusOK, rw)
+	return nil
+}
+
+// RunAgent executes a non-streaming agent run for a given session and message.
+func (c *RuntimeAPIController) runAgent(ctx context.Context, runAgentRequest models.RunAgentRequest) ([]*session.Event, error) {
+	err := c.validateSessionExists(ctx, runAgentRequest.AppName, runAgentRequest.UserId, runAgentRequest.SessionId)
+	if err != nil {
+		return nil, err
+	}
+
+	r, rCfg, err := c.getRunner(runAgentRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := r.Run(ctx, runAgentRequest.UserId, runAgentRequest.SessionId, &runAgentRequest.NewMessage, *rCfg)
+
+	var events []*session.Event
+	for event, err := range resp {
+		if err != nil {
+			return nil, newStatusError(fmt.Errorf("failed to run agent: %w", err), http.StatusInternalServerError)
+		}
+		events = append(events, event)
+	}
+	return events, nil
+}
+
+// RunSSEHandler executes an agent run and streams the resulting events using Server-Sent Events (SSE).
+func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.Request) {
+	// set custom deadlines for this request - it overrides server-wide timeouts
+	rc := http.NewResponseController(rw)
+	deadline := time.Now().Add(c.sseTimeout)
+	err := rc.SetWriteDeadline(deadline)
+	if err != nil {
+		http.Error(rw, "failed to set write deadline: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	runAgentRequest, err := decodeRequestBody(req)
+	if err != nil {
+		http.Error(rw, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = c.validateSessionExists(req.Context(), runAgentRequest.AppName, runAgentRequest.UserId, runAgentRequest.SessionId)
+	if err != nil {
+		http.Error(rw, "failed to find the session: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	r, rCfg, err := c.getRunner(runAgentRequest)
+	if err != nil {
+		http.Error(rw, "failed to get runner: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Flush as soon as possible so the client doesn't drop connection.
+	// Add the headers after the error handling to avoid wrong content type.
+	rw.Header().Set("Content-Type", "text/event-stream")
+	rw.Header().Set("Cache-Control", "no-cache")
+	rw.Header().Set("Connection", "keep-alive")
+	if err := rc.Flush(); err != nil {
+		http.Error(rw, "failed to flush headers", http.StatusInternalServerError)
+		return
+	}
+
+	opts := []runner.RunOption{}
+	if runAgentRequest.StateDelta != nil {
+		opts = append(opts, runner.WithStateDelta(*runAgentRequest.StateDelta))
+	}
+	resp := r.Run(req.Context(), runAgentRequest.UserId, runAgentRequest.SessionId, &runAgentRequest.NewMessage, *rCfg, opts...)
+
+	for event, err := range resp {
+		if err != nil {
+			err := flashErrorEvent(rc, rw, err)
+			// The error is returned only when we cannot communicate with the client
+			// Exit the handler as connection is closed.
+			if err != nil {
+				log.Printf("failed to flash error event: %v", err)
+				return
+			}
+			continue
+		}
+		if event == nil {
+			continue
+		}
+		// Skip reporting error if it fails to marshal to the client (to avoid recursive error reporting).
+		marshalledData, err := json.Marshal(models.FromSessionEvent(*event))
+		if err != nil {
+			log.Printf("failed to marshal event: %v", err)
+			return
+		}
+		err = flashEvent(rc, rw, string(marshalledData))
+		if err != nil {
+			log.Printf("failed to flash event: %v", err)
+			return
+		}
+	}
+}
+
+func flashErrorEvent(rc *http.ResponseController, rw http.ResponseWriter, origError error) error {
+	_, err := fmt.Fprintf(rw, "event: error\n")
+	if err != nil {
+		return fmt.Errorf("write error event: %w", err)
+	}
+	safeErrorJSON, err := json.Marshal(map[string]string{"error": origError.Error()})
+	if err != nil {
+		// Skip reporting error if it fails to marshal to the client (to avoid recursive error reporting).
+		return fmt.Errorf("marshal error event: %w", err)
+	}
+	return flashEvent(rc, rw, string(safeErrorJSON))
+}
+
+func flashEvent(rc *http.ResponseController, rw http.ResponseWriter, data string) error {
+	_, err := fmt.Fprintf(rw, "data: %s\n\n", data)
+	if err != nil {
+		return fmt.Errorf("write response: %w", err)
+	}
+	err = rc.Flush()
+	if err != nil {
+		return fmt.Errorf("flush event: %w", err)
+	}
+	return nil
+}
+
+func (c *RuntimeAPIController) validateSessionExists(ctx context.Context, appName, userID, sessionID string) error {
+	_, err := c.sessionService.Get(ctx, &session.GetRequest{
+		AppName:   appName,
+		UserID:    userID,
+		SessionID: sessionID,
+	})
+	if err != nil {
+		return newStatusError(fmt.Errorf("failed to get session: %w", err), http.StatusNotFound)
+	}
+	return nil
+}
+
+func (c *RuntimeAPIController) getRunner(req models.RunAgentRequest) (*runner.Runner, *agent.RunConfig, error) {
+	curAgent, err := c.agentLoader.LoadAgent(req.AppName)
+	if err != nil {
+		return nil, nil, newStatusError(fmt.Errorf("failed to load agent: %w", err), http.StatusInternalServerError)
+	}
+
+	r, err := runner.New(runner.Config{
+		AppName:         req.AppName,
+		Agent:           curAgent,
+		SessionService:  c.sessionService,
+		MemoryService:   c.memoryService,
+		ArtifactService: c.artifactService,
+		PluginConfig:    c.pluginConfig,
+	},
+	)
+	if err != nil {
+		return nil, nil, newStatusError(fmt.Errorf("failed to create runner: %w", err), http.StatusInternalServerError)
+	}
+
+	streamingMode := agent.StreamingModeNone
+	if req.Streaming {
+		streamingMode = agent.StreamingModeSSE
+	}
+	return r, &agent.RunConfig{
+		StreamingMode: streamingMode,
+	}, nil
+}
+
+func decodeRequestBody(req *http.Request) (decodedReq models.RunAgentRequest, err error) {
+	var runAgentRequest models.RunAgentRequest
+	defer func() {
+		err = req.Body.Close()
+	}()
+	d := json.NewDecoder(req.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&runAgentRequest); err != nil {
+		return runAgentRequest, newStatusError(fmt.Errorf("failed to decode request: %w", err), http.StatusBadRequest)
+	}
+	return runAgentRequest, nil
+}
+
+
+===== server\adkrest\controllers\sessions.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package controllers
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+
+	"github.com/gorilla/mux"
+
+	"google.golang.org/adk/server/adkrest/internal/models"
+	"google.golang.org/adk/session"
+)
+
+// TODO: Confirm error handling and target semantic for REST API.
+
+// SessionsAPIController is the controller for the Sessions API.
+type SessionsAPIController struct {
+	service session.Service
+}
+
+// NewSessionsAPIController creates a new SessionsAPIController.
+func NewSessionsAPIController(service session.Service) *SessionsAPIController {
+	return &SessionsAPIController{service: service}
+}
+
+// CreateSesssionHTTP is a HTTP handler for the create session API.
+func (c *SessionsAPIController) CreateSessionHandler(rw http.ResponseWriter, req *http.Request) {
+	params := mux.Vars(req)
+	sessionID, err := models.SessionIDFromHTTPParameters(params)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	createSessionRequest := models.CreateSessionRequest{}
+	// No state and no events, fails to decode req.Body failing with "EOF"
+	if req.ContentLength > 0 {
+		err := json.NewDecoder(req.Body).Decode(&createSessionRequest)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	respSession, err := c.createSession(req.Context(), sessionID, createSessionRequest)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	EncodeJSONResponse(respSession, http.StatusOK, rw)
+}
+
+func (c *SessionsAPIController) createSession(ctx context.Context, sessionID models.SessionID, createSessionRequest models.CreateSessionRequest) (models.Session, error) {
+	session, err := c.service.Create(ctx, &session.CreateRequest{
+		AppName:   sessionID.AppName,
+		UserID:    sessionID.UserID,
+		SessionID: sessionID.ID,
+		State:     createSessionRequest.State,
+	})
+	if err != nil {
+		return models.Session{}, err
+	}
+	for _, event := range createSessionRequest.Events {
+		err = c.service.AppendEvent(ctx, session.Session, models.ToSessionEvent(event))
+		if err != nil {
+			return models.Session{}, err
+		}
+	}
+	return models.FromSession(session.Session)
+}
+
+// DeleteSession handles deleting a specific session.
+func (c *SessionsAPIController) DeleteSessionHandler(rw http.ResponseWriter, req *http.Request) {
+	params := mux.Vars(req)
+	sessionID, err := models.SessionIDFromHTTPParameters(params)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if sessionID.ID == "" {
+		http.Error(rw, "session_id parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	err = c.service.Delete(req.Context(), &session.DeleteRequest{
+		AppName:   sessionID.AppName,
+		UserID:    sessionID.UserID,
+		SessionID: sessionID.ID,
+	})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	EncodeJSONResponse(nil, http.StatusOK, rw)
+}
+
+// GetSession retrieves a specific session by its ID.
+func (c *SessionsAPIController) GetSessionHandler(rw http.ResponseWriter, req *http.Request) {
+	params := mux.Vars(req)
+	sessionID, err := models.SessionIDFromHTTPParameters(params)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if sessionID.ID == "" {
+		http.Error(rw, "session_id parameter is required", http.StatusBadRequest)
+		return
+	}
+	storedSession, err := c.service.Get(req.Context(), &session.GetRequest{
+		AppName:   sessionID.AppName,
+		UserID:    sessionID.UserID,
+		SessionID: sessionID.ID,
+	})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	session, err := models.FromSession(storedSession.Session)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	EncodeJSONResponse(session, http.StatusOK, rw)
+}
+
+// ListSessions handles listing all sessions for a given app and user.
+func (c *SessionsAPIController) ListSessionsHandler(rw http.ResponseWriter, req *http.Request) {
+	params := mux.Vars(req)
+	sessionID, err := models.SessionIDFromHTTPParameters(params)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var sessions []models.Session
+	resp, err := c.service.List(req.Context(), &session.ListRequest{
+		AppName: sessionID.AppName,
+		UserID:  sessionID.UserID,
+	})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for _, session := range resp.Sessions {
+		respSession, err := models.FromSession(session)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		sessions = append(sessions, respSession)
+	}
+	EncodeJSONResponse(sessions, http.StatusOK, rw)
+}
+
+
+===== server\adkrest\internal\models\runtime.go =====
+
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package models
+
+import (
+	"fmt"
+
+	"google.golang.org/genai"
+)
+
+type RunAgentRequest struct {
+	AppName string `json:"appName"`
+
+	UserId string `json:"userId"`
+
+	SessionId string `json:"sessionId"`
+
+	NewMessage genai.Content `json:"newMessage"`
+
+	Streaming bool `json:"streaming,omitempty"`
+
+	StateDelta *map[string]any `json:"stateDelta,omitempty"`
+}
+
+// AssertRunAgentRequestRequired checks if the required fields are not zero-ed
+func (req RunAgentRequest) AssertRunAgentRequestRequired() error {
+	elements := map[string]any{
+		"appName":    req.AppName,
+		"userId":     req.UserId,
+		"sessionId":  req.SessionId,
+		"newMessage": req.NewMessage,
+	}
+	for name, el := range elements {
+		if isZero := IsZeroValue(el); isZero {
+			return fmt.Errorf("%s is required", name)
+		}
+	}
+
+	return nil
+}

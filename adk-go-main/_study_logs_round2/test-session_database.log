@@ -1,0 +1,387 @@
+﻿=== RUN   Test_databaseService
+=== RUN   Test_databaseService/Create
+=== RUN   Test_databaseService/Create/full_key
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.527ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "testUserID" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/Create/generated_session_id
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.535ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "testUserID" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/Create/when_already_exists,_it_fails
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.597ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "testUserID" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "testUserID" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:124 [35;1mconstraint failed: UNIQUE constraint failed: sessions.app_name, sessions.user_id, sessions.id (1555)
+[0m[33m[0.000ms] [34;1m[rows:0][0m INSERT INTO `sessions` (`app_name`,`user_id`,`id`,`state`,`create_time`,`update_time`) VALUES ("testApp","testUserID","bdacd524-3c02-405c-94db-bab321196677","{}","2026-05-14 08:59:17.112","2026-05-14 08:59:17.112")
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/Get
+=== RUN   Test_databaseService/Get/ok
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "testUserID" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "testUserID" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/Get/error_when_not_found
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:156 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `sessions` WHERE `sessions`.`app_name` = "nonExistent" AND `sessions`.`user_id` = "user" AND `sessions`.`id` = "s1" ORDER BY `sessions`.`id` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/Get/get_session_respects_user_id
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.397ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:156 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `sessions` WHERE `sessions`.`app_name` = "testApp" AND `sessions`.`user_id` = "user2" AND `sessions`.`id` = "11b85be6-1a71-4233-952f-18469de00514" ORDER BY `sessions`.`id` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/Get/with_config_filters
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.628ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/List
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.446ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user2" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user2" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "nonExistent" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/Delete
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:156 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `sessions` WHERE `sessions`.`app_name` = "testApp" AND `sessions`.`user_id` = "user1" AND `sessions`.`id` = "48af392b-b7f6-41eb-ae59-4e63f207e427" ORDER BY `sessions`.`id` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/AppendEvent
+=== RUN   Test_databaseService/AppendEvent/when_session_not_found_should_fail
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/AppendEvent/ok
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/AppendEvent/partial_events_are_not_persisted
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/AppendEvent/with_bytes_content
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/AppendEvent/with_existing_events
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.474ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/AppendEvent/with_all_fields
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "user1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/StateManagement
+=== RUN   Test_databaseService/StateManagement/app_state_is_shared
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u2" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/StateManagement/user_state_is_user_specific
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.528ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u2" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/StateManagement/session_state_is_not_shared
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.512ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+=== RUN   Test_databaseService/StateManagement/temp_state_is_not_persisted
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:440 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `app_states` WHERE app_name = "testApp" ORDER BY `app_states`.`app_name` LIMIT 1
+
+2026/05/14 08:59:17 [31;1mC:/Users/yuanyp8/Desktop/adk-go-main/session/database/service.go:452 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `user_states` WHERE app_name = "testApp" AND user_id = "u1" ORDER BY `user_states`.`app_name` LIMIT 1
+    service_test.go:55: CLEANUP: Deleting all rows from tables...
+--- PASS: Test_databaseService (0.06s)
+    --- PASS: Test_databaseService/Create (0.02s)
+        --- PASS: Test_databaseService/Create/full_key (0.02s)
+        --- PASS: Test_databaseService/Create/generated_session_id (0.00s)
+        --- PASS: Test_databaseService/Create/when_already_exists,_it_fails (0.00s)
+    --- PASS: Test_databaseService/Get (0.01s)
+        --- PASS: Test_databaseService/Get/ok (0.00s)
+        --- PASS: Test_databaseService/Get/error_when_not_found (0.00s)
+        --- PASS: Test_databaseService/Get/get_session_respects_user_id (0.00s)
+        --- PASS: Test_databaseService/Get/with_config_filters (0.01s)
+    --- PASS: Test_databaseService/List (0.00s)
+    --- PASS: Test_databaseService/Delete (0.00s)
+    --- PASS: Test_databaseService/AppendEvent (0.01s)
+        --- PASS: Test_databaseService/AppendEvent/when_session_not_found_should_fail (0.00s)
+        --- PASS: Test_databaseService/AppendEvent/ok (0.00s)
+        --- PASS: Test_databaseService/AppendEvent/partial_events_are_not_persisted (0.00s)
+        --- PASS: Test_databaseService/AppendEvent/with_bytes_content (0.00s)
+        --- PASS: Test_databaseService/AppendEvent/with_existing_events (0.00s)
+        --- PASS: Test_databaseService/AppendEvent/with_all_fields (0.00s)
+    --- PASS: Test_databaseService/StateManagement (0.01s)
+        --- PASS: Test_databaseService/StateManagement/app_state_is_shared (0.00s)
+        --- PASS: Test_databaseService/StateManagement/user_state_is_user_specific (0.00s)
+        --- PASS: Test_databaseService/StateManagement/session_state_is_not_shared (0.00s)
+        --- PASS: Test_databaseService/StateManagement/temp_state_is_not_persisted (0.00s)
+PASS
+ok  	google.golang.org/adk/session/database	0.345s

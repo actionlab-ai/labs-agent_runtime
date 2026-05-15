@@ -1,0 +1,26 @@
+{
+  "error": "",
+  "response": {
+    "Content": {
+      "parts": [
+        {
+          "text": "\n\n您好！我注意到您的消息显示为乱码（????），可能是编码问题导致我无法正确读取您的内容。\n\n我是 **qwen_weather_time_agent**，专门用于学习 ADK Go Agent Runtime 的调试 Agent。我的功能包括：\n\n| 功能 | 说明 |\n|------|------|\n| 🌤️ 查询天气 | 调用 `get_weather` 工具获取指定城市的模拟天气 |\n| 🕐 查询时间 | 调用 `get_time` 工具获取指定城市的模拟时间 |\n| 💬 回答问题 | 解答关于 ADK 框架原理的问题 |\n\n**请您尝试：**\n- 用中文重新输入您的问题\n- 或者告诉我您想查询哪个城市的天气/时间\n\n例如：\n- \"北京天气怎么样？\"\n- \"上海现在几点？\"\n- \"ADK Agent 是如何工作的？\"\n\n期待您的回复！😊"
+        }
+      ],
+      "role": "model"
+    },
+    "CitationMetadata": null,
+    "GroundingMetadata": null,
+    "UsageMetadata": null,
+    "CustomMetadata": null,
+    "LogprobsResult": null,
+    "ModelVersion": "qwen_qwen3.5-397b-a17b",
+    "Partial": false,
+    "TurnComplete": false,
+    "Interrupted": false,
+    "ErrorCode": "",
+    "ErrorMessage": "",
+    "FinishReason": "stop",
+    "AvgLogprobs": 0
+  }
+}

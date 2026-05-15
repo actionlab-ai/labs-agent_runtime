@@ -1,0 +1,26 @@
+{
+  "error": "",
+  "response": {
+    "Content": {
+      "parts": [
+        {
+          "text": "\n\n根据查询结果，北京目前的天气情况如下：\n\n- **温度**：23°C\n- **天气状况**：晴朗\n- **风力**：微风\n- **总体评价**：适合学习 Agent 框架\n\n今天北京的天气很不错，温度适宜，晴空万里，微风轻拂，是个外出或学习的好天气！"
+        }
+      ],
+      "role": "model"
+    },
+    "CitationMetadata": null,
+    "GroundingMetadata": null,
+    "UsageMetadata": null,
+    "CustomMetadata": null,
+    "LogprobsResult": null,
+    "ModelVersion": "qwen_qwen3.5-397b-a17b",
+    "Partial": false,
+    "TurnComplete": false,
+    "Interrupted": false,
+    "ErrorCode": "",
+    "ErrorMessage": "",
+    "FinishReason": "stop",
+    "AvgLogprobs": 0
+  }
+}

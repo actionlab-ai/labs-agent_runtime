@@ -1,0 +1,13 @@
+{
+  "args": {
+    "city": "Beijing"
+  },
+  "error": "",
+  "result": {
+    "city": "Beijing",
+    "source": "local-demo-tool",
+    "temperature": "23°C",
+    "weather": "晴，微风，适合学习 Agent 框架"
+  },
+  "tool": "get_weather"
+}

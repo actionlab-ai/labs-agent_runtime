@@ -1,0 +1,68 @@
+﻿=== RUN   TestNewRuntimeAPIController_PluginsAssignment
+=== RUN   TestNewRuntimeAPIController_PluginsAssignment/with_no_plugins
+=== RUN   TestNewRuntimeAPIController_PluginsAssignment/with_empty_plugin_list
+=== RUN   TestNewRuntimeAPIController_PluginsAssignment/with_single_plugin
+=== RUN   TestNewRuntimeAPIController_PluginsAssignment/with_multiple_plugins
+--- PASS: TestNewRuntimeAPIController_PluginsAssignment (0.00s)
+    --- PASS: TestNewRuntimeAPIController_PluginsAssignment/with_no_plugins (0.00s)
+    --- PASS: TestNewRuntimeAPIController_PluginsAssignment/with_empty_plugin_list (0.00s)
+    --- PASS: TestNewRuntimeAPIController_PluginsAssignment/with_single_plugin (0.00s)
+    --- PASS: TestNewRuntimeAPIController_PluginsAssignment/with_multiple_plugins (0.00s)
+=== RUN   TestRunSSEHandler
+=== RUN   TestRunSSEHandler/success_case
+=== RUN   TestRunSSEHandler/error_case
+=== RUN   TestRunSSEHandler/interleaved_success_and_error
+--- PASS: TestRunSSEHandler (0.00s)
+    --- PASS: TestRunSSEHandler/success_case (0.00s)
+    --- PASS: TestRunSSEHandler/error_case (0.00s)
+    --- PASS: TestRunSSEHandler/interleaved_success_and_error (0.00s)
+=== RUN   TestSessionSpansHandler
+=== RUN   TestSessionSpansHandler/spans_found_for_session
+=== RUN   TestSessionSpansHandler/spans_not_found_for_session
+=== RUN   TestSessionSpansHandler/empty_session_id_param
+--- PASS: TestSessionSpansHandler (0.01s)
+    --- PASS: TestSessionSpansHandler/spans_found_for_session (0.01s)
+    --- PASS: TestSessionSpansHandler/spans_not_found_for_session (0.00s)
+    --- PASS: TestSessionSpansHandler/empty_session_id_param (0.00s)
+=== RUN   TestEventSpanHandler
+=== RUN   TestEventSpanHandler/span_with_generate_content_operation
+=== RUN   TestEventSpanHandler/span_with_execute_tool_operation
+=== RUN   TestEventSpanHandler/span_not_found_for_event_id
+=== RUN   TestEventSpanHandler/span_with_different_operation_name
+=== RUN   TestEventSpanHandler/empty_event_id_param
+--- PASS: TestEventSpanHandler (0.00s)
+    --- PASS: TestEventSpanHandler/span_with_generate_content_operation (0.00s)
+    --- PASS: TestEventSpanHandler/span_with_execute_tool_operation (0.00s)
+    --- PASS: TestEventSpanHandler/span_not_found_for_event_id (0.00s)
+    --- PASS: TestEventSpanHandler/span_with_different_operation_name (0.00s)
+    --- PASS: TestEventSpanHandler/empty_event_id_param (0.00s)
+=== RUN   TestGetSession
+=== RUN   TestGetSession/session_exists
+=== RUN   TestGetSession/session_does_not_exist
+=== RUN   TestGetSession/user_ID_is_missing_in_input
+=== RUN   TestGetSession/session_ID_is_missing
+--- PASS: TestGetSession (0.00s)
+    --- PASS: TestGetSession/session_exists (0.00s)
+    --- PASS: TestGetSession/session_does_not_exist (0.00s)
+    --- PASS: TestGetSession/user_ID_is_missing_in_input (0.00s)
+    --- PASS: TestGetSession/session_ID_is_missing (0.00s)
+=== RUN   TestCreateSession
+=== RUN   TestCreateSession/session_exists
+=== RUN   TestCreateSession/successful_create_operation
+=== RUN   TestCreateSession/user_id_is_missing
+--- PASS: TestCreateSession (0.00s)
+    --- PASS: TestCreateSession/session_exists (0.00s)
+    --- PASS: TestCreateSession/successful_create_operation (0.00s)
+    --- PASS: TestCreateSession/user_id_is_missing (0.00s)
+=== RUN   TestDeleteSession
+=== RUN   TestDeleteSession/session_exists
+=== RUN   TestDeleteSession/session_does_not_exist
+--- PASS: TestDeleteSession (0.00s)
+    --- PASS: TestDeleteSession/session_exists (0.00s)
+    --- PASS: TestDeleteSession/session_does_not_exist (0.00s)
+=== RUN   TestListSessions
+=== RUN   TestListSessions/session_exists
+--- PASS: TestListSessions (0.00s)
+    --- PASS: TestListSessions/session_exists (0.00s)
+PASS
+ok  	google.golang.org/adk/server/adkrest/controllers	0.295s

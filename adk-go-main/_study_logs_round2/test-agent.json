@@ -1,0 +1,68 @@
+﻿{"Time":"2026-05-14T08:58:49.6177399+08:00","Action":"start","Package":"google.golang.org/adk/agent"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks","Output":"=== RUN   TestAgentCallbacks\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks","Output":"=== PAUSE TestAgentCallbacks\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pause","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestEndInvocation_EndsBeforeMainCall"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestEndInvocation_EndsBeforeMainCall","Output":"=== RUN   TestEndInvocation_EndsBeforeMainCall\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestEndInvocation_EndsBeforeMainCall","Output":"--- PASS: TestEndInvocation_EndsBeforeMainCall (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestEndInvocation_EndsBeforeMainCall","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestEndInvocation_EndsAfterMainCall"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestEndInvocation_EndsAfterMainCall","Output":"=== RUN   TestEndInvocation_EndsAfterMainCall\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestEndInvocation_EndsAfterMainCall","Output":"--- PASS: TestEndInvocation_EndsAfterMainCall (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestEndInvocation_EndsAfterMainCall","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestWithContext"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestWithContext","Output":"=== RUN   TestWithContext\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestWithContext","Output":"--- PASS: TestWithContext (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestWithContext","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestFindAgent"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent","Output":"=== RUN   TestFindAgent\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent","Output":"=== PAUSE TestFindAgent\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pause","Package":"google.golang.org/adk/agent","Test":"TestFindAgent"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestDuplicateName"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestDuplicateName","Output":"=== RUN   TestDuplicateName\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestDuplicateName","Output":"--- PASS: TestDuplicateName (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestDuplicateName","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"cont","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks","Output":"=== CONT  TestAgentCallbacks\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/before_agent_callback_runs,_no_llm_calls"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/before_agent_callback_runs,_no_llm_calls","Output":"=== RUN   TestAgentCallbacks/before_agent_callback_runs,_no_llm_calls\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"cont","Package":"google.golang.org/adk/agent","Test":"TestFindAgent"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent","Output":"=== CONT  TestFindAgent\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/before_agent_callback_runs,_no_llm_calls","Output":"--- PASS: TestAgentCallbacks/before_agent_callback_runs,_no_llm_calls (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/before_agent_callback_runs,_no_llm_calls","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/no_callback_effect_if_callbacks_return_nil"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/no_callback_effect_if_callbacks_return_nil","Output":"=== RUN   TestAgentCallbacks/no_callback_effect_if_callbacks_return_nil\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/no_callback_effect_if_callbacks_return_nil","Output":"--- PASS: TestAgentCallbacks/no_callback_effect_if_callbacks_return_nil (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/no_callback_effect_if_callbacks_return_nil","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/after_agent_callback_create_a_new_event_with_new_content"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/after_agent_callback_create_a_new_event_with_new_content","Output":"=== RUN   TestAgentCallbacks/after_agent_callback_create_a_new_event_with_new_content\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_self"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_self","Output":"=== RUN   TestFindAgent/Find_self\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/after_agent_callback_create_a_new_event_with_new_content","Output":"--- PASS: TestAgentCallbacks/after_agent_callback_create_a_new_event_with_new_content (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks/after_agent_callback_create_a_new_event_with_new_content","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks","Output":"--- PASS: TestAgentCallbacks (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestAgentCallbacks","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_self","Output":"--- PASS: TestFindAgent/Find_self (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_self","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_direct_child1"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_direct_child1","Output":"=== RUN   TestFindAgent/Find_direct_child1\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_direct_child1","Output":"--- PASS: TestFindAgent/Find_direct_child1 (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_direct_child1","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_direct_child2"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_direct_child2","Output":"=== RUN   TestFindAgent/Find_direct_child2\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_direct_child2","Output":"--- PASS: TestFindAgent/Find_direct_child2 (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_direct_child2","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_nested_grandchild"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_nested_grandchild","Output":"=== RUN   TestFindAgent/Find_nested_grandchild\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_nested_grandchild","Output":"--- PASS: TestFindAgent/Find_nested_grandchild (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_nested_grandchild","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"run","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_non-existent_agent"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_non-existent_agent","Output":"=== RUN   TestFindAgent/Find_non-existent_agent\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_non-existent_agent","Output":"--- PASS: TestFindAgent/Find_non-existent_agent (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestFindAgent/Find_non-existent_agent","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Test":"TestFindAgent","Output":"--- PASS: TestFindAgent (0.00s)\n"}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Test":"TestFindAgent","Elapsed":0}
+{"Time":"2026-05-14T08:58:50.0265155+08:00","Action":"output","Package":"google.golang.org/adk/agent","Output":"PASS\n"}
+{"Time":"2026-05-14T08:58:50.028179+08:00","Action":"output","Package":"google.golang.org/adk/agent","Output":"ok  \tgoogle.golang.org/adk/agent\t0.410s\n"}
+{"Time":"2026-05-14T08:58:50.028179+08:00","Action":"pass","Package":"google.golang.org/adk/agent","Elapsed":0.41}

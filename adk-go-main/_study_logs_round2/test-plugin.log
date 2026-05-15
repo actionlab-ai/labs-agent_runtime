@@ -1,0 +1,76 @@
+﻿=== RUN   TestNew
+=== RUN   TestNew/Successfully_maps_all_fields
+=== RUN   TestNew/Safety:_Handles_nil_CloseFunc_gracefully
+=== RUN   TestNew/Functionality:_Executes_provided_CloseFunc
+--- PASS: TestNew (0.00s)
+    --- PASS: TestNew/Successfully_maps_all_fields (0.00s)
+    --- PASS: TestNew/Safety:_Handles_nil_CloseFunc_gracefully (0.00s)
+    --- PASS: TestNew/Functionality:_Executes_provided_CloseFunc (0.00s)
+=== RUN   TestCallTool
+=== RUN   TestCallTool/tool_runs_successfully_plugin
+=== RUN   TestCallTool/tool_error_plugin
+=== RUN   TestCallTool/before_callback_returns_result_plugin
+=== RUN   TestCallTool/before_callback_returns_error_plugin
+=== RUN   TestCallTool/after_callback_modifies_result_plugin
+=== RUN   TestCallTool/after_callback_handles_error_and_are_run_in_symmetrical_order_plugin
+=== RUN   TestCallTool/after_callback_returns_error_and_are_run_in_symmetrical_order_plugin
+=== RUN   TestCallTool/no-op_callbacks_return_func_results_plugin
+=== RUN   TestCallTool/before_callback_result_passed_to_after_callback_plugin
+=== RUN   TestCallTool/before_callback_error_passed_to_after_callback_plugin
+=== RUN   TestCallTool/before_callback_error_passed_to_on_tool_error_callback_plugin
+=== RUN   TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_after_tool_called_plugin
+=== RUN   TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_passed_to_after_tool_called_plugin
+=== RUN   TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_passed_to_after_tool_called_and_handled_plugin
+--- PASS: TestCallTool (0.00s)
+    --- PASS: TestCallTool/tool_runs_successfully_plugin (0.00s)
+    --- PASS: TestCallTool/tool_error_plugin (0.00s)
+    --- PASS: TestCallTool/before_callback_returns_result_plugin (0.00s)
+    --- PASS: TestCallTool/before_callback_returns_error_plugin (0.00s)
+    --- PASS: TestCallTool/after_callback_modifies_result_plugin (0.00s)
+    --- PASS: TestCallTool/after_callback_handles_error_and_are_run_in_symmetrical_order_plugin (0.00s)
+    --- PASS: TestCallTool/after_callback_returns_error_and_are_run_in_symmetrical_order_plugin (0.00s)
+    --- PASS: TestCallTool/no-op_callbacks_return_func_results_plugin (0.00s)
+    --- PASS: TestCallTool/before_callback_result_passed_to_after_callback_plugin (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_after_callback_plugin (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_on_tool_error_callback_plugin (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_after_tool_called_plugin (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_passed_to_after_tool_called_plugin (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_passed_to_after_tool_called_and_handled_plugin (0.00s)
+=== RUN   TestModelCallbacks
+=== PAUSE TestModelCallbacks
+=== CONT  TestModelCallbacks
+=== RUN   TestModelCallbacks/before_model_callback_doesn't_modify_anything
+=== RUN   TestModelCallbacks/before_model_callback_returns_an_error
+=== RUN   TestModelCallbacks/before_model_callback_returns_new_LLMResponse
+=== RUN   TestModelCallbacks/before_model_callback_returns_both_new_LLMResponse_and_error
+=== RUN   TestModelCallbacks/after_model_callback_doesn't_modify_anything
+=== RUN   TestModelCallbacks/after_model_callback_returns_new_LLMResponse_and_are_run_in_symmetrical_order
+=== RUN   TestModelCallbacks/after_model_callback_returns_error_and_are_run_in_symmetrical_order
+=== RUN   TestModelCallbacks/after_model_callback_returns_both_new_LLMResponse_and_error
+=== RUN   TestModelCallbacks/on_model_error_callback_is_not_called
+=== RUN   TestModelCallbacks/on_model_error_callback_changes_message
+=== RUN   TestModelCallbacks/on_model_error_callback_changes_err
+=== RUN   TestModelCallbacks/on_model_error_callback_returns_both_new_LLMResponse_and_error
+=== RUN   TestModelCallbacks/on_model_error_callback_does_not_process_before_model_callback_error
+=== RUN   TestModelCallbacks/on_model_error_callback_does_not_process_before_model_callback_message
+=== RUN   TestModelCallbacks/after_error_callback_process_on_model_error_callback_message
+=== RUN   TestModelCallbacks/after_error_callback_does_not_process_on_model_error_callback_error
+--- PASS: TestModelCallbacks (0.00s)
+    --- PASS: TestModelCallbacks/before_model_callback_doesn't_modify_anything (0.00s)
+    --- PASS: TestModelCallbacks/before_model_callback_returns_an_error (0.00s)
+    --- PASS: TestModelCallbacks/before_model_callback_returns_new_LLMResponse (0.00s)
+    --- PASS: TestModelCallbacks/before_model_callback_returns_both_new_LLMResponse_and_error (0.00s)
+    --- PASS: TestModelCallbacks/after_model_callback_doesn't_modify_anything (0.00s)
+    --- PASS: TestModelCallbacks/after_model_callback_returns_new_LLMResponse_and_are_run_in_symmetrical_order (0.00s)
+    --- PASS: TestModelCallbacks/after_model_callback_returns_error_and_are_run_in_symmetrical_order (0.00s)
+    --- PASS: TestModelCallbacks/after_model_callback_returns_both_new_LLMResponse_and_error (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_is_not_called (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_changes_message (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_changes_err (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_returns_both_new_LLMResponse_and_error (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_does_not_process_before_model_callback_error (0.00s)
+    --- PASS: TestModelCallbacks/on_model_error_callback_does_not_process_before_model_callback_message (0.00s)
+    --- PASS: TestModelCallbacks/after_error_callback_process_on_model_error_callback_message (0.00s)
+    --- PASS: TestModelCallbacks/after_error_callback_does_not_process_on_model_error_callback_error (0.00s)
+PASS
+ok  	google.golang.org/adk/plugin	0.283s

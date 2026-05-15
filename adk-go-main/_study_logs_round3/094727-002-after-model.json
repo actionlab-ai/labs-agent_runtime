@@ -1,0 +1,26 @@
+{
+  "error": "",
+  "response": {
+    "Content": {
+      "parts": [
+        {
+          "text": "\n\n你好！我现在运行在 **ADK Go Agent Runtime** 框架中。\n\n这是一个用于学习和调试 Agent Tool Calling 数据流的运行时环境。我的主要功能是：\n\n1. **天气查询** - 通过 `get_weather` 工具获取指定城市的模拟天气信息\n2. **时间查询** - 通过 `get_time` 工具获取指定城市的模拟时间信息\n\n这个框架支持使用自建 OpenAI-compatible Qwen 模型来处理用户请求，并在需要时调用相应的工具来获取数据。我作为一个调试 Agent，主要用于演示和学习 ADK 框架中工具调用的完整数据流。\n\n如果你需要查询天气或时间，随时告诉我城市名称即可！"
+        }
+      ],
+      "role": "model"
+    },
+    "CitationMetadata": null,
+    "GroundingMetadata": null,
+    "UsageMetadata": null,
+    "CustomMetadata": null,
+    "LogprobsResult": null,
+    "ModelVersion": "qwen_qwen3.5-397b-a17b",
+    "Partial": false,
+    "TurnComplete": false,
+    "Interrupted": false,
+    "ErrorCode": "",
+    "ErrorMessage": "",
+    "FinishReason": "stop",
+    "AvgLogprobs": 0
+  }
+}

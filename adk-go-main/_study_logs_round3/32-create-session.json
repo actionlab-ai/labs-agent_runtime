@@ -1,0 +1,13 @@
+﻿{
+    "id":  "s1",
+    "appName":  "qwen_weather_time_agent",
+    "userId":  "u1",
+    "lastUpdateTime":  1778722623,
+    "events":  [
+
+               ],
+    "state":  {
+                  "from":  "powershell-round3",
+                  "purpose":  "learn-adk-openai-compatible-runtime"
+              }
+}

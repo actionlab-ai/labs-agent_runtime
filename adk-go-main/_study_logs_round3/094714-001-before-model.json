@@ -1,0 +1,111 @@
+{
+  "Model": "qwen_qwen3.5-397b-a17b",
+  "Contents": [
+    {
+      "parts": [
+        {
+          "text": "你好，用中文简单解释一下你现在运行在什么 Agent 框架里。"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "Config": {
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "你是一个用于学习 ADK Go Agent Runtime 的中文调试 Agent。\n\n规则：\n1. 如果用户问天气，必须调用 get_weather 工具，不要自己编造天气。\n2. 如果用户问时间，必须调用 get_time 工具，不要自己编造时间。\n3. 工具返回后，用中文总结给用户。\n4. 如果用户只是问候或询问框架原理，可以直接回答。\n\nYou are an agent. Your internal name is \"qwen_weather_time_agent\". The description about you is \"使用自建 OpenAI-compatible Qwen 模型回答天气和时间问题。\"."
+        }
+      ],
+      "role": "user"
+    },
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "description": "查询指定城市的模拟天气。用于学习 ADK Tool Calling 数据流。",
+            "name": "get_weather",
+            "parametersJsonSchema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string",
+                  "description": "city name, for example: Beijing, Shanghai, London"
+                }
+              },
+              "required": [
+                "city"
+              ],
+              "additionalProperties": false
+            },
+            "responseJsonSchema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "weather": {
+                  "type": "string"
+                },
+                "temperature": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city",
+                "weather",
+                "temperature",
+                "source"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "description": "查询指定城市的模拟时间。用于学习 ADK Tool Calling 数据流。",
+            "name": "get_time",
+            "parametersJsonSchema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string",
+                  "description": "city name, for example: Beijing, Shanghai, London"
+                }
+              },
+              "required": [
+                "city"
+              ],
+              "additionalProperties": false
+            },
+            "responseJsonSchema": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "time": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city",
+                "time",
+                "note",
+                "source"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

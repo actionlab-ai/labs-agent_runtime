@@ -1,0 +1,32 @@
+﻿=== RUN   TestTypes
+=== RUN   TestTypes/FunctionTool
+=== RUN   TestTypes/geminitool
+=== RUN   TestTypes/geminitool.GoogleSearch{}
+=== RUN   TestTypes/LoadArtifactsTool
+=== RUN   TestTypes/AgentTool
+=== RUN   TestTypes/LoadArtifactsTool#01
+--- PASS: TestTypes (0.00s)
+    --- PASS: TestTypes/FunctionTool (0.00s)
+    --- PASS: TestTypes/geminitool (0.00s)
+    --- PASS: TestTypes/geminitool.GoogleSearch{} (0.00s)
+    --- PASS: TestTypes/LoadArtifactsTool (0.00s)
+    --- PASS: TestTypes/AgentTool (0.00s)
+    --- PASS: TestTypes/LoadArtifactsTool#01 (0.00s)
+=== RUN   TestWithConfirmation
+=== RUN   TestWithConfirmation/confirmation_required,_no_confirmation_in_context
+=== RUN   TestWithConfirmation/confirmation_required,_confirmed_in_context
+=== RUN   TestWithConfirmation/confirmation_required,_rejected_in_context
+=== RUN   TestWithConfirmation/confirmation_not_required
+=== RUN   TestWithConfirmation/confirmation_provider_requires_confirmation
+=== RUN   TestWithConfirmation/confirmation_provider_does_not_require_confirmation
+=== RUN   TestWithConfirmation/requireConfirmation=true_but_provider_returns_false
+--- PASS: TestWithConfirmation (0.00s)
+    --- PASS: TestWithConfirmation/confirmation_required,_no_confirmation_in_context (0.00s)
+    --- PASS: TestWithConfirmation/confirmation_required,_confirmed_in_context (0.00s)
+    --- PASS: TestWithConfirmation/confirmation_required,_rejected_in_context (0.00s)
+    --- PASS: TestWithConfirmation/confirmation_not_required (0.00s)
+    --- PASS: TestWithConfirmation/confirmation_provider_requires_confirmation (0.00s)
+    --- PASS: TestWithConfirmation/confirmation_provider_does_not_require_confirmation (0.00s)
+    --- PASS: TestWithConfirmation/requireConfirmation=true_but_provider_returns_false (0.00s)
+PASS
+ok  	google.golang.org/adk/tool	0.278s

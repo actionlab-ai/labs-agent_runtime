@@ -1,0 +1,6 @@
+{
+  "args": {
+    "city": "Beijing"
+  },
+  "tool": "get_weather"
+}

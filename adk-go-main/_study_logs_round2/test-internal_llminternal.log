@@ -1,0 +1,347 @@
+﻿=== RUN   TestGenerateContentTracing
+--- PASS: TestGenerateContentTracing (0.00s)
+=== RUN   TestGenerateContentTracingNoFinalResponse
+--- PASS: TestGenerateContentTracingNoFinalResponse (0.00s)
+=== RUN   TestGenerateContentTracingError
+--- PASS: TestGenerateContentTracingError (0.00s)
+=== RUN   TestLoggingSpanIDPropagation
+--- PASS: TestLoggingSpanIDPropagation (0.00s)
+=== RUN   TestCallTool
+=== RUN   TestCallTool/tool_runs_successfully
+=== RUN   TestCallTool/tool_error
+=== RUN   TestCallTool/before_callback_returns_result
+=== RUN   TestCallTool/before_callback_returns_error
+=== RUN   TestCallTool/after_callback_modifies_result
+=== RUN   TestCallTool/after_callback_handles_error
+=== RUN   TestCallTool/after_callback_returns_error
+=== RUN   TestCallTool/no-op_callbacks_return_func_results
+=== RUN   TestCallTool/before_callback_result_passed_to_after_callback
+=== RUN   TestCallTool/before_callback_error_passed_to_after_callback
+=== RUN   TestCallTool/before_callback_error_passed_to_on_tool_error_callback
+=== RUN   TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_after_tool_called
+=== RUN   TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_passed_to_after_tool_called
+=== RUN   TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_passed_to_after_tool_called_and_handled
+--- PASS: TestCallTool (0.00s)
+    --- PASS: TestCallTool/tool_runs_successfully (0.00s)
+    --- PASS: TestCallTool/tool_error (0.00s)
+    --- PASS: TestCallTool/before_callback_returns_result (0.00s)
+    --- PASS: TestCallTool/before_callback_returns_error (0.00s)
+    --- PASS: TestCallTool/after_callback_modifies_result (0.00s)
+    --- PASS: TestCallTool/after_callback_handles_error (0.00s)
+    --- PASS: TestCallTool/after_callback_returns_error (0.00s)
+    --- PASS: TestCallTool/no-op_callbacks_return_func_results (0.00s)
+    --- PASS: TestCallTool/before_callback_result_passed_to_after_callback (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_after_callback (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_on_tool_error_callback (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_after_tool_called (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_passed_to_after_tool_called (0.00s)
+    --- PASS: TestCallTool/before_callback_error_passed_to_on_tool_error_callback_and_passed_to_after_tool_called_and_handled (0.00s)
+=== RUN   TestMergeEventActions
+=== RUN   TestMergeEventActions/both_nil
+=== RUN   TestMergeEventActions/other_nil_returns_base
+=== RUN   TestMergeEventActions/base_nil_returns_other
+=== RUN   TestMergeEventActions/state_delta_merged_with_non-overlapping_keys
+=== RUN   TestMergeEventActions/state_delta_merged_with_overlapping_keys_-_later_wins
+=== RUN   TestMergeEventActions/state_delta_merged_with_nested_map_values
+=== RUN   TestMergeEventActions/state_delta_merged_with_multiple_keys_from_multiple_tools
+=== RUN   TestMergeEventActions/base_has_nil_state_delta,_other_has_values
+=== RUN   TestMergeEventActions/skip_summarization_merging_-_any_true_wins
+=== RUN   TestMergeEventActions/escalate_merging_-_any_true_wins
+=== RUN   TestMergeEventActions/transfer_to_agent_-_last_wins
+=== RUN   TestMergeEventActions/all_fields_merged_correctly
+--- PASS: TestMergeEventActions (0.00s)
+    --- PASS: TestMergeEventActions/both_nil (0.00s)
+    --- PASS: TestMergeEventActions/other_nil_returns_base (0.00s)
+    --- PASS: TestMergeEventActions/base_nil_returns_other (0.00s)
+    --- PASS: TestMergeEventActions/state_delta_merged_with_non-overlapping_keys (0.00s)
+    --- PASS: TestMergeEventActions/state_delta_merged_with_overlapping_keys_-_later_wins (0.00s)
+    --- PASS: TestMergeEventActions/state_delta_merged_with_nested_map_values (0.00s)
+    --- PASS: TestMergeEventActions/state_delta_merged_with_multiple_keys_from_multiple_tools (0.00s)
+    --- PASS: TestMergeEventActions/base_has_nil_state_delta,_other_has_values (0.00s)
+    --- PASS: TestMergeEventActions/skip_summarization_merging_-_any_true_wins (0.00s)
+    --- PASS: TestMergeEventActions/escalate_merging_-_any_true_wins (0.00s)
+    --- PASS: TestMergeEventActions/transfer_to_agent_-_last_wins (0.00s)
+    --- PASS: TestMergeEventActions/all_fields_merged_correctly (0.00s)
+=== RUN   TestPreprocess_Toolset
+=== RUN   TestPreprocess_Toolset/agent_not_llminternal.Agent
+=== RUN   TestPreprocess_Toolset/agent_has_no_toolsets
+=== RUN   TestPreprocess_Toolset/toolset_implements_RequestProcessor,_error
+=== RUN   TestPreprocess_Toolset/toolsets,_success
+--- PASS: TestPreprocess_Toolset (0.00s)
+    --- PASS: TestPreprocess_Toolset/agent_not_llminternal.Agent (0.00s)
+    --- PASS: TestPreprocess_Toolset/agent_has_no_toolsets (0.00s)
+    --- PASS: TestPreprocess_Toolset/toolset_implements_RequestProcessor,_error (0.00s)
+    --- PASS: TestPreprocess_Toolset/toolsets,_success (0.00s)
+=== RUN   TestClone
+=== RUN   TestClone/pointer
+=== RUN   TestClone/value
+=== RUN   TestClone/interface
+--- PASS: TestClone (0.00s)
+    --- PASS: TestClone/pointer (0.00s)
+    --- PASS: TestClone/value (0.00s)
+    --- PASS: TestClone/interface (0.00s)
+=== RUN   TestCloneNil
+--- PASS: TestCloneNil (0.00s)
+=== RUN   TestCloneUnexported
+--- PASS: TestCloneUnexported (0.00s)
+=== RUN   TestGenerateRequestConfirmationEvent
+=== RUN   TestGenerateRequestConfirmationEvent/no_confirmation_requested
+=== RUN   TestGenerateRequestConfirmationEvent/confirmation_requested_but_no_matching_function_call
+=== RUN   TestGenerateRequestConfirmationEvent/confirmation_requested_and_matching_function_call
+--- PASS: TestGenerateRequestConfirmationEvent (0.00s)
+    --- PASS: TestGenerateRequestConfirmationEvent/no_confirmation_requested (0.00s)
+    --- PASS: TestGenerateRequestConfirmationEvent/confirmation_requested_but_no_matching_function_call (0.00s)
+    --- PASS: TestGenerateRequestConfirmationEvent/confirmation_requested_and_matching_function_call (0.00s)
+=== RUN   TestGenerateRequestConfirmationEventHasID
+--- PASS: TestGenerateRequestConfirmationEventHasID (0.00s)
+=== RUN   TestIdentityRequestProcessor
+=== PAUSE TestIdentityRequestProcessor
+=== RUN   TestInjectSessionState
+=== RUN   TestInjectSessionState/successful_state_injection
+=== RUN   TestInjectSessionState/successful_artifact_injection
+=== RUN   TestInjectSessionState/optional_missing_state_variable
+=== RUN   TestInjectSessionState/missing_required_state_variable
+=== RUN   TestInjectSessionState/missing_required_artifact
+=== RUN   TestInjectSessionState/invalid_state_name_is_not_replaced
+=== RUN   TestInjectSessionState/invalid_prefix_state_name_is_not_replaced
+=== RUN   TestInjectSessionState/valid_prefixed_state_variable
+=== RUN   TestInjectSessionState/state_value_is_nil
+=== RUN   TestInjectSessionState/optional_missing_artifact
+=== RUN   TestInjectSessionState/artifact_service_not_initialized
+=== RUN   TestInjectSessionState/empty_artifact_name
+=== RUN   TestInjectSessionState/complex_template_with_mixed_variables_and_artifacts
+--- PASS: TestInjectSessionState (0.00s)
+    --- PASS: TestInjectSessionState/successful_state_injection (0.00s)
+    --- PASS: TestInjectSessionState/successful_artifact_injection (0.00s)
+    --- PASS: TestInjectSessionState/optional_missing_state_variable (0.00s)
+    --- PASS: TestInjectSessionState/missing_required_state_variable (0.00s)
+    --- PASS: TestInjectSessionState/missing_required_artifact (0.00s)
+    --- PASS: TestInjectSessionState/invalid_state_name_is_not_replaced (0.00s)
+    --- PASS: TestInjectSessionState/invalid_prefix_state_name_is_not_replaced (0.00s)
+    --- PASS: TestInjectSessionState/valid_prefixed_state_variable (0.00s)
+    --- PASS: TestInjectSessionState/state_value_is_nil (0.00s)
+    --- PASS: TestInjectSessionState/optional_missing_artifact (0.00s)
+    --- PASS: TestInjectSessionState/artifact_service_not_initialized (0.00s)
+    --- PASS: TestInjectSessionState/empty_artifact_name (0.00s)
+    --- PASS: TestInjectSessionState/complex_template_with_mixed_variables_and_artifacts (0.00s)
+=== RUN   TestOutputSchemaRequestProcessor
+=== RUN   TestOutputSchemaRequestProcessor/InjectsToolAndInstructions
+=== RUN   TestOutputSchemaRequestProcessor/NoOpWhenNoTools
+=== RUN   TestOutputSchemaRequestProcessor/NoOpWhenNoSchema
+=== RUN   TestOutputSchemaRequestProcessor/NoOpWhenNativeSupportAvailable
+--- PASS: TestOutputSchemaRequestProcessor (0.00s)
+    --- PASS: TestOutputSchemaRequestProcessor/InjectsToolAndInstructions (0.00s)
+    --- PASS: TestOutputSchemaRequestProcessor/NoOpWhenNoTools (0.00s)
+    --- PASS: TestOutputSchemaRequestProcessor/NoOpWhenNoSchema (0.00s)
+    --- PASS: TestOutputSchemaRequestProcessor/NoOpWhenNativeSupportAvailable (0.00s)
+=== RUN   TestCreateFinalModelResponseEvent
+--- PASS: TestCreateFinalModelResponseEvent (0.00s)
+=== RUN   TestGetStructuredModelResponse
+=== RUN   TestGetStructuredModelResponse/ExtractsResponse
+=== RUN   TestGetStructuredModelResponse/NoResponseWhenNameMismatch
+=== RUN   TestGetStructuredModelResponse/NilEvent
+--- PASS: TestGetStructuredModelResponse (0.00s)
+    --- PASS: TestGetStructuredModelResponse/ExtractsResponse (0.00s)
+    --- PASS: TestGetStructuredModelResponse/NoResponseWhenNameMismatch (0.00s)
+    --- PASS: TestGetStructuredModelResponse/NilEvent (0.00s)
+=== RUN   TestSetModelResponseTool
+=== RUN   TestSetModelResponseTool/RunSuccess
+=== RUN   TestSetModelResponseTool/RunValidationFailure_Type
+=== RUN   TestSetModelResponseTool/RunValidationFailure_MissingRequired
+--- PASS: TestSetModelResponseTool (0.00s)
+    --- PASS: TestSetModelResponseTool/RunSuccess (0.00s)
+    --- PASS: TestSetModelResponseTool/RunValidationFailure_Type (0.00s)
+    --- PASS: TestSetModelResponseTool/RunValidationFailure_MissingRequired (0.00s)
+=== RUN   TestAgentTransferRequestProcessor
+=== RUN   TestAgentTransferRequestProcessor/SoloAgent
+=== RUN   TestAgentTransferRequestProcessor/NotLLMAgent
+=== RUN   TestAgentTransferRequestProcessor/LLMAgentParent
+=== RUN   TestAgentTransferRequestProcessor/LLMAgentParentAndPeer
+=== RUN   TestAgentTransferRequestProcessor/LLMAgentSubagents
+=== RUN   TestAgentTransferRequestProcessor/AgentWithParentAndPeersAndSubagents
+=== RUN   TestAgentTransferRequestProcessor/NonLLMAgentSubagents
+=== RUN   TestAgentTransferRequestProcessor/AgentWithDisallowTransferToParent
+=== RUN   TestAgentTransferRequestProcessor/AgentWithDisallowTransferToPeers
+=== RUN   TestAgentTransferRequestProcessor/AgentWithDisallowTransferToParentAndPeers
+=== RUN   TestAgentTransferRequestProcessor/AgentWithDisallowTransfer
+=== RUN   TestAgentTransferRequestProcessor/AgentWithParallelParent
+=== RUN   TestAgentTransferRequestProcessor/AgentWithSequentialParent
+=== RUN   TestAgentTransferRequestProcessor/AgentWithSequentialSubagent
+--- PASS: TestAgentTransferRequestProcessor (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/SoloAgent (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/NotLLMAgent (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/LLMAgentParent (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/LLMAgentParentAndPeer (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/LLMAgentSubagents (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/AgentWithParentAndPeersAndSubagents (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/NonLLMAgentSubagents (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/AgentWithDisallowTransferToParent (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/AgentWithDisallowTransferToPeers (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/AgentWithDisallowTransferToParentAndPeers (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/AgentWithDisallowTransfer (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/AgentWithParallelParent (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/AgentWithSequentialParent (0.00s)
+    --- PASS: TestAgentTransferRequestProcessor/AgentWithSequentialSubagent (0.00s)
+=== RUN   TestAgentTransfer_ProcessRequest
+--- PASS: TestAgentTransfer_ProcessRequest (0.00s)
+=== RUN   TestTransferToAgentToolRun
+=== RUN   TestTransferToAgentToolRun/Success
+=== RUN   TestTransferToAgentToolRun/InvalidArguments
+=== RUN   TestTransferToAgentToolRun/InvalidArguments/NoAgentName
+=== RUN   TestTransferToAgentToolRun/InvalidArguments/NilArg
+=== RUN   TestTransferToAgentToolRun/InvalidArguments/InvalidType
+=== RUN   TestTransferToAgentToolRun/InvalidArguments/InvalidValue
+--- PASS: TestTransferToAgentToolRun (0.00s)
+    --- PASS: TestTransferToAgentToolRun/Success (0.00s)
+    --- PASS: TestTransferToAgentToolRun/InvalidArguments (0.00s)
+        --- PASS: TestTransferToAgentToolRun/InvalidArguments/NoAgentName (0.00s)
+        --- PASS: TestTransferToAgentToolRun/InvalidArguments/NilArg (0.00s)
+        --- PASS: TestTransferToAgentToolRun/InvalidArguments/InvalidType (0.00s)
+        --- PASS: TestTransferToAgentToolRun/InvalidArguments/InvalidValue (0.00s)
+=== RUN   TestContentsRequestProcessor_IncludeContents
+=== PAUSE TestContentsRequestProcessor_IncludeContents
+=== RUN   TestContentsRequestProcessor
+=== PAUSE TestContentsRequestProcessor
+=== RUN   TestConvertForeignEvent
+=== PAUSE TestConvertForeignEvent
+=== RUN   TestContentsRequestProcessor_NonLLMAgent
+--- PASS: TestContentsRequestProcessor_NonLLMAgent (0.00s)
+=== RUN   TestContentsRequestProcessor_Rearrange
+=== RUN   TestContentsRequestProcessor_Rearrange/NilEvent
+=== RUN   TestContentsRequestProcessor_Rearrange/EmptyEvents
+=== RUN   TestContentsRequestProcessor_Rearrange/EventWithoutContent
+=== RUN   TestContentsRequestProcessor_Rearrange/Basic_function_call_no_rearrangement
+=== RUN   TestContentsRequestProcessor_Rearrange/Rearrangement_with_intermediate_response
+=== RUN   TestContentsRequestProcessor_Rearrange/Rearrangement_with_mixed_LRO_and_normal_calls
+=== RUN   TestContentsRequestProcessor_Rearrange/Rearrangement_in_history_(non-final_event)
+=== RUN   TestContentsRequestProcessor_Rearrange/Mixed_rearrangement_in_history_(non-final_event)
+=== RUN   TestContentsRequestProcessor_Rearrange/Rearrangement_preserves_mixed_text_parts
+=== RUN   TestContentsRequestProcessor_Rearrange/Error_on_function_response_without_matching_call
+--- PASS: TestContentsRequestProcessor_Rearrange (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/NilEvent (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/EmptyEvents (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/EventWithoutContent (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/Basic_function_call_no_rearrangement (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/Rearrangement_with_intermediate_response (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/Rearrangement_with_mixed_LRO_and_normal_calls (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/Rearrangement_in_history_(non-final_event) (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/Mixed_rearrangement_in_history_(non-final_event) (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/Rearrangement_preserves_mixed_text_parts (0.00s)
+    --- PASS: TestContentsRequestProcessor_Rearrange/Error_on_function_response_without_matching_call (0.00s)
+=== RUN   TestHandleFunctionCallsAsync
+    handle_function_calls_async_test.go:172: Elapsed time: 517.5623ms
+--- PASS: TestHandleFunctionCallsAsync (0.52s)
+=== RUN   TestParallelFunctionCallsWithHITL
+--- PASS: TestParallelFunctionCallsWithHITL (0.00s)
+=== RUN   TestParallelFunctionCallsWithPartialHITL
+--- PASS: TestParallelFunctionCallsWithPartialHITL (0.00s)
+=== RUN   TestParallelFunctionCalls
+=== RUN   TestParallelFunctionCalls/test_parallel_function_calls_gemini-2.5-flash
+=== RUN   TestParallelFunctionCalls/test_parallel_function_calls_gemini-3-flash-preview
+=== RUN   TestParallelFunctionCalls/test_parallel_function_calls_gemini-3.1-pro-preview
+--- PASS: TestParallelFunctionCalls (0.01s)
+    --- PASS: TestParallelFunctionCalls/test_parallel_function_calls_gemini-2.5-flash (0.00s)
+    --- PASS: TestParallelFunctionCalls/test_parallel_function_calls_gemini-3-flash-preview (0.00s)
+    --- PASS: TestParallelFunctionCalls/test_parallel_function_calls_gemini-3.1-pro-preview (0.00s)
+=== RUN   TestRequestConfirmationRequestProcessor
+=== RUN   TestRequestConfirmationRequestProcessor/NoEvents
+=== RUN   TestRequestConfirmationRequestProcessor/NoFunctionResponses
+=== RUN   TestRequestConfirmationRequestProcessor/NoConfirmationFunctionResponse
+=== RUN   TestRequestConfirmationRequestProcessor/Success
+=== RUN   TestRequestConfirmationRequestProcessor/ToolNotConfirmed
+--- PASS: TestRequestConfirmationRequestProcessor (0.00s)
+    --- PASS: TestRequestConfirmationRequestProcessor/NoEvents (0.00s)
+    --- PASS: TestRequestConfirmationRequestProcessor/NoFunctionResponses (0.00s)
+    --- PASS: TestRequestConfirmationRequestProcessor/NoConfirmationFunctionResponse (0.00s)
+    --- PASS: TestRequestConfirmationRequestProcessor/Success (0.00s)
+    --- PASS: TestRequestConfirmationRequestProcessor/ToolNotConfirmed (0.00s)
+=== RUN   TestProgressiveSSEStreamingFunctionCallArguments
+--- PASS: TestProgressiveSSEStreamingFunctionCallArguments (0.00s)
+=== RUN   TestThoughtSignaturePropagationToFirstFunctionCallSeparateResponses
+--- PASS: TestThoughtSignaturePropagationToFirstFunctionCallSeparateResponses (0.00s)
+=== RUN   TestThoughtSignaturePropagationToFirstFunctionCallSingleResponse
+--- PASS: TestThoughtSignaturePropagationToFirstFunctionCallSingleResponse (0.00s)
+=== RUN   TestProgressiveSSEPreservesThoughtSignature
+--- PASS: TestProgressiveSSEPreservesThoughtSignature (0.00s)
+=== RUN   TestProgressiveSSEHandlesEmptyFunctionCall
+--- PASS: TestProgressiveSSEHandlesEmptyFunctionCall (0.00s)
+=== RUN   TestStreamingFCChunkWithWillContinueButNoPartialArgs
+--- PASS: TestStreamingFCChunkWithWillContinueButNoPartialArgs (0.00s)
+=== RUN   TestProgressiveSSEStreamingFunctionCalls
+--- PASS: TestProgressiveSSEStreamingFunctionCalls (0.00s)
+=== RUN   TestProgressiveSSEPreservesPartOrdering
+--- PASS: TestProgressiveSSEPreservesPartOrdering (0.00s)
+=== RUN   TestPartialFunctionCallsNotExecutedInNoneStreamingMode
+--- PASS: TestPartialFunctionCallsNotExecutedInNoneStreamingMode (0.00s)
+=== RUN   TestFinishReasonUnexpectedToolCallPreservesErrorCode
+--- PASS: TestFinishReasonUnexpectedToolCallPreservesErrorCode (0.00s)
+=== CONT  TestIdentityRequestProcessor
+=== CONT  TestContentsRequestProcessor
+=== RUN   TestIdentityRequestProcessor/InjectsNameOnly
+=== CONT  TestConvertForeignEvent
+=== CONT  TestContentsRequestProcessor_IncludeContents
+=== PAUSE TestIdentityRequestProcessor/InjectsNameOnly
+=== RUN   TestIdentityRequestProcessor/InjectsNameAndDescription
+=== PAUSE TestIdentityRequestProcessor/InjectsNameAndDescription
+=== RUN   TestIdentityRequestProcessor/NoOpForNonLLMAgent
+=== PAUSE TestIdentityRequestProcessor/NoOpForNonLLMAgent
+=== RUN   TestIdentityRequestProcessor/EmptyDescription
+=== PAUSE TestIdentityRequestProcessor/EmptyDescription
+=== RUN   TestIdentityRequestProcessor/AppendsToExistingInstructions
+=== RUN   TestContentsRequestProcessor_IncludeContents/empty/include_contents=default
+=== PAUSE TestIdentityRequestProcessor/AppendsToExistingInstructions
+=== CONT  TestIdentityRequestProcessor/InjectsNameOnly
+=== CONT  TestIdentityRequestProcessor/NoOpForNonLLMAgent
+=== CONT  TestIdentityRequestProcessor/InjectsNameAndDescription
+=== CONT  TestIdentityRequestProcessor/AppendsToExistingInstructions
+=== RUN   TestContentsRequestProcessor_IncludeContents/empty/include_contents=none
+=== RUN   TestConvertForeignEvent/Text
+=== CONT  TestIdentityRequestProcessor/EmptyDescription
+=== RUN   TestContentsRequestProcessor_IncludeContents/helloAndGoodBye/include_contents=
+--- PASS: TestIdentityRequestProcessor (0.00s)
+    --- PASS: TestIdentityRequestProcessor/InjectsNameOnly (0.00s)
+    --- PASS: TestIdentityRequestProcessor/NoOpForNonLLMAgent (0.00s)
+    --- PASS: TestIdentityRequestProcessor/InjectsNameAndDescription (0.00s)
+    --- PASS: TestIdentityRequestProcessor/AppendsToExistingInstructions (0.00s)
+    --- PASS: TestIdentityRequestProcessor/EmptyDescription (0.00s)
+=== RUN   TestContentsRequestProcessor/NilEvent
+=== RUN   TestContentsRequestProcessor/EmptyEvents
+=== RUN   TestContentsRequestProcessor/UserAndAgentEvents
+=== RUN   TestContentsRequestProcessor_IncludeContents/helloAndGoodBye/include_contents=default
+=== RUN   TestContentsRequestProcessor/anotherAgentEvent
+=== RUN   TestContentsRequestProcessor_IncludeContents/helloAndGoodBye/include_contents=none
+=== RUN   TestContentsRequestProcessor_IncludeContents/agentTransfer/include_contents=
+=== RUN   TestConvertForeignEvent/FunctionCall
+=== RUN   TestContentsRequestProcessor/ExcludeToolConfirmation
+=== RUN   TestContentsRequestProcessor/FilterByBranch
+=== RUN   TestConvertForeignEvent/FunctionResponse
+=== RUN   TestContentsRequestProcessor/AuthEvent
+--- PASS: TestConvertForeignEvent (0.00s)
+    --- PASS: TestConvertForeignEvent/Text (0.00s)
+    --- PASS: TestConvertForeignEvent/FunctionCall (0.00s)
+    --- PASS: TestConvertForeignEvent/FunctionResponse (0.00s)
+=== RUN   TestContentsRequestProcessor/EventWithoutContent
+=== RUN   TestContentsRequestProcessor_IncludeContents/agentTransfer/include_contents=none
+--- PASS: TestContentsRequestProcessor (0.00s)
+    --- PASS: TestContentsRequestProcessor/NilEvent (0.00s)
+    --- PASS: TestContentsRequestProcessor/EmptyEvents (0.00s)
+    --- PASS: TestContentsRequestProcessor/UserAndAgentEvents (0.00s)
+    --- PASS: TestContentsRequestProcessor/anotherAgentEvent (0.00s)
+    --- PASS: TestContentsRequestProcessor/ExcludeToolConfirmation (0.00s)
+    --- PASS: TestContentsRequestProcessor/FilterByBranch (0.00s)
+    --- PASS: TestContentsRequestProcessor/AuthEvent (0.00s)
+    --- PASS: TestContentsRequestProcessor/EventWithoutContent (0.00s)
+=== RUN   TestContentsRequestProcessor_IncludeContents/robot/include_contents=default
+=== RUN   TestContentsRequestProcessor_IncludeContents/robot/include_contents=none
+--- PASS: TestContentsRequestProcessor_IncludeContents (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/empty/include_contents=default (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/empty/include_contents=none (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/helloAndGoodBye/include_contents= (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/helloAndGoodBye/include_contents=default (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/helloAndGoodBye/include_contents=none (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/agentTransfer/include_contents= (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/agentTransfer/include_contents=none (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/robot/include_contents=default (0.00s)
+    --- PASS: TestContentsRequestProcessor_IncludeContents/robot/include_contents=none (0.00s)
+PASS
+ok  	google.golang.org/adk/internal/llminternal	0.868s

@@ -1,0 +1,34 @@
+﻿=== RUN   TestAgentCallbacks
+=== PAUSE TestAgentCallbacks
+=== RUN   TestEndInvocation_EndsBeforeMainCall
+--- PASS: TestEndInvocation_EndsBeforeMainCall (0.00s)
+=== RUN   TestEndInvocation_EndsAfterMainCall
+--- PASS: TestEndInvocation_EndsAfterMainCall (0.00s)
+=== RUN   TestWithContext
+--- PASS: TestWithContext (0.00s)
+=== RUN   TestFindAgent
+=== PAUSE TestFindAgent
+=== RUN   TestDuplicateName
+--- PASS: TestDuplicateName (0.00s)
+=== CONT  TestAgentCallbacks
+=== RUN   TestAgentCallbacks/before_agent_callback_runs,_no_llm_calls
+=== CONT  TestFindAgent
+=== RUN   TestFindAgent/Find_self
+=== RUN   TestAgentCallbacks/no_callback_effect_if_callbacks_return_nil
+=== RUN   TestFindAgent/Find_direct_child1
+=== RUN   TestFindAgent/Find_direct_child2
+=== RUN   TestFindAgent/Find_nested_grandchild
+=== RUN   TestFindAgent/Find_non-existent_agent
+--- PASS: TestFindAgent (0.00s)
+    --- PASS: TestFindAgent/Find_self (0.00s)
+    --- PASS: TestFindAgent/Find_direct_child1 (0.00s)
+    --- PASS: TestFindAgent/Find_direct_child2 (0.00s)
+    --- PASS: TestFindAgent/Find_nested_grandchild (0.00s)
+    --- PASS: TestFindAgent/Find_non-existent_agent (0.00s)
+=== RUN   TestAgentCallbacks/after_agent_callback_create_a_new_event_with_new_content
+--- PASS: TestAgentCallbacks (0.00s)
+    --- PASS: TestAgentCallbacks/before_agent_callback_runs,_no_llm_calls (0.00s)
+    --- PASS: TestAgentCallbacks/no_callback_effect_if_callbacks_return_nil (0.00s)
+    --- PASS: TestAgentCallbacks/after_agent_callback_create_a_new_event_with_new_content (0.00s)
+PASS
+ok  	google.golang.org/adk/agent	0.314s

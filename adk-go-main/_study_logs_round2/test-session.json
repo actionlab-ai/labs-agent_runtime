@@ -1,0 +1,109 @@
+﻿{"Time":"2026-05-14T08:59:14.9609723+08:00","Action":"start","Package":"google.golang.org/adk/session"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService","Output":"=== RUN   Test_inMemoryService\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create","Output":"=== RUN   Test_inMemoryService/Create\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/full_key"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/full_key","Output":"=== RUN   Test_inMemoryService/Create/full_key\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/full_key","Output":"--- PASS: Test_inMemoryService/Create/full_key (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/full_key","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/generated_session_id"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/generated_session_id","Output":"=== RUN   Test_inMemoryService/Create/generated_session_id\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/generated_session_id","Output":"--- PASS: Test_inMemoryService/Create/generated_session_id (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/generated_session_id","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/when_already_exists,_it_fails"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/when_already_exists,_it_fails","Output":"=== RUN   Test_inMemoryService/Create/when_already_exists,_it_fails\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/when_already_exists,_it_fails","Output":"--- PASS: Test_inMemoryService/Create/when_already_exists,_it_fails (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create/when_already_exists,_it_fails","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create","Output":"--- PASS: Test_inMemoryService/Create (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Create","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get","Output":"=== RUN   Test_inMemoryService/Get\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/ok"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/ok","Output":"=== RUN   Test_inMemoryService/Get/ok\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/ok","Output":"--- PASS: Test_inMemoryService/Get/ok (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/ok","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/error_when_not_found"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/error_when_not_found","Output":"=== RUN   Test_inMemoryService/Get/error_when_not_found\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/error_when_not_found","Output":"--- PASS: Test_inMemoryService/Get/error_when_not_found (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/error_when_not_found","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/get_session_respects_user_id"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/get_session_respects_user_id","Output":"=== RUN   Test_inMemoryService/Get/get_session_respects_user_id\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/get_session_respects_user_id","Output":"--- PASS: Test_inMemoryService/Get/get_session_respects_user_id (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/get_session_respects_user_id","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/with_config_filters"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/with_config_filters","Output":"=== RUN   Test_inMemoryService/Get/with_config_filters\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/with_config_filters","Output":"--- PASS: Test_inMemoryService/Get/with_config_filters (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get/with_config_filters","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get","Output":"--- PASS: Test_inMemoryService/Get (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Get","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/List"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/List","Output":"=== RUN   Test_inMemoryService/List\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/List","Output":"--- PASS: Test_inMemoryService/List (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/List","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Delete"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Delete","Output":"=== RUN   Test_inMemoryService/Delete\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Delete","Output":"--- PASS: Test_inMemoryService/Delete (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/Delete","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent","Output":"=== RUN   Test_inMemoryService/AppendEvent\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/when_session_not_found_should_fail"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/when_session_not_found_should_fail","Output":"=== RUN   Test_inMemoryService/AppendEvent/when_session_not_found_should_fail\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/when_session_not_found_should_fail","Output":"--- PASS: Test_inMemoryService/AppendEvent/when_session_not_found_should_fail (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/when_session_not_found_should_fail","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/ok"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/ok","Output":"=== RUN   Test_inMemoryService/AppendEvent/ok\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/ok","Output":"--- PASS: Test_inMemoryService/AppendEvent/ok (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/ok","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/partial_events_are_not_persisted"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/partial_events_are_not_persisted","Output":"=== RUN   Test_inMemoryService/AppendEvent/partial_events_are_not_persisted\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/partial_events_are_not_persisted","Output":"--- PASS: Test_inMemoryService/AppendEvent/partial_events_are_not_persisted (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/partial_events_are_not_persisted","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_bytes_content"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_bytes_content","Output":"=== RUN   Test_inMemoryService/AppendEvent/with_bytes_content\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_bytes_content","Output":"--- PASS: Test_inMemoryService/AppendEvent/with_bytes_content (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_bytes_content","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_existing_events"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_existing_events","Output":"=== RUN   Test_inMemoryService/AppendEvent/with_existing_events\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_existing_events","Output":"--- PASS: Test_inMemoryService/AppendEvent/with_existing_events (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_existing_events","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_all_fields"}
+{"Time":"2026-05-14T08:59:15.18947+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_all_fields","Output":"=== RUN   Test_inMemoryService/AppendEvent/with_all_fields\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_all_fields","Output":"--- PASS: Test_inMemoryService/AppendEvent/with_all_fields (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent/with_all_fields","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent","Output":"--- PASS: Test_inMemoryService/AppendEvent (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/AppendEvent","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement","Output":"=== RUN   Test_inMemoryService/StateManagement\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/app_state_is_shared"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/app_state_is_shared","Output":"=== RUN   Test_inMemoryService/StateManagement/app_state_is_shared\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/app_state_is_shared","Output":"--- PASS: Test_inMemoryService/StateManagement/app_state_is_shared (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/app_state_is_shared","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/user_state_is_user_specific"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/user_state_is_user_specific","Output":"=== RUN   Test_inMemoryService/StateManagement/user_state_is_user_specific\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/user_state_is_user_specific","Output":"--- PASS: Test_inMemoryService/StateManagement/user_state_is_user_specific (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/user_state_is_user_specific","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/session_state_is_not_shared"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/session_state_is_not_shared","Output":"=== RUN   Test_inMemoryService/StateManagement/session_state_is_not_shared\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/session_state_is_not_shared","Output":"--- PASS: Test_inMemoryService/StateManagement/session_state_is_not_shared (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/session_state_is_not_shared","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/temp_state_is_not_persisted"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/temp_state_is_not_persisted","Output":"=== RUN   Test_inMemoryService/StateManagement/temp_state_is_not_persisted\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/temp_state_is_not_persisted","Output":"--- PASS: Test_inMemoryService/StateManagement/temp_state_is_not_persisted (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement/temp_state_is_not_persisted","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement","Output":"--- PASS: Test_inMemoryService/StateManagement (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService/StateManagement","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService","Output":"--- PASS: Test_inMemoryService (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService_CreateConcurrentAccess"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService_CreateConcurrentAccess","Output":"=== RUN   Test_inMemoryService_CreateConcurrentAccess\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService_CreateConcurrentAccess","Output":"--- PASS: Test_inMemoryService_CreateConcurrentAccess (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"Test_inMemoryService_CreateConcurrentAccess","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"run","Package":"google.golang.org/adk/session","Test":"TestInMemorySession_AppendEvent_Deadlock"}
+{"Time":"2026-05-14T08:59:15.1899971+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"TestInMemorySession_AppendEvent_Deadlock","Output":"=== RUN   TestInMemorySession_AppendEvent_Deadlock\n"}
+{"Time":"2026-05-14T08:59:15.1907173+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"TestInMemorySession_AppendEvent_Deadlock","Output":"    inmemory_test.go:114: AppendEvent did not deadlock\n"}
+{"Time":"2026-05-14T08:59:15.1907173+08:00","Action":"output","Package":"google.golang.org/adk/session","Test":"TestInMemorySession_AppendEvent_Deadlock","Output":"--- PASS: TestInMemorySession_AppendEvent_Deadlock (0.00s)\n"}
+{"Time":"2026-05-14T08:59:15.1907173+08:00","Action":"pass","Package":"google.golang.org/adk/session","Test":"TestInMemorySession_AppendEvent_Deadlock","Elapsed":0}
+{"Time":"2026-05-14T08:59:15.1907173+08:00","Action":"output","Package":"google.golang.org/adk/session","Output":"PASS\n"}
+{"Time":"2026-05-14T08:59:15.1922825+08:00","Action":"output","Package":"google.golang.org/adk/session","Output":"ok  \tgoogle.golang.org/adk/session\t0.231s\n"}
+{"Time":"2026-05-14T08:59:15.1931945+08:00","Action":"pass","Package":"google.golang.org/adk/session","Elapsed":0.232}

@@ -1,0 +1,156 @@
+﻿{
+    "id":  "s1",
+    "appName":  "qwen_weather_time_agent",
+    "userId":  "u1",
+    "lastUpdateTime":  1778722924,
+    "events":  [
+                   {
+                       "id":  "20a88fd3-bf8c-4215-a53c-91d6d381520a",
+                       "invocationId":  "e-1b315f24-76eb-452c-b4c0-6e453c676ab7",
+                       "author":  "user",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "user",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "??,????????????????? Agent ????"
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "a6b2cdd1-8eb0-424e-a4ee-37100400d718",
+                       "invocationId":  "e-1b315f24-76eb-452c-b4c0-6e453c676ab7",
+                       "author":  "qwen_weather_time_agent",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "finishReason":  "stop",
+                       "modelVersion":  "qwen_qwen3.5-397b-a17b",
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "model",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "\n\n您好！看起来您的消息可能出现了编码问题，我无法正确理解您想问的内容。\n\n我是 qwen_weather_time_agent，一个用于学习 ADK Go Agent Runtime 的中文调试 Agent。我可以帮您：\n\n1. **查询天气** - 告诉我城市名称，我可以查询该城市的模拟天气\n2. **查询时间** - 告诉我城市名称，我可以查询该城市的模拟时间\n3. **回答框架原理问题** - 关于 ADK Go Agent Runtime 的问题\n\n请问您想了解什么？请重新发送您的问题，谢谢！"
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "b991c797-aa07-4002-9b17-f576fe499cd4",
+                       "invocationId":  "e-c4ff0b85-060c-4693-800b-28faa247127c",
+                       "author":  "user",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "user",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "??????????????,????????"
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "7efa2800-f47e-4703-83d1-356fe37dac8e",
+                       "invocationId":  "e-c4ff0b85-060c-4693-800b-28faa247127c",
+                       "author":  "qwen_weather_time_agent",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "finishReason":  "stop",
+                       "modelVersion":  "qwen_qwen3.5-397b-a17b",
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "model",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "\n\n您好！我注意到您的消息显示为乱码（????），可能是编码问题导致我无法正确读取您的内容。\n\n我是 **qwen_weather_time_agent**，专门用于学习 ADK Go Agent Runtime 的调试 Agent。我的功能包括：\n\n| 功能 | 说明 |\n|------|------|\n| 🌤️ 查询天气 | 调用 `get_weather` 工具获取指定城市的模拟天气 |\n| 🕐 查询时间 | 调用 `get_time` 工具获取指定城市的模拟时间 |\n| 💬 回答问题 | 解答关于 ADK 框架原理的问题 |\n\n**请您尝试：**\n- 用中文重新输入您的问题\n- 或者告诉我您想查询哪个城市的天气/时间\n\n例如：\n- \"北京天气怎么样？\"\n- \"上海现在几点？\"\n- \"ADK Agent 是如何工作的？\"\n\n期待您的回复！😊"
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "2b25515b-2f73-4645-bc4c-ed330d6074f0",
+                       "invocationId":  "e-7286bc6b-4556-4e97-b64e-3d83e526f7b3",
+                       "author":  "user",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "user",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "??????????????,????????"
+                                                     }
+                                                 ]
+                                   }
+                   },
+                   {
+                       "id":  "2c108102-9b25-4c38-8096-cb51deffbbdf",
+                       "invocationId":  "e-7286bc6b-4556-4e97-b64e-3d83e526f7b3",
+                       "author":  "qwen_weather_time_agent",
+                       "groundingMetadata":  null,
+                       "usageMetadata":  null,
+                       "finishReason":  "stop",
+                       "modelVersion":  "qwen_qwen3.5-397b-a17b",
+                       "actions":  {
+                                       "stateDelta":  {
+
+                                                      },
+                                       "artifactDelta":  {
+
+                                                         }
+                                   },
+                       "content":  {
+                                       "role":  "model",
+                                       "parts":  [
+                                                     {
+                                                         "text":  "\n\n您好！您的消息仍然显示为乱码（????），我无法正常读取内容。这可能是编码或传输问题导致的。\n\n**我能为您提供的帮助：**\n\n| 服务 | 示例提问 |\n|------|----------|\n| 🌤️ 天气查询 | \"北京天气怎么样？\" |\n| 🕐 时间查询 | \"上海现在几点？\" |\n| 💡 框架咨询 | \"ADK Agent 工作原理是什么？\" |\n\n**建议您：**\n1. 刷新页面后重新输入\n2. 确保使用 UTF-8 编码\n3. 直接用中文描述您的需求\n\n请问您想查询**天气**、**时间**，还是想了解**ADK 框架**相关信息？请重新发送您的问题，我会尽力帮助您！🙏"
+                                                     }
+                                                 ]
+                                   }
+                   }
+               ],
+    "state":  {
+                  "from":  "powershell-round3",
+                  "purpose":  "learn-adk-openai-compatible-runtime"
+              }
+}
