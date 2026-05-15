@@ -47,16 +47,16 @@ func (m *mockTool) Run(ctx tool.Context, args any) (map[string]any, error) { ret
 type mockLLM struct {
 	model.LLM
 	name    string
-	variant *genai.Backend
+	variant *model.ProviderBackend
 }
 
 func (m *mockLLM) Name() string { return m.name }
 
-func (m *mockLLM) GetGoogleLLMVariant() genai.Backend {
+func (m *mockLLM) ProviderBackend() model.ProviderBackend {
 	if m.variant != nil {
 		return *m.variant
 	}
-	return genai.BackendGeminiAPI
+	return model.ProviderBackendGoogleGeminiAPI
 }
 
 func TestOutputSchemaRequestProcessor(t *testing.T) {
@@ -166,7 +166,7 @@ func TestOutputSchemaRequestProcessor(t *testing.T) {
 		// Native support = Vertex AI + Gemini 2.5+
 		llm := &mockLLM{
 			name:    "gemini-2.5-flash",
-			variant: func() *genai.Backend { x := genai.BackendVertexAI; return &x }(),
+			variant: func() *model.ProviderBackend { x := model.ProviderBackendGoogleVertexAI; return &x }(),
 		}
 
 		baseAgent := utils.Must(agent.New(agent.Config{Name: "VertexGemini2Agent"}))

@@ -22,24 +22,18 @@ import (
 	"os"
 	"time"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
-	"google.golang.org/adk/model/gemini"
+	"google.golang.org/adk/model/openaicompat"
 	"google.golang.org/adk/server/adkrest"
 	"google.golang.org/adk/session"
-	"google.golang.org/adk/tool"
-	"google.golang.org/adk/tool/geminitool"
 )
 
 func main() {
 	ctx := context.Background()
 
-	// Create a Gemini model
-	model, err := gemini.NewModel(ctx, "gemini-2.5-flash", &genai.ClientConfig{
-		APIKey: os.Getenv("GOOGLE_API_KEY"),
-	})
+	// Create a provider-neutral model using an OpenAI-compatible endpoint.
+	model, err := openaicompat.NewModel(ctx, os.Getenv("OPENAI_COMPAT_MODEL"))
 	if err != nil {
 		log.Fatalf("Failed to create model: %v", err)
 	}
@@ -50,9 +44,6 @@ func main() {
 		Model:       model,
 		Description: "Agent to answer questions about the time and weather in a city.",
 		Instruction: "I can answer your questions about the time and weather in a city.",
-		Tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
 	})
 	if err != nil {
 		log.Fatalf("Failed to create agent: %v", err)

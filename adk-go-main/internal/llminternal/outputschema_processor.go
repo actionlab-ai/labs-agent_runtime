@@ -22,7 +22,6 @@ import (
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/agent"
-	"google.golang.org/adk/internal/llminternal/googlellm"
 	"google.golang.org/adk/internal/toolinternal/toolutils"
 	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/model"
@@ -101,7 +100,7 @@ func needOutputSchemaProcessor(state *State) bool {
 		return false
 	}
 	hasTools := len(state.Tools) > 0 || len(state.Toolsets) > 0
-	return hasTools && googlellm.NeedsOutputSchemaProcessor(state.Model)
+	return hasTools && needsOutputSchemaProcessorForModel(state.Model)
 }
 
 // setModelResponseTool implements tool.Tool and toolinternal.FunctionTool.

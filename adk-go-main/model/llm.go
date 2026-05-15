@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package model defines the Archinfra Agent Runtime LLM abstraction layer. It contains the interfaces and data structures used to connect Gemini, OpenAI-compatible models, Qwen, DeepSeek, or other custom LLM providers.
+// Package model defines the Archinfra Agent Runtime LLM abstraction layer. It contains the interfaces and data structures used to connect OpenAI-compatible models, hosted providers, local models, or other custom LLM providers.
 package model
 
 import (
@@ -22,7 +22,7 @@ import (
 	"google.golang.org/genai"
 )
 
-// ADK 不关心你后面接的是 Gemini、OpenAI、Qwen、DeepSeek、LiteLLM 还是本地模型。
+// ADK 不关心你后面接的是 OpenAI-compatible、Qwen、DeepSeek、LiteLLM、本地模型或其他 provider adapter。
 // 只要你实现 model.LLM，ADK 就可以把它当成模型用。
 type LLM interface {
 	Name() string
@@ -46,7 +46,7 @@ type LLMRequest struct {
 		Tools                工具声明
 		ResponseSchema       输出结构约束
 		SafetySettings       安全设置
-		HTTPOptions          Gemini 相关 HTTP 配置
+		HTTPOptions          provider-specific HTTP options when supported
 	*/
 	// 对 OpenAI-compatible 最重要的是这两个：Config.SystemInstruction / Config.Tools
 	// 也就是：SystemInstruction -> OpenAI messages[0] role=system / Tools             -> OpenAI tools

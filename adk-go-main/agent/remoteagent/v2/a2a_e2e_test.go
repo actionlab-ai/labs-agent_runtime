@@ -49,6 +49,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/genai"
 
+	"google.golang.org/adk/adapters/google/model/gemini"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/agent/workflowagents/sequentialagent"
@@ -57,7 +58,6 @@ import (
 	"google.golang.org/adk/internal/testutil"
 	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/model"
-	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/server/adka2a/v2"
 	"google.golang.org/adk/session"

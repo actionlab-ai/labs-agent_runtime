@@ -25,8 +25,8 @@ import (
 
 	"google.golang.org/genai"
 
+	"google.golang.org/adk/adapters/google/model/gemini"
 	"google.golang.org/adk/model"
-	"google.golang.org/adk/model/gemini"
 )
 
 const (

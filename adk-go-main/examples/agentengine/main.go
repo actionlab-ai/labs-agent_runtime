@@ -24,15 +24,15 @@ import (
 
 	"google.golang.org/genai"
 
+	vertexaiMem "google.golang.org/adk/adapters/google/memory/vertexai"
+	"google.golang.org/adk/adapters/google/model/gemini"
+	"google.golang.org/adk/adapters/google/session/vertexai"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/agentengine"
-	vertexaiMem "google.golang.org/adk/memory/vertexai"
-	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/plugin"
 	"google.golang.org/adk/runner"
-	"google.golang.org/adk/session/vertexai"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 	vertexaiutil "google.golang.org/adk/util/vertexai"

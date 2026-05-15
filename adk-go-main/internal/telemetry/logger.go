@@ -66,7 +66,7 @@ var otelLogger = global.GetLoggerProvider().Logger(
 // LogRequest logs the request to the model - the system message and user messages.
 // It iterates over the request contents and logs each as a separate event.
 // Check [logSystemMessage] and [logUserMessage] for emitted event details.
-func LogRequest(ctx context.Context, req *model.LLMRequest, backend genai.Backend) {
+func LogRequest(ctx context.Context, req *model.LLMRequest, backend model.ProviderBackend) {
 	genAISystem := variantToGenAISystem(backend)
 	logSystemMessage(ctx, req, genAISystem)
 	for _, content := range req.Contents {
@@ -79,7 +79,7 @@ func LogRequest(ctx context.Context, req *model.LLMRequest, backend genai.Backen
 // NOTE: The current implementation doesn't fully follow the spec, but aims for consistency with ADK Python. The differences are:
 // * The spec embeds the "content" field to be under the "message" key, but it's added directly in body.
 // * The "tool_calls" field is required if available in the spec, but it's omitted.
-func LogResponse(ctx context.Context, resp *model.LLMResponse, backend genai.Backend) {
+func LogResponse(ctx context.Context, resp *model.LLMResponse, backend model.ProviderBackend) {
 	record := log.Record{}
 	record.SetEventName("gen_ai.choice")
 
@@ -145,12 +145,12 @@ func logUserMessage(ctx context.Context, content *genai.Content, genAISystem *lo
 }
 
 // Ref: https://github.com/open-telemetry/semantic-conventions/blob/v1.36.0/docs/registry/attributes/gen-ai.md#gen-ai-system well-known values.
-func variantToGenAISystem(variant genai.Backend) *log.KeyValue {
-	if variant == genai.BackendVertexAI {
+func variantToGenAISystem(variant model.ProviderBackend) *log.KeyValue {
+	if variant == model.ProviderBackendGoogleVertexAI {
 		val := log.KeyValueFromAttribute(semconv.GenAISystemGCPVertexAI)
 		return &val
 	}
-	if variant == genai.BackendGeminiAPI {
+	if variant == model.ProviderBackendGoogleGeminiAPI {
 		val := log.KeyValueFromAttribute(semconv.GenAISystemGCPGemini)
 		return &val
 	}

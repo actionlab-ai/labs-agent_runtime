@@ -14,7 +14,7 @@
 
 // Package tool defines the interfaces for tools that can be called by an agent.
 // A tool is a piece of code that performs a specific task. You can either define
-// your own custom tools or use built-in ones, for example, GoogleSearch.
+// your own custom tools or explicitly registered provider-native adapter tools.
 package tool
 
 import (
