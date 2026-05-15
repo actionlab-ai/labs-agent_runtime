@@ -70,16 +70,16 @@ func TestNeedsOutputSchemaProcessor(t *testing.T) {
 	testCases := []struct {
 		name    string
 		model   string
-		variant genai.Backend
+		variant model.ProviderBackend
 		want    bool
 	}{
-		{"Gemini2.0_Vertex", "gemini-2.0-flash", genai.BackendVertexAI, false},
-		{"Gemini2.0_GeminiAPI", "gemini-2.0-flash", genai.BackendGeminiAPI, true},
-		{"NonGemini_Vertex", "not-a-gemini", genai.BackendVertexAI, false},
-		{"Gemini3.0_GeminiAPI", "gemini-3.0", genai.BackendGeminiAPI, false},
-		{"Gemini3.0_Vertex", "gemini-3.0", genai.BackendVertexAI, false},
-		{"CustomGemini2", "gemini-2.0-hack", genai.BackendUnspecified, false},
-		{"CustomGemini3", "gemini-3.0-hack", genai.BackendUnspecified, false},
+		{"Gemini2.0_Vertex", "gemini-2.0-flash", model.ProviderBackendGoogleVertexAI, false},
+		{"Gemini2.0_GeminiAPI", "gemini-2.0-flash", model.ProviderBackendGoogleGeminiAPI, true},
+		{"NonGemini_Vertex", "not-a-gemini", model.ProviderBackendGoogleVertexAI, false},
+		{"Gemini3.0_GeminiAPI", "gemini-3.0", model.ProviderBackendGoogleGeminiAPI, false},
+		{"Gemini3.0_Vertex", "gemini-3.0", model.ProviderBackendGoogleVertexAI, false},
+		{"CustomGemini2", "gemini-2.0-hack", model.ProviderBackendUnspecified, false},
+		{"CustomGemini3", "gemini-3.0-hack", model.ProviderBackendUnspecified, false},
 	}
 
 	for _, tc := range testCases {
@@ -97,16 +97,14 @@ func TestNeedsOutputSchemaProcessor(t *testing.T) {
 
 type mockGoogleLLM struct {
 	model.LLM
-	variant genai.Backend
+	variant model.ProviderBackend
 	nameVal string
 }
 
-func (m *mockGoogleLLM) GetGoogleLLMVariant() genai.Backend {
+func (m *mockGoogleLLM) ProviderBackend() model.ProviderBackend {
 	return m.variant
 }
 
 func (m *mockGoogleLLM) Name() string {
 	return m.nameVal
 }
-
-var _ GoogleLLM = (*mockGoogleLLM)(nil)

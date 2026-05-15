@@ -25,14 +25,14 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.36.0"
 	"google.golang.org/genai"
 
+	"google.golang.org/adk/adapters/google/model/gemini"
+	"google.golang.org/adk/adapters/google/tool/geminitool"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
-	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/telemetry"
 	"google.golang.org/adk/tool"
-	"google.golang.org/adk/tool/geminitool"
 )
 
 func main() {

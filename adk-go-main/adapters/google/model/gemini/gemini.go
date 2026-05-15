@@ -27,7 +27,6 @@ import (
 
 	"google.golang.org/adk/internal/llminternal"
 	"google.golang.org/adk/internal/llminternal/converters"
-	"google.golang.org/adk/internal/llminternal/googlellm"
 	"google.golang.org/adk/internal/version"
 	"google.golang.org/adk/model"
 )
@@ -189,11 +188,18 @@ func (h *mergeHeadersInterceptor) RoundTrip(req *http.Request) (*http.Response, 
 	return h.base.RoundTrip(req)
 }
 
-func (m *geminiModel) GetGoogleLLMVariant() genai.Backend {
+func (m *geminiModel) ProviderBackend() model.ProviderBackend {
 	if m == nil || m.client == nil {
-		return genai.BackendUnspecified
+		return model.ProviderBackendUnspecified
 	}
-	return m.client.ClientConfig().Backend
+	switch m.client.ClientConfig().Backend {
+	case genai.BackendGeminiAPI:
+		return model.ProviderBackendGoogleGeminiAPI
+	case genai.BackendVertexAI:
+		return model.ProviderBackendGoogleVertexAI
+	default:
+		return model.ProviderBackendUnspecified
+	}
 }
 
-var _ googlellm.GoogleLLM = &geminiModel{}
+var _ model.BackendProvider = &geminiModel{}

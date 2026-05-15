@@ -30,7 +30,6 @@ package configurable
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"google.golang.org/genai"
 
@@ -39,8 +38,6 @@ import (
 	"google.golang.org/adk/agent/workflowagents/loopagent"
 	"google.golang.org/adk/agent/workflowagents/parallelagent"
 	"google.golang.org/adk/agent/workflowagents/sequentialagent"
-	"google.golang.org/adk/internal/llminternal/googlellm"
-	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/tool"
 )
 
@@ -115,6 +112,8 @@ type llmAgentYAMLConfig struct {
 	// 2. Define the "extra" fields specific to this agent here.
 	Model string `yaml:"model"`
 
+	ModelProvider string `yaml:"model_provider,omitempty"`
+
 	Instruction string `yaml:"instruction"`
 
 	Tools []ToolConfig `yaml:"tools,omitempty"`
@@ -127,13 +126,7 @@ type llmAgentYAMLConfig struct {
 }
 
 func (c *llmAgentYAMLConfig) toLLMAgentConfig(ctx context.Context) (*llmagent.Config, error) {
-	if !googlellm.IsGeminiModel(c.Model) {
-		return nil, fmt.Errorf("model %s is not supported", c.Model)
-	}
-
-	model, err := gemini.NewModel(ctx, c.Model, &genai.ClientConfig{
-		APIKey: os.Getenv("GOOGLE_API_KEY"),
-	})
+	model, err := ResolveModel(ctx, c.ModelProvider, c.Model)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create model: %w", err)
 	}

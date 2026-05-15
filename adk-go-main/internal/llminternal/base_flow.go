@@ -31,7 +31,6 @@ import (
 	"google.golang.org/adk/internal/agent/parentmap"
 	"google.golang.org/adk/internal/agent/runconfig"
 	icontext "google.golang.org/adk/internal/context"
-	"google.golang.org/adk/internal/llminternal/googlellm"
 	"google.golang.org/adk/internal/plugininternal/plugincontext"
 	"google.golang.org/adk/internal/telemetry"
 	"google.golang.org/adk/internal/toolinternal"
@@ -416,7 +415,7 @@ func generateContent(ctx agent.InvocationContext, m model.LLM, req *model.LLMReq
 			InvocationID: ctx.InvocationID(),
 		})
 		ctx = ctx.WithContext(spanCtx)
-		backend := googlellm.GetGoogleLLMVariant(m)
+		backend := model.GetProviderBackend(m)
 		// Log request before calling the model.
 		telemetry.LogRequest(ctx, req, backend)
 

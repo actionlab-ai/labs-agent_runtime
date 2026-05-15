@@ -18,7 +18,6 @@ import (
 	"iter"
 
 	"google.golang.org/adk/agent"
-	"google.golang.org/adk/internal/llminternal/googlellm"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
 )
@@ -36,7 +35,7 @@ func removeDisplayNameIfExists(ctx agent.InvocationContext, req *model.LLMReques
 			return
 		}
 
-		if !googlellm.IsGeminiAPIVariant(llmAgent.internal().Model) {
+		if model.GetProviderBackend(llmAgent.internal().Model) != model.ProviderBackendGoogleGeminiAPI {
 			return
 		}
 

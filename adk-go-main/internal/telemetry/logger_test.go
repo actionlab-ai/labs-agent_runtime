@@ -50,7 +50,7 @@ func TestLogRequest(t *testing.T) {
 	}
 	tests := []struct {
 		name                  string
-		backend               genai.Backend
+		backend               model.ProviderBackend
 		captureMessageContent bool
 		req                   *model.LLMRequest
 		wantEvents            []wantEvent
@@ -156,7 +156,7 @@ func TestLogRequest(t *testing.T) {
 		{
 			name:                  "RequestWithNilContentsGeminiBackend",
 			captureMessageContent: true,
-			backend:               genai.BackendGeminiAPI,
+			backend:               model.ProviderBackendGoogleGeminiAPI,
 			req: &model.LLMRequest{
 				Config:   nil,
 				Contents: nil,
@@ -176,7 +176,7 @@ func TestLogRequest(t *testing.T) {
 		{
 			name:                  "RequestWithNilContentsVertexBackend",
 			captureMessageContent: true,
-			backend:               genai.BackendVertexAI,
+			backend:               model.ProviderBackendGoogleVertexAI,
 			req: &model.LLMRequest{
 				Config:   nil,
 				Contents: nil,
@@ -342,7 +342,7 @@ func TestLogResponse(t *testing.T) {
 	tests := []struct {
 		name                  string
 		resp                  *model.LLMResponse
-		backend               genai.Backend
+		backend               model.ProviderBackend
 		captureMessageContent bool
 		wantName              string
 		wantBody              map[string]any
@@ -377,7 +377,7 @@ func TestLogResponse(t *testing.T) {
 		{
 			name:                  "ResponseGeminiBackend",
 			captureMessageContent: true,
-			backend:               genai.BackendGeminiAPI,
+			backend:               model.ProviderBackendGoogleGeminiAPI,
 			resp: &model.LLMResponse{
 				FinishReason: genai.FinishReasonStop,
 				Content: &genai.Content{
@@ -405,7 +405,7 @@ func TestLogResponse(t *testing.T) {
 		{
 			name:                  "ResponseVertexBackend",
 			captureMessageContent: true,
-			backend:               genai.BackendVertexAI,
+			backend:               model.ProviderBackendGoogleVertexAI,
 			resp: &model.LLMResponse{
 				FinishReason: genai.FinishReasonStop,
 				Content: &genai.Content{
@@ -574,8 +574,8 @@ func TestSpanIDPropagation(t *testing.T) {
 		},
 	}
 
-	LogRequest(ctx, req, genai.BackendVertexAI)
-	LogResponse(ctx, &model.LLMResponse{}, genai.BackendVertexAI)
+	LogRequest(ctx, req, model.ProviderBackendGoogleVertexAI)
+	LogResponse(ctx, &model.LLMResponse{}, model.ProviderBackendGoogleVertexAI)
 
 	if len(exporter.records) != 3 {
 		t.Fatalf("expected 3 records, got %d", len(exporter.records))

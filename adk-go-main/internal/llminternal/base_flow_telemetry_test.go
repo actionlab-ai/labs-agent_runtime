@@ -65,8 +65,8 @@ func (m *mockModelForTest) GenerateContent(ctx context.Context, req *model.LLMRe
 	return func(yield func(*model.LLMResponse, error) bool) {}
 }
 
-func (m *mockModelForTest) Backend() genai.Backend {
-	return genai.BackendGeminiAPI
+func (m *mockModelForTest) ProviderBackend() model.ProviderBackend {
+	return model.ProviderBackendGoogleGeminiAPI
 }
 
 var (

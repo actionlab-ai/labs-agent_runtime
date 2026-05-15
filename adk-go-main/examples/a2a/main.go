@@ -27,17 +27,17 @@ import (
 	"github.com/a2aproject/a2a-go/a2asrv"
 	"google.golang.org/genai"
 
+	"google.golang.org/adk/adapters/google/model/gemini"
+	"google.golang.org/adk/adapters/google/tool/geminitool"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/agent/remoteagent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
-	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/server/adka2a"
 	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
-	"google.golang.org/adk/tool/geminitool"
 )
 
 // newWeatherAgent creates a simple LLM-agent as in the quickstart example.

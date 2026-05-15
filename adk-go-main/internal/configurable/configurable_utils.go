@@ -40,24 +40,25 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gopkg.in/yaml.v3"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/agent/workflowagents/loopagent"
 	"google.golang.org/adk/agent/workflowagents/parallelagent"
 	"google.golang.org/adk/agent/workflowagents/sequentialagent"
+	"google.golang.org/adk/model"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/agenttool"
 	"google.golang.org/adk/tool/exampletool"
 	"google.golang.org/adk/tool/exitlooptool"
-	"google.golang.org/adk/tool/geminitool"
 	"google.golang.org/adk/tool/mcptoolset"
 )
 
 type AgentFactory func(ctx context.Context, configBytes []byte, configPath string) (agent.Agent, error)
 
 type ToolFactory func(ctx context.Context, args map[string]any) (tool.Tool, error)
+
+// ModelFactory creates an LLM adapter from a provider-neutral model name.
+type ModelFactory func(ctx context.Context, modelName string) (model.LLM, error)
 
 type ToolsetFactory func(ctx context.Context, args map[string]any) (tool.Toolset, error)
 
@@ -66,6 +67,7 @@ var (
 	registry         = make(map[string]AgentFactory)
 	agentRegistry    = make(map[string]agent.Agent)
 	toolRegistry     = make(map[string]any)
+	modelRegistry    = make(map[string]ModelFactory)
 	callbackRegistry = make(map[string]any)
 )
 
@@ -84,24 +86,6 @@ func init() {
 	}
 	err := RegisterToolFactory("exit_loop", func(_ context.Context, _ map[string]any) (tool.Tool, error) {
 		return exitlooptool.New()
-	})
-	if err != nil {
-		panic(err)
-	}
-	err = RegisterToolFactory("google_search", func(_ context.Context, _ map[string]any) (tool.Tool, error) {
-		return geminitool.GoogleSearch{}, nil
-	})
-	if err != nil {
-		panic(err)
-	}
-	err = RegisterToolFactory("url_context", func(_ context.Context, _ map[string]any) (tool.Tool, error) {
-		return geminitool.New("url_context", "url context", &genai.Tool{URLContext: &genai.URLContext{}}), nil
-	})
-	if err != nil {
-		panic(err)
-	}
-	err = RegisterToolFactory("google_maps_grounding", func(_ context.Context, _ map[string]any) (tool.Tool, error) {
-		return geminitool.New("google_maps_grounding", "google maps grounding", &genai.Tool{GoogleMaps: &genai.GoogleMaps{}}), nil
 	})
 	if err != nil {
 		panic(err)
@@ -282,6 +266,32 @@ func RegisterToolsetFactory(name string, factory ToolsetFactory) error {
 	}
 	toolRegistry[name] = factory
 	return nil
+}
+
+// RegisterModelFactory registers an optional model adapter for configurable agents.
+func RegisterModelFactory(name string, factory ModelFactory) error {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	if _, dup := modelRegistry[name]; dup {
+		return fmt.Errorf("RegisterModelFactory called twice for model provider %s", name)
+	}
+	modelRegistry[name] = factory
+	return nil
+}
+
+// ResolveModel creates a model using an explicitly registered provider. When a
+// provider is omitted, the provider name "default" is used.
+func ResolveModel(ctx context.Context, provider, modelName string) (model.LLM, error) {
+	if provider == "" {
+		provider = "default"
+	}
+	registryMu.RLock()
+	factory, ok := modelRegistry[provider]
+	registryMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("model provider %q is not registered; register an adapter explicitly", provider)
+	}
+	return factory(ctx, modelName)
 }
 
 func RegisterCallback(name string, callback any) error {
